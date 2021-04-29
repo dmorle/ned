@@ -57,7 +57,6 @@ namespace nn
 		static constexpr std::array<size_t, Tensor<_ty, _dims...>::Rank()> Shape() noexcept {
 			return impl::shape<_dims...>::Shape(); }
 
-	protected:
 		_ty _data[Tensor<_ty, _dims...>::Size()];
 	};
 }

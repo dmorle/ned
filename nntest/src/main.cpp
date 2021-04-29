@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <vector>
 #include <iostream>
 #include <libnn/core/tensor.h>
 

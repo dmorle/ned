@@ -8,10 +8,10 @@ add_library (
 	"src/ops/linear.cu"
 
 	"include/libnn/core/tensor.h"
-	"include/libnn/ops/op.h"
+	
 	"include/libnn/ops/linear.h"
 	"include/libnn/ops/conv2d.h"
-)
+ "include/libnn/core/param.h")
 
 set_property(TARGET libnn PROPERTY CXX_STANDARD 17)
 set_target_properties (libnn PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
