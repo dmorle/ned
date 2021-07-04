@@ -13,4 +13,4 @@ endif()
 
 # Include sub-projects.
 add_subdirectory ("libnn")
-add_subdirectory ("nntest")
+# add_subdirectory ("nntest")

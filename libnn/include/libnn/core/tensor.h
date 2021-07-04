@@ -1,64 +1,29 @@
 #ifndef NN_TENSOR_H
 #define NN_TENSOR_H
 
-#include <array>
-#include <tuple>
-#include <cstdint>
+#include <vector>
 
 namespace nn
 {
-	namespace impl
-	{
-		template<size_t... _dims>
-		struct shape;
+    enum class tensor_dty
+    {
+        F16,
+        F32,
+        F64,
+        I16,
+        I32,
+        I64,
+        U16,
+        U32,
+        U64
+    };
 
-		template<>
-		struct shape<>
-		{
-		public:
-			static constexpr size_t Rank() noexcept { return 0; }
-			static constexpr std::array<size_t, 0> Shape() noexcept { return {}; }
-		};
-
-		template<size_t _dim, size_t... _dims>
-		struct shape<_dim, _dims...>
-		{
-		public:
-			static constexpr size_t Rank() noexcept { return 1 + shape<_dims...>::Rank(); }
-			static constexpr std::array<size_t, shape<_dim, _dims...>::Rank()> Shape() noexcept
-			{
-				constexpr size_t rk = shape<_dim, _dims...>::Rank();
-				std::array<size_t, rk> s{};
-				size_t index = 0;
-				s[index] = _dim;
-				for (auto e : shape<_dims...>::Shape())
-					s[++index] = e;
-				return s;
-			}
-		};
-	}
-
-	template<typename _ty, size_t... _dims>
-	class Tensor
-	{
-	public:
-		Tensor() {}
-
-		static constexpr size_t Size() noexcept
-		{
-			auto shape = Tensor<_ty, _dims...>::Shape();
-			size_t size = 1;
-			for (auto e : shape)
-				size *= e;
-			return size;
-		}
-
-		static constexpr size_t Rank() noexcept { return impl::shape<_dims...>::Rank(); }
-		static constexpr std::array<size_t, Tensor<_ty, _dims...>::Rank()> Shape() noexcept {
-			return impl::shape<_dims...>::Shape(); }
-
-		_ty _data[Tensor<_ty, _dims...>::Size()];
-	};
+    struct tensor_dsc
+    {
+        tensor_dty dty = tensor_dty::F32;
+        uint32_t rk = 0;
+        std::vector<uint32_t> dims = {};
+    };
 }
 
 #endif
