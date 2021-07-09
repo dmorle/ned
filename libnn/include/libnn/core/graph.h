@@ -5,6 +5,8 @@
 #include <vector>
 #include <string>
 
+#include <libnn/core/tensor.h>
+
 namespace nn
 {
     namespace nodes
@@ -75,13 +77,19 @@ namespace nn
 		>;
     }
 
-    template<class D>
-    struct Node
+    class Node
     {
-        nodes::node_id id = nodes::node_id_map::get_id<D>();
-        std::vector<std::tuple<node&, size_t>> inps = {};
+	public:
+        nodes::node_id id = 0;
+        std::vector<std::tuple<Node&, size_t>> inps = {};
         std::vector<tensor_dsc> out_shapes = {};
+
+		virtual void set_output_dsc(tensor_dsc& dsc, size_t out_id) = 0;
     };
+
+	class Graph
+	{
+	};
 }
 
 #endif

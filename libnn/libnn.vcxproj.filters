@@ -21,10 +21,13 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="source\main.cpp">
-      <Filter>source</Filter>
-    </ClCompile>
     <ClCompile Include="source\frontend\lexer.cpp">
+      <Filter>source\frontend</Filter>
+    </ClCompile>
+    <ClCompile Include="source\frontend\parser.cpp">
+      <Filter>source\frontend</Filter>
+    </ClCompile>
+    <ClCompile Include="source\frontend\generator.cpp">
       <Filter>source\frontend</Filter>
     </ClCompile>
   </ItemGroup>
@@ -36,6 +39,12 @@
       <Filter>headers\core</Filter>
     </ClInclude>
     <ClInclude Include="include\libnn\frontend\lexer.h">
+      <Filter>headers\frontend</Filter>
+    </ClInclude>
+    <ClInclude Include="include\libnn\frontend\parser.h">
+      <Filter>headers\frontend</Filter>
+    </ClInclude>
+    <ClInclude Include="include\libnn\frontend\generator.h">
       <Filter>headers\frontend</Filter>
     </ClInclude>
   </ItemGroup>

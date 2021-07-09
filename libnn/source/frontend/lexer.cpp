@@ -1,6 +1,7 @@
 #include <libnn/frontend/lexer.h>
 
 #include <stdexcept>
+#include <cassert>
 
 
 namespace nn
@@ -128,6 +129,7 @@ void TokenArray::push_back(const TokenImp<TokenType::TY>& tk){                 \
     rawlen += nsz;                                                             \
 }
 
+        SMALL_PUSH_BACK( INDENT   )
         SMALL_PUSH_BACK( ANGLE_O  )
         SMALL_PUSH_BACK( ANGLE_C  )
         SMALL_PUSH_BACK( ROUND_O  )
@@ -151,7 +153,6 @@ void TokenArray::push_back(const TokenImp<TokenType::TY>& tk){                 \
         SMALL_PUSH_BACK( CMP_NE   )
         SMALL_PUSH_BACK( CMP_GE   )
         SMALL_PUSH_BACK( CMP_LE   )
-        SMALL_PUSH_BACK( BOOL     )
         SMALL_PUSH_BACK( INT      )
         SMALL_PUSH_BACK( FLOAT    )
         LARGE_PUSH_BACK( STRLIT   )
@@ -265,7 +266,22 @@ void TokenArray::push_back(const TokenImp<TokenType::TY>& tk){                 \
                     }
                     tarr.push_back(TokenImp<TokenType::ASSIGN>(line_num, i - line_start));
                     break;
+                case '"':
+                {
+                    TokenImp<TokenType::STRLIT> tk(line_num, i - line_start);
+                    int sidx = 0;
+                    for (i += 1; i < bufsz && sidx < 256 && buf[i] != '"'; i++, sidx++)
+                        tk.val[sidx] = buf[i];
+                    if (i >= bufsz)
+                        throw SyntaxError(tk.line_num, tk.col_num, "Missing closing '\"' for string literal");
+                    if (sidx == 256)
+                        throw std::overflow_error("buffer overflow for string literal during lexing");
+                    assert(buf[i] == '"');
+                    tk.val[sidx] = '\0';
+                    break;
+                }
                 default:
+
                     break;
                 }
 

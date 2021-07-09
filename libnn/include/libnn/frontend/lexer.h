@@ -5,6 +5,8 @@
 #include <string>
 #include <format>
 
+#include <libnn/frontend/parser.h>
+
 namespace nn
 {
     namespace frontend
@@ -41,6 +43,7 @@ namespace nn
         enum class TokenType
         {
             INVALID,
+            INDENT,
             ANGLE_O,
             ANGLE_C,
             ROUND_O,
@@ -62,7 +65,6 @@ namespace nn
             CMP_NE,
             CMP_GE,
             CMP_LE,
-            BOOL,
             INT,
             FLOAT,
             STRLIT,
@@ -91,21 +93,6 @@ namespace nn
                 Token(line_num, col_num)
             {
                 ty = T;
-            }
-        };
-
-        template<>
-        class TokenImp<TokenType::BOOL> :
-            public Token
-        {
-        public:
-            bool val;
-
-            TokenImp(uint32_t line_num, uint32_t col_num) :
-                Token(line_num, col_num)
-            {
-                ty = TokenType::BOOL;
-                val = false;
             }
         };
 
@@ -144,13 +131,13 @@ namespace nn
             public Token
         {
         public:
-            std::string val;
+            char val[256];
 
             TokenImp(uint32_t line_num, uint32_t col_num) :
                 Token(line_num, col_num)
             {
                 ty = TokenType::STRLIT;
-                val = "";
+                val[0] = '\0';
             }
         };
 
@@ -159,13 +146,13 @@ namespace nn
             public Token
         {
         public:
-            std::string val;
+            char val[64];
 
             TokenImp(uint32_t line_num, uint32_t col_num) :
                 Token(line_num, col_num)
             {
                 ty = TokenType::IDN;
-                val = "";
+                val[0] = '\0';
             }
         };
 

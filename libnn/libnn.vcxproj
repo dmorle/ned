@@ -11,13 +11,16 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="source\frontend\generator.cpp" />
     <ClCompile Include="source\frontend\lexer.cpp" />
-    <ClCompile Include="source\main.cpp" />
+    <ClCompile Include="source\frontend\parser.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\libnn\core\graph.h" />
     <ClInclude Include="include\libnn\core\tensor.h" />
+    <ClInclude Include="include\libnn\frontend\generator.h" />
     <ClInclude Include="include\libnn\frontend\lexer.h" />
+    <ClInclude Include="include\libnn\frontend\parser.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="sample.nn" />
@@ -26,10 +29,11 @@
     <ProjectGuid>{4C9CF90D-21C0-40C0-9A66-5D367A2FE3E8}</ProjectGuid>
     <RootNamespace>libnn</RootNamespace>
     <ProjectName>libnn</ProjectName>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>MultiByte</CharacterSet>
     <PlatformToolset>v142</PlatformToolset>

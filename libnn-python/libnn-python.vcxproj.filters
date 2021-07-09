@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="headers">
+      <UniqueIdentifier>{4cef9981-b947-413a-9430-9648d5b678ad}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source">
+      <UniqueIdentifier>{7369a00e-a897-427e-8c60-720391f54c9b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libnn">
+      <UniqueIdentifier>{f440a1e7-e9e4-4ff4-96e9-e995096f904e}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="setup.py" />
+    <None Include="libnn\__init__.py">
+      <Filter>libnn</Filter>
+    </None>
+  </ItemGroup>
+</Project>
