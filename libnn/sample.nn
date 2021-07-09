@@ -1,0 +1,35 @@
+import stdlib.*
+
+
+def reshape<int *out_shape, <int *in_shape>>(tensor<*in_shape> inp):
+    return _reshape<*out_shape>(inp)
+
+
+def rnn_cell<int N, int I, int S>(tensor<N, I> inp, tensor<N, S> state, dict theta):
+    var combined = concat<1>(reshape<N, -1>(inp), reshape<N, -1>(state))
+    var layer1 = relu(linear(combined, theta["rnn-l1"]))
+    var output = softmax<1>(linear(layer1, theta["rnn-lo"]))
+    var nstate = relu(linear(layer1, theta["rnn-ls"]))
+
+    return nstate, output
+
+
+def rnn<int N, int I, int S>(tensor<N, I> inp, dict theta):
+    static tensor<N, S> state;
+
+    state, output = rnn_cell<N, I, S>(inp, state, theta)
+    return output
+
+
+def model<int N, int G>(tensor<N, 3, 312, 312> img, dict theta):
+    var layer1 = relu(conv2d<<>, 1>(img, theta["layer1"]))
+    var layer2 = relu(conv2d(layer1, theta["layer2"]))
+
+    tensor<N, 16, 6, 6> tmp = layer2
+    for (int i : range(G)):
+        tmp = relu(conv2d(tmp, theta[strfmt("res-l{}", i)]))
+    
+    var flattened = reshape<N, -1>(tmp);
+    var output = rnn<N, shape(flattened)[-1], 128>(flattened, theta)
+
+    return output

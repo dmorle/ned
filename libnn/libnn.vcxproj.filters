@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="source">
+      <UniqueIdentifier>{51058487-8b5b-4a0c-845f-60fa68718af5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\core">
+      <UniqueIdentifier>{129a8fb6-7fe6-45f1-a3ee-e2ced99d9a0b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="headers">
+      <UniqueIdentifier>{82c7d589-e5fd-495b-9f7c-02c0e8a92ec9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="headers\core">
+      <UniqueIdentifier>{c50dbfcb-9e64-42b9-ac3a-356499976b13}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\frontend">
+      <UniqueIdentifier>{ca4ee090-a802-4a58-85c2-8651997bf566}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="headers\frontend">
+      <UniqueIdentifier>{0f863ea3-c3b8-4a93-ae47-9b8b4e3aaca6}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="source\main.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="source\frontend\lexer.cpp">
+      <Filter>source\frontend</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\libnn\core\graph.h">
+      <Filter>headers\core</Filter>
+    </ClInclude>
+    <ClInclude Include="include\libnn\core\tensor.h">
+      <Filter>headers\core</Filter>
+    </ClInclude>
+    <ClInclude Include="include\libnn\frontend\lexer.h">
+      <Filter>headers\frontend</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="sample.nn" />
+  </ItemGroup>
+</Project>
