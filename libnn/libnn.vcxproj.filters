@@ -24,10 +24,10 @@
     <ClCompile Include="source\frontend\lexer.cpp">
       <Filter>source\frontend</Filter>
     </ClCompile>
-    <ClCompile Include="source\frontend\parser.cpp">
+    <ClCompile Include="source\frontend\ast.cpp">
       <Filter>source\frontend</Filter>
     </ClCompile>
-    <ClCompile Include="source\frontend\generator.cpp">
+    <ClCompile Include="source\frontend\obj.cpp">
       <Filter>source\frontend</Filter>
     </ClCompile>
   </ItemGroup>
@@ -41,10 +41,10 @@
     <ClInclude Include="include\libnn\frontend\lexer.h">
       <Filter>headers\frontend</Filter>
     </ClInclude>
-    <ClInclude Include="include\libnn\frontend\parser.h">
+    <ClInclude Include="include\libnn\frontend\ast.h">
       <Filter>headers\frontend</Filter>
     </ClInclude>
-    <ClInclude Include="include\libnn\frontend\generator.h">
+    <ClInclude Include="include\libnn\frontend\obj.h">
       <Filter>headers\frontend</Filter>
     </ClInclude>
   </ItemGroup>

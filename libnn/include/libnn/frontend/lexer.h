@@ -5,8 +5,6 @@
 #include <string>
 #include <format>
 
-#include <libnn/frontend/parser.h>
-
 namespace nn
 {
     namespace frontend
@@ -44,6 +42,7 @@ namespace nn
         {
             INVALID,
             INDENT,
+            ENDL,
             ANGLE_O,
             ANGLE_C,
             ROUND_O,
@@ -75,10 +74,12 @@ namespace nn
         {
         public:
             TokenType ty = TokenType::INVALID;
+            uint32_t sz;
             uint32_t line_num;
             uint32_t col_num;
 
-            Token(uint32_t line_num, uint32_t col_num) :
+            Token(uint32_t sz, uint32_t line_num, uint32_t col_num) :
+                sz(sz),
                 line_num(line_num),
                 col_num(col_num)
             {}
@@ -90,7 +91,7 @@ namespace nn
         {
         public:
             TokenImp(uint32_t line_num, uint32_t col_num) :
-                Token(line_num, col_num)
+                Token(sizeof(TokenImp<T>), line_num, col_num)
             {
                 ty = T;
             }
@@ -104,7 +105,7 @@ namespace nn
             int64_t val;
 
             TokenImp(uint32_t line_num, uint32_t col_num) :
-                Token(line_num, col_num)
+                Token(sizeof(TokenImp<TokenType::INT>), line_num, col_num)
             {
                 ty = TokenType::INT;
                 val = 0;
@@ -119,7 +120,7 @@ namespace nn
             double val;
 
             TokenImp(uint32_t line_num, uint32_t col_num) :
-                Token(line_num, col_num)
+                Token(sizeof(TokenImp<TokenType::FLOAT>), line_num, col_num)
             {
                 ty = TokenType::FLOAT;
                 val = 1.0;
@@ -134,7 +135,7 @@ namespace nn
             char val[256];
 
             TokenImp(uint32_t line_num, uint32_t col_num) :
-                Token(line_num, col_num)
+                Token(sizeof(TokenImp<TokenType::STRLIT>), line_num, col_num)
             {
                 ty = TokenType::STRLIT;
                 val[0] = '\0';
@@ -149,7 +150,7 @@ namespace nn
             char val[64];
 
             TokenImp(uint32_t line_num, uint32_t col_num) :
-                Token(line_num, col_num)
+                Token(sizeof(TokenImp<TokenType::IDN>), line_num, col_num)
             {
                 ty = TokenType::IDN;
                 val[0] = '\0';
@@ -170,6 +171,11 @@ namespace nn
             
             const Token* operator[](size_t idx) const noexcept;
             template<TokenType T> void push_back(const TokenImp<T>& tk);
+
+            // returns -1 if token is not present in range
+            // start/end arguments <0 offsets from the end of the token array
+            int ffind(TokenType tkty, int start= 0, int end=-1);
+            int rfind(TokenType tkty, int start=-1, int end= 0);
 
         private:
             bool is_slice = false;

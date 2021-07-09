@@ -11,16 +11,16 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="source\frontend\generator.cpp" />
+    <ClCompile Include="source\frontend\obj.cpp" />
     <ClCompile Include="source\frontend\lexer.cpp" />
-    <ClCompile Include="source\frontend\parser.cpp" />
+    <ClCompile Include="source\frontend\ast.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\libnn\core\graph.h" />
     <ClInclude Include="include\libnn\core\tensor.h" />
-    <ClInclude Include="include\libnn\frontend\generator.h" />
+    <ClInclude Include="include\libnn\frontend\obj.h" />
     <ClInclude Include="include\libnn\frontend\lexer.h" />
-    <ClInclude Include="include\libnn\frontend\parser.h" />
+    <ClInclude Include="include\libnn\frontend\ast.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="sample.nn" />
