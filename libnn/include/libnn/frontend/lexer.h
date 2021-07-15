@@ -178,7 +178,7 @@ namespace nn
         {
         public:
             TokenArray(size_t mem_sz=512, size_t off_cap=16);
-            TokenArray(const TokenArray& base, size_t start, size_t end);  // slice constructor
+            TokenArray(const TokenArray& base, int start = 0, int end = -1);  // slice constructor
             ~TokenArray();
 
             TokenArray(TokenArray&&) noexcept;
@@ -231,7 +231,6 @@ namespace nn
             template<bool(*F)(TokenType)>
             int search(int start = 0, int end = -1) const
             {
-                start %= this->off_len;
                 end %= this->off_len;
 
                 // A bit better cache utilization than rfind
@@ -254,7 +253,6 @@ namespace nn
             template<bool(*F)(TokenType)>
             int rsearch(int start = -1, int end = 0) const
             {
-                start %= this->off_len;
                 end %= this->off_len;
 
                 for (int i = start % this->off_len; i >= end; i--)
@@ -266,7 +264,6 @@ namespace nn
             template<int(*F)(TokenType, int)>
             int search(int start = 0, int end = -1) const
             {
-                start %= this->off_len;
                 end %= this->off_len;
 
                 // A bit better cache utilization than rfind
@@ -289,7 +286,6 @@ namespace nn
             int rsearch(int start = -1, int end = 0) const
             {
                 start %= this->off_len;
-                end %= this->off_len;
 
                 int ret;
                 for (int i = start % this->off_len; i >= end; i--)

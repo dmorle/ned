@@ -88,8 +88,10 @@ namespace nn
                 throw std::bad_alloc();
         }
 
-        TokenArray::TokenArray(const TokenArray& base, size_t start, size_t end)
+        TokenArray::TokenArray(const TokenArray& base, int start, int end)
         {
+            end = end % base.size();
+
             size_t base_offset = base.offsets[start];
             
             this->is_slice = true;
@@ -184,13 +186,15 @@ namespace nn
         {
             size_t line_num = 1;
             size_t line_start = 0;
+            bool use_indents = true;
 
             for (size_t i = 0; i < bufsz;)
             {
                 switch (buf[i])
                 {
                 case ' ':
-                    if (bufsz - i >= 4
+                    if (use_indents
+                        && bufsz - i >= 4
                         && buf[i + 1] == ' '
                         && buf[i + 2] == ' '
                         && buf[i + 3] == ' '
@@ -201,18 +205,21 @@ namespace nn
                         continue;
                     }
                 case '\t':
-                    tarr.push_back(TokenImp<TokenType::INDENT>(line_num, i - line_start));
+                    if (use_indents)
+                        tarr.push_back(TokenImp<TokenType::INDENT>(line_num, i - line_start));
                     break;
                 case '\r':
                 case '\v':
                 case '\f':
                     break;
                 case '\n':
+                    use_indents = true;
                     line_start = i;
                     line_num++;
                     tarr.push_back(TokenImp<TokenType::ENDL>(line_num, i - line_start));
                     break;
                 case '<':
+                    use_indents = false;
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::CMP_LE>(line_num, i - line_start));
@@ -222,6 +229,7 @@ namespace nn
                     tarr.push_back(TokenImp<TokenType::ANGLE_O>(line_num, i - line_start));
                     break;
                 case '>':
+                    use_indents = false;
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::CMP_GE>(line_num, i - line_start));
@@ -231,27 +239,36 @@ namespace nn
                     tarr.push_back(TokenImp<TokenType::ANGLE_C>(line_num, i - line_start));
                     break;
                 case '(':
+                    use_indents = false;
                     tarr.push_back(TokenImp<TokenType::ROUND_O>(line_num, i - line_start));
                     break;
                 case ')':
+                    use_indents = false;
                     tarr.push_back(TokenImp<TokenType::ROUND_C>(line_num, i - line_start));
                     break;
                 case '[':
+                    use_indents = false;
                     tarr.push_back(TokenImp<TokenType::SQUARE_O>(line_num, i - line_start));
                     break;
                 case ']':
+                    use_indents = false;
                     tarr.push_back(TokenImp<TokenType::SQUARE_C>(line_num, i - line_start));
                     break;
                 case '.':
+                    use_indents = false;
                     tarr.push_back(TokenImp<TokenType::DOT>(line_num, i - line_start));
                     break;
                 case ':':
+                    use_indents = false;
                     tarr.push_back(TokenImp<TokenType::COLON>(line_num, i - line_start));
                     break;
                 case ',':
+                    use_indents = false;
                     tarr.push_back(TokenImp<TokenType::COMMA>(line_num, i - line_start));
                     break;
                 case '+':
+                    use_indents = false;
+
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::IADD>(line_num, i - line_start));
@@ -261,6 +278,8 @@ namespace nn
                     tarr.push_back(TokenImp<TokenType::ADD>(line_num, i - line_start));
                     break;
                 case '*':
+                    use_indents = false;
+
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::IMUL>(line_num, i - line_start));
@@ -270,6 +289,8 @@ namespace nn
                     tarr.push_back(TokenImp<TokenType::MUL>(line_num, i - line_start));
                     break;
                 case '/':
+                    use_indents = false;
+
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::IDIV>(line_num, i - line_start));
@@ -279,6 +300,8 @@ namespace nn
                     tarr.push_back(TokenImp<TokenType::DIV>(line_num, i - line_start));
                     break;
                 case '!':
+                    use_indents = false;
+
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::CMP_NE>(line_num, i - line_start));
@@ -287,6 +310,8 @@ namespace nn
                     }
                     throw SyntaxError(line_num, i - line_start, "Expected '=' after '!'");
                 case '=':
+                    use_indents = false;
+
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::CMP_EQ>(line_num, i - line_start));
@@ -297,6 +322,8 @@ namespace nn
                     break;
                 case '"':
                 {
+                    use_indents = false;
+
                     TokenImp<TokenType::STRLIT> tk(line_num, i - line_start);
                     int sidx = 0;
                     for (i += 1; i < bufsz && sidx < 256 && buf[i] != '"'; i++, sidx++)
@@ -311,6 +338,8 @@ namespace nn
                 }
                 default:
                 {
+                    use_indents = false;
+
                     // Handling numeric types
                     size_t col_num = i - line_start;
                     bool neg_val = false;

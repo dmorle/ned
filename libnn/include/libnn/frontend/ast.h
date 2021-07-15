@@ -16,38 +16,71 @@ namespace nn
         using EvalCtx = std::unordered_map<std::string, Obj*>;
 
         class ModImp;
+        class AstSeq;
         class AstDef;
-        class Module
-        {
-        public:
-            std::vector<ModImp> imps;
-            std::vector<AstDef> defs;
+        class Module;
 
-            Module(const TokenArray& tarr);
-            ~Module();
-
-            Obj* eval(const std::string& entry_point, EvalCtx& ctx);
-        };
-
-        class Ast
+        class AstBlock
         {
         public:
             virtual Obj* eval(EvalCtx& ctx, Module& mod) = 0;
         };
 
-        // root node
-        class AstDef :
-            public Ast
+        class AstExpr :
+            public AstBlock
+        {};
+
+        class AstBool :
+            public AstExpr
         {
         public:
-            AstDef(const TokenArray& def_sig, const TokenArray& def_block);
-            ~AstDef();
+            AstBool(const TokenArray& tarr);
+        };
 
-            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        class AstInt :
+            public AstExpr
+        {
+        public:
+            AstInt(const TokenArray& tarr);
+        };
+
+        class AstFloat :
+            public AstExpr
+        {
+        public:
+            AstFloat(const TokenArray& tarr);
+        };
+
+        class AstStr :
+            public AstExpr
+        {
+        public:
+            AstStr(const TokenArray& tarr);
+        };
+
+        class AstTuple :
+            public AstExpr
+        {
+        public:
+            AstTuple(const TokenArray& tarr);
+        };
+
+        class AstIdn :
+            public AstExpr
+        {
+        public:
+            AstIdn(const TokenArray& tarr);
+        };
+
+        class AstIAdd :
+            public AstExpr
+        {
+        public:
+            AstIAdd(const TokenArray& tarr);
         };
 
         class AstCall :
-            public Ast
+            public AstExpr
         {
         public:
             AstCall(const TokenArray& tarr, int indent_level);
@@ -56,100 +89,86 @@ namespace nn
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
-        class AstFor :
-            public Ast
+        AstExpr* parseExpr(const TokenArray& tarr);
+
+        // end of expression nodes
+        // block nodes
+
+        class AstDecl :
+            public AstBlock
         {
         public:
-            AstFor(const TokenArray& tarr, int indent_level);
-            ~AstFor();
-
-            virtual Obj* eval(EvalCtx& ctx, Module& mod);
-        };
-
-        class AstWhile :
-            public Ast
-        {
-        public:
-            AstWhile(const TokenArray& tarr, int indent_level);
-            ~AstWhile();
+            AstDecl(const TokenArray& tarr);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
         class AstIf :
-            public Ast
+            public AstBlock
         {
         public:
-            AstIf(const TokenArray& tarr, int indent_level);
+            AstIf(const TokenArray& if_sig, const TokenArray& if_seq, int indent_level);
             ~AstIf();
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
-        class AstBlock :
-            public Ast
+        class AstWhile :
+            public AstBlock
         {
         public:
-            AstBlock(const TokenArray& tarr, int indent_level);
-            ~AstBlock();
+            AstWhile(const TokenArray& while_sig, const TokenArray& whlie_seq, int indent_level);
+            ~AstWhile();
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
-        class AstIAdd :
-            public Ast
+        class AstFor :
+            public AstBlock
         {
+            AstSeq seq;
+
         public:
-            AstIAdd(const TokenArray& tarr);
+            AstFor(const TokenArray& for_sig, const TokenArray& for_seq, int indent_level);
+            ~AstFor();
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
-        class AstDecl :
-            public Ast
+        class AstSeq
         {
+            std::vector<AstBlock*> blocks;
+
         public:
-            AstDecl(const TokenArray& tarr);
+            AstSeq(const TokenArray& tarr, int indent_level);
+            ~AstSeq();
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
-        class AstIdn :
-            public Ast
+        // root node
+        class AstDef
         {
+            AstSeq block;
+            std::string name;
+            std::vector<AstDecl> constargs;
+            std::vector<AstDecl> varargs;
+
         public:
-            AstIdn(const TokenArray& tarr);
+            AstDef(const TokenArray& def_sig, const TokenArray& def_block);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
-        class AstTuple :
-            public Ast
+        class Module
         {
-        public:
-            AstTuple(const TokenArray& tarr);
-        };
+            std::vector<ModImp> imps;
+            std::vector<AstDef> defs;
 
-        class AstStr :
-            public Ast
-        {
         public:
-            AstStr(const TokenArray& tarr);
-        };
+            Module(const TokenArray& tarr);
 
-        class AstFloat :
-            public Ast
-        {
-        public:
-            AstFloat(const TokenArray& tarr);
-        };
-
-        class AstInt :
-            public Ast
-        {
-        public:
-            AstInt(const TokenArray& tarr);
-        };
-
-        class AstBool :
-            public Ast
-        {
-        public:
-            AstBool(const TokenArray& tarr);
+            Obj* eval(const std::string& entry_point, EvalCtx& ctx);
         };
     }
 }
