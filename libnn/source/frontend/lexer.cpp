@@ -144,64 +144,40 @@ namespace nn
             return (Token*)(pbuf + offsets[idx]);
         }
 
-        SMALL_PUSH_BACK( INDENT   )
-        SMALL_PUSH_BACK( ENDL     )
-        SMALL_PUSH_BACK( ANGLE_O  )
-        SMALL_PUSH_BACK( ANGLE_C  )
-        SMALL_PUSH_BACK( ROUND_O  )
-        SMALL_PUSH_BACK( ROUND_C  )
-        SMALL_PUSH_BACK( SQUARE_O )
-        SMALL_PUSH_BACK( SQUARE_C )
-        SMALL_PUSH_BACK( DOT      )
-        SMALL_PUSH_BACK( COMMA    )
-        SMALL_PUSH_BACK( ADD      )
-        SMALL_PUSH_BACK( SUB      )
-        SMALL_PUSH_BACK( MUL      )
-        SMALL_PUSH_BACK( DIV      )
-        SMALL_PUSH_BACK( IADD     )
-        SMALL_PUSH_BACK( ISUB     )
-        SMALL_PUSH_BACK( IMUL     )
-        SMALL_PUSH_BACK( IMUL     )
-        SMALL_PUSH_BACK( IMUL     )
-        SMALL_PUSH_BACK( IDIV     )
-        SMALL_PUSH_BACK( ASSIGN   )
-        SMALL_PUSH_BACK( CMP_EQ   )
-        SMALL_PUSH_BACK( CMP_NE   )
-        SMALL_PUSH_BACK( CMP_GE   )
-        SMALL_PUSH_BACK( CMP_LE   )
-        SMALL_PUSH_BACK( INT      )
-        SMALL_PUSH_BACK( FLOAT    )
-        LARGE_PUSH_BACK( STRLIT   )
-        LARGE_PUSH_BACK( IDN      )
+        SMALL_PUSH_BACK( INDENT   );
+        SMALL_PUSH_BACK( ENDL     );
+        SMALL_PUSH_BACK( ANGLE_O  );
+        SMALL_PUSH_BACK( ANGLE_C  );
+        SMALL_PUSH_BACK( ROUND_O  );
+        SMALL_PUSH_BACK( ROUND_C  );
+        SMALL_PUSH_BACK( SQUARE_O );
+        SMALL_PUSH_BACK( SQUARE_C );
+        SMALL_PUSH_BACK( DOT      );
+        SMALL_PUSH_BACK( COLON    );
+        SMALL_PUSH_BACK( COMMA    );
+        SMALL_PUSH_BACK( ADD      );
+        SMALL_PUSH_BACK( SUB      );
+        SMALL_PUSH_BACK( MUL      );
+        SMALL_PUSH_BACK( DIV      );
+        SMALL_PUSH_BACK( IADD     );
+        SMALL_PUSH_BACK( ISUB     );
+        SMALL_PUSH_BACK( IMUL     );
+        SMALL_PUSH_BACK( IMUL     );
+        SMALL_PUSH_BACK( IMUL     );
+        SMALL_PUSH_BACK( IDIV     );
+        SMALL_PUSH_BACK( ASSIGN   );
+        SMALL_PUSH_BACK( CMP_EQ   );
+        SMALL_PUSH_BACK( CMP_NE   );
+        SMALL_PUSH_BACK( CMP_GE   );
+        SMALL_PUSH_BACK( CMP_LE   );
+        SMALL_PUSH_BACK( INT      );
+        SMALL_PUSH_BACK( FLOAT    );
+        LARGE_PUSH_BACK( STRLIT   );
+        LARGE_PUSH_BACK( IDN      );
 
-        int TokenArray::ffind(TokenType tkty, int start, int end)
+        size_t TokenArray::size() const
         {
-            start %= this->off_len;
-            end %= this->off_len;
-
-            // A bit better cache utilization than rfind
-            int result = start;
-            Token* pstart = (Token*)(this->pbuf + this->offsets[start]);
-            while (result < end)
-            {
-                if (pstart->ty == tkty)
-                    return result;
-                result++;
-                pstart = (Token*)((uint8_t*)pstart + pstart->sz);
-            }
-
-            return -1;
-        }
-
-        int TokenArray::rfind(TokenType tkty, int start, int end)
-        {
-            start %= this->off_len;
-            end %= this->off_len;
-
-            for (int i = start % this->off_len; i >= end; i--)
-                if (((Token*)(this->pbuf + this->offsets[i]))->ty == tkty)
-                    return i;
-            return -1;
+            return off_len;
         }
 
         int lex_buf(char* buf, size_t bufsz, TokenArray& tarr)
@@ -214,7 +190,19 @@ namespace nn
                 switch (buf[i])
                 {
                 case ' ':
+                    if (bufsz - i >= 4
+                        && buf[i + 1] == ' '
+                        && buf[i + 2] == ' '
+                        && buf[i + 3] == ' '
+                        )
+                    {
+                        tarr.push_back(TokenImp<TokenType::INDENT>(line_num, i - line_start));
+                        i += 4;
+                        continue;
+                    }
                 case '\t':
+                    tarr.push_back(TokenImp<TokenType::INDENT>(line_num, i - line_start));
+                    break;
                 case '\r':
                 case '\v':
                 case '\f':
@@ -256,6 +244,9 @@ namespace nn
                     break;
                 case '.':
                     tarr.push_back(TokenImp<TokenType::DOT>(line_num, i - line_start));
+                    break;
+                case ':':
+                    tarr.push_back(TokenImp<TokenType::COLON>(line_num, i - line_start));
                     break;
                 case ',':
                     tarr.push_back(TokenImp<TokenType::COMMA>(line_num, i - line_start));
@@ -383,7 +374,7 @@ namespace nn
                         double fval = ival;
                         while (i < bufsz && is_numeric(buf[i]))
                         {
-                            fval += multiplier * buf[i] - '0';
+                            fval += multiplier * (buf[i] - '0');
                             multiplier /= 10;
                             i += 1;
                         }

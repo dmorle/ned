@@ -40,8 +40,18 @@ namespace nn
             public Ast
         {
         public:
-            AstDef(const TokenArray& tarr, int indent_level);
+            AstDef(const TokenArray& def_sig, const TokenArray& def_block);
             ~AstDef();
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstCall :
+            public Ast
+        {
+        public:
+            AstCall(const TokenArray& tarr, int indent_level);
+            ~AstCall();
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -76,12 +86,12 @@ namespace nn
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
-        class AstSequence :
+        class AstBlock :
             public Ast
         {
         public:
-            AstSequence(const TokenArray& tarr, int indent_level);
-            ~AstSequence();
+            AstBlock(const TokenArray& tarr, int indent_level);
+            ~AstBlock();
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
