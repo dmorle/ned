@@ -87,6 +87,20 @@ namespace nn
             IDN
         };
 
+        enum class Keyword
+        {
+            DEF,
+            IF,
+            ELIF,
+            ELSE,
+            FOR,
+            IN,
+            WHILE,
+            VAR,
+            IMPORT,
+            RETURN
+        };
+
         class Token
         {
         public:
@@ -196,6 +210,34 @@ namespace nn
                 return ty == Ty;
             }
 
+            template<Keyword kw>
+            static bool is_keyword(const Token* tk);
+            template<> static bool is_keyword<Keyword::DEF>(const Token* tk)
+            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "def"; }
+            template<> static bool is_keyword<Keyword::IF>(const Token* tk)
+            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "if"; }
+            template<> static bool is_keyword<Keyword::ELIF>(const Token* tk)
+            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "elif"; }
+            template<> static bool is_keyword<Keyword::ELSE>(const Token* tk)
+            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "else"; }
+            template<> static bool is_keyword<Keyword::FOR>(const Token* tk)
+            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "for"; }
+            template<> static bool is_keyword<Keyword::IN>(const Token* tk)
+            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "in"; }
+            template<> static bool is_keyword<Keyword::WHILE>(const Token* tk)
+            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "while"; }
+            template<> static bool is_keyword<Keyword::VAR>(const Token* tk)
+            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "var"; }
+            template<> static bool is_keyword<Keyword::IMPORT>(const Token* tk)
+            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "import"; }
+            template<> static bool is_keyword<Keyword::RETURN>(const Token* tk)
+            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "return"; }
+
+            static bool test(const Token* tk)
+            {
+                return true;
+            }
+
             template<int ILV>
             static int block_end(const TokenType ty, int position)
             {
@@ -235,13 +277,74 @@ namespace nn
 
                 // A bit better cache utilization than rfind
                 int result = start;
-                Token* pstart = (Token*)(this->pbuf + this->offsets[start]);
+                const Token* pstart = static_cast<const Token*>(this->pbuf + this->offsets[start]);
                 while (result < end)
                 {
                     if (F(pstart->ty))
                         return result;
                     result++;
-                    pstart = (Token*)((uint8_t*)pstart + pstart->sz);
+                    pstart = static_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
+                }
+
+                return -1;
+            }
+
+            template<bool(*F)(const Token*)>
+            int search(int start = 0, int end = -1) const
+            {
+                end %= this->off_len;
+
+                // A bit better cache utilization than rfind
+                int result = start;
+                const Token* pstart = static_cast<const Token*>(this->pbuf + this->offsets[start]);
+                while (result < end)
+                {
+                    if (F(pstart))
+                        return result;
+                    result++;
+                    pstart = static_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
+                }
+
+                return -1;
+            }
+
+            template<int(*F)(TokenType, int)>
+            int search(int start = 0, int end = -1) const
+            {
+                end %= this->off_len;
+
+                // A bit better cache utilization than rfind
+                int ret;
+                int idx = start;
+                const Token* pstart = static_cast<const Token*>(this->pbuf + this->offsets[start]);
+                while (idx < end)
+                {
+                    ret = F(pstart->ty, idx);
+                    if (ret >= 0)
+                        return ret;
+                    idx++;
+                    pstart = static_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
+                }
+
+                return -1;
+            }
+
+            template<int(*F)(const Token*, int)>
+            int search(int start = 0, int end = -1) const
+            {
+                end %= this->off_len;
+
+                // A bit better cache utilization than rfind
+                int ret;
+                int idx = start;
+                const Token* pstart = static_cast<const Token*>(this->pbuf + this->offsets[start]);
+                while (idx < end)
+                {
+                    ret = F(pstart, idx);
+                    if (ret >= 0)
+                        return ret;
+                    idx++;
+                    pstart = static_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
                 }
 
                 return -1;
@@ -256,29 +359,19 @@ namespace nn
                 end %= this->off_len;
 
                 for (int i = start % this->off_len; i >= end; i--)
-                    if (F(((Token*)(this->pbuf + this->offsets[i]))->ty))
+                    if (F(static_cast<const Token*>(this->pbuf + this->offsets[i])->ty))
                         return i;
                 return -1;
             }
 
-            template<int(*F)(TokenType, int)>
-            int search(int start = 0, int end = -1) const
+            template<bool(*F)(const Token*)>
+            int rsearch(int start = -1, int end = 0) const
             {
                 end %= this->off_len;
 
-                // A bit better cache utilization than rfind
-                int ret;
-                int idx = start;
-                Token* pstart = (Token*)(this->pbuf + this->offsets[start]);
-                while (idx < end)
-                {
-                    ret = F(pstart->ty, idx);
-                    if (ret >= 0)
-                        return ret;
-                    idx++;
-                    pstart = (Token*)((uint8_t*)pstart + pstart->sz);
-                }
-
+                for (int i = start % this->off_len; i >= end; i--)
+                    if (F(static_cast<const Token*>(this->pbuf + this->offsets[i])))
+                        return i;
                 return -1;
             }
 
@@ -290,7 +383,22 @@ namespace nn
                 int ret;
                 for (int i = start % this->off_len; i >= end; i--)
                 {
-                    ret = F(((Token*)(this->pbuf + this->offsets[i]))->ty, i);
+                    ret = F(static_cast<const Token*>(this->pbuf + this->offsets[i])->ty, i);
+                    if (ret >= 0)
+                        return ret;
+                }
+                return -1;
+            }
+
+            template<int(*F)(const Token*, int)>
+            int rsearch(int start = -1, int end = 0) const
+            {
+                start %= this->off_len;
+
+                int ret;
+                for (int i = start % this->off_len; i >= end; i--)
+                {
+                    ret = F(static_cast<const Token*>(this->pbuf + this->offsets[i]), i);
                     if (ret >= 0)
                         return ret;
                 }

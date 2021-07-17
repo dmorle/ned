@@ -98,6 +98,7 @@ namespace nn
             public AstBlock
         {
         public:
+            AstDecl();
             AstDecl(const TokenArray& tarr);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
@@ -126,7 +127,9 @@ namespace nn
         class AstFor :
             public AstBlock
         {
+            AstDecl it;
             AstSeq seq;
+            AstExpr* pexpr;
 
         public:
             AstFor(const TokenArray& for_sig, const TokenArray& for_seq, int indent_level);

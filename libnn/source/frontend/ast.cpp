@@ -28,6 +28,22 @@ namespace nn
             } while (end != -1);
         }
 
+        AstFor::AstFor(const TokenArray& for_sig, const TokenArray& for_seq, int indent_level) :
+            seq(for_seq, indent_level + 1)
+        {
+            if (for_sig[0]->ty != TokenType::IDN || static_cast<const TokenImp<TokenType::IDN>*>(for_sig[0])->val != "for")
+                throw SyntaxError(for_sig[0], "Invalid for loop signature");  // should never run
+
+            if (for_sig.size() < 5)  // for var i in lst  <- minimum number of tokens in a for loop signature
+                throw SyntaxError(for_sig[0], "Invalid for loop signature");
+
+            int in_pos = for_sig.search<TokenArray::is_keyword<Keyword::IN>>(2);
+            if (in_pos < 0)
+                throw SyntaxError(for_sig[1], "Missing keyword in for loop signature: 'in'");
+            this->it = TokenArray(for_sig, 1, in_pos);  // decl init
+            this->pexpr = parseExpr(TokenArray(for_sig, in_pos + 1));
+        }
+
         AstSeq::AstSeq(const TokenArray& tarr, int indent_level)
         {
             // Assuming the first 'indent_level' tokens are TokenType::INDENT for every line
@@ -51,7 +67,7 @@ namespace nn
 
                         TokenArray if_sig(tarr, start, colon_pos);
                         TokenArray if_seq(tarr, colon_pos + 1, end);
-                        this->blocks.push_back(new AstIf(if_sig, if_seq, indent_level + 1));
+                        this->blocks.push_back(new AstIf(if_sig, if_seq, indent_level));
                         // else isn't a thing yet...
                         start = end + indent_level;
                         continue;
@@ -69,7 +85,7 @@ namespace nn
 
                         TokenArray while_sig(tarr, start, colon_pos);
                         TokenArray while_seq(tarr, colon_pos + 1, end);
-                        this->blocks.push_back(new AstWhile(while_sig, while_seq, indent_level + 1));
+                        this->blocks.push_back(new AstWhile(while_sig, while_seq, indent_level));
                         start = end + indent_level;
                         continue;
                     }
@@ -86,7 +102,7 @@ namespace nn
 
                         TokenArray for_sig(tarr, start, colon_pos);
                         TokenArray for_seq(tarr, colon_pos + 1, end);
-                        this->blocks.push_back(new AstFor(for_sig, for_seq, indent_level + 1));
+                        this->blocks.push_back(new AstFor(for_sig, for_seq, indent_level));
                         start = end + indent_level;
                         continue;
                     }
