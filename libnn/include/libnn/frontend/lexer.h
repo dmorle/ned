@@ -70,7 +70,7 @@ namespace nn
             COMMA,
             ADD,
             SUB,
-            MUL,
+            STAR,
             DIV,
             IADD,
             ISUB,
@@ -192,7 +192,8 @@ namespace nn
         {
         public:
             TokenArray(size_t mem_sz=512, size_t off_cap=16);
-            TokenArray(const TokenArray& base, int start = 0, int end = -1);  // slice constructor
+            TokenArray(const TokenArray& base, int start = 0);  // slice constructor
+            TokenArray(const TokenArray& base, int start, int end);  // slice constructor
             ~TokenArray();
 
             TokenArray(TokenArray&&) noexcept;
@@ -266,6 +267,42 @@ namespace nn
                 ilv = 0;
                 last_endl = 0;
                 return ret;
+            }
+
+            static bool constargs_end(const TokenType ty)
+            {
+                static int lvl = 0;
+
+                if (ty == TokenType::ANGLE_C)
+                {
+                    if (lvl == 0)
+                        return true;
+                    lvl--;
+                    return false;
+                }
+                if (ty == TokenType::ANGLE_O)
+                    lvl++;
+                return false;
+            }
+
+            static bool args_elem(const TokenType ty)
+            {
+                static int lvl = 0;
+
+                if (ty == TokenType::ANGLE_C)
+                {
+                    if (lvl == 0)
+                        return true;
+                    lvl--;
+                    return false;
+                }
+                if (ty == TokenType::ANGLE_O)
+                {
+                    lvl++;
+                    return false;
+                }
+
+                return ty == TokenType::COMMA && lvl == 0;
             }
 
             // returns -1 if token is not present in range

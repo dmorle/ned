@@ -1,6 +1,8 @@
 #include <libnn/frontend/ast.h>
 #include <libnn/frontend/obj.h>
 
+#include <cassert>
+
 namespace nn
 {
     namespace frontend
@@ -15,24 +17,167 @@ namespace nn
         }
 
         // helper for function signatures ie. def my_func<...>(...)
-        void parseDeclList(const TokenArray& tarr, std::vector<AstDecl>& declList)
+        void paseDefArgs(const TokenArray& tarr, std::vector<AstDefArgSingle>& args)
         {
             int start = 0;
             int end;
             do
             {
-                end = tarr.search<TokenArray::is_same<TokenType::COMMA>>();
+                end = tarr.search<TokenArray::args_elem>(start);
                 TokenArray decl(tarr, start, end);
-                declList.push_back({ decl });
+                args.push_back({ decl });
                 start = end;
             } while (end != -1);
+        }
+
+        // helper for function signatures ie. def my_func<...>(...)
+        void parseDefCargs(const TokenArray& tarr, std::vector<AstDefCarg*>& cargs)
+        {
+            if (tarr.size() == 0)
+                return;
+
+            int start = 0;
+            int end;
+            do
+            {
+                end = tarr.search<TokenArray::args_elem>(start);
+                TokenArray carg(tarr, start, end);
+                if (carg.size() == 0)
+                    throw SyntaxError(tarr[0], "Dangling end of constargs in def");
+                if (carg[0]->ty == TokenType::ANGLE_O)
+                {
+                    if (carg[carg.size() - 1]->ty != TokenType::ANGLE_C)
+                        throw SyntaxError(carg[0], "Missing closing '>' for constarg tuple in def");
+                    TokenArray cargtuple(carg, 1, -1);
+                    cargs.push_back(new AstDefCargTuple(carg));
+                }
+                else
+                    cargs.push_back(new AstDefArgSingle(carg));
+                start = end + 1;
+            } while (end != -1);
+        }
+
+        // helper for function calls ie. my_func<...>(...)
+        void parseConstargs(const TokenArray& tarr, std::vector<AstExpr*>& exprs)
+        {
+            if (tarr.size() == 0)
+                return;
+
+            int start = 0;
+            int end;
+            do
+            {
+                end = tarr.search<TokenArray::args_elem>(start);
+                TokenArray carg(tarr, start, end);
+                if (carg.size() == 0)
+                    throw SyntaxError(tarr[0], "Dangling end of constargs in block");
+                if (carg[0]->ty == TokenType::ANGLE_O)
+                {
+                    if (carg[carg.size() - 1]->ty != TokenType::ANGLE_C)
+                        throw SyntaxError(carg[0], "Missing closing '>' for constarg tuple in block");
+                    TokenArray cargtuple(carg, 1, -1);
+                    exprs.push_back(new AstTuple(cargtuple));
+                }
+                else
+                    exprs.push_back(parseExpr(carg));
+                start = end + 1;
+            } while (end != -1);
+        }
+
+        AstDecl::AstDecl()
+        {
+            this->var_name = "";
+            this->type_name = "";
+            this->constargs = {};
+        }
+
+        AstDecl::AstDecl(const TokenArray& tarr)
+        {
+            assert(tarr.size());
+            if (tarr.size() < 2)
+                throw SyntaxError(tarr[0], "Invalid syntax for declaration");
+
+            if (tarr[0]->ty != TokenType::IDN)
+                throw SyntaxError(tarr[0], "Invalid token for type name in declaration");
+            this->type_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val;
+            if (this->type_name == "var")
+            {
+                if (tarr.size() != 2)
+                    throw SyntaxError(tarr[0], "Invalid syntax for var declaration");
+                if (tarr[1]->ty != TokenType::IDN)
+                    throw SyntaxError(tarr[1], "Invalid token for variable name in var declaration");
+                this->var_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[1])->val;
+            }
+            else
+            {
+                int var_idx = tarr.size() - 1;
+                if (tarr[var_idx]->ty != TokenType::IDN)
+                    throw SyntaxError(tarr[var_idx], "Invalid token for variable name in declaration");
+                this->var_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[var_idx])->val;
+                
+                if (tarr.size() != 2)
+                {
+                    if (tarr[2]->ty != TokenType::ANGLE_O)
+                        throw SyntaxError(tarr[2], "Expected '<' in type for variable declaration");
+                    if (tarr[tarr.size() - 2]->ty != TokenType::ANGLE_C)
+                        throw SyntaxError(tarr[tarr.size() - 2], "Expected '>' in type for variable declaration");
+                    TokenArray cargs(tarr, 3, tarr.size() - 2);
+                    parseConstargs(cargs, this->constargs);
+                }
+            }
+        }
+
+        AstIf::AstIf(const TokenArray& if_sig, const TokenArray& if_seq, int indent_level) :
+            seq(if_seq, indent_level + 1)
+        {
+            assert(if_sig[0]->ty == TokenType::IDN);
+            assert(static_cast<const TokenImp<TokenType::IDN>*>(if_sig[0])->val == "if");
+
+            if (if_sig.size() < 2)  // if cond  <- minimum number of tokens in an if statement signature
+                throw SyntaxError(if_sig[0], "Invalid if statement signature");
+
+            this->pcond = parseExpr(TokenArray(if_sig, 1));
+        }
+
+        AstIf::~AstIf()
+        {
+            if (pcond)
+                delete pcond;
+        }
+
+        Obj* AstIf::eval(EvalCtx& ctx, Module& mod)
+        {
+            throw std::logic_error("Not implemented");
+        }
+
+        AstWhile::AstWhile(const TokenArray& while_sig, const TokenArray& while_seq, int indent_level) :
+            seq(while_seq, indent_level + 1)
+        {
+            assert(while_sig[0]->ty == TokenType::IDN);
+            assert(static_cast<const TokenImp<TokenType::IDN>*>(while_sig[0])->val == "while");
+
+            if (while_sig.size() < 2)  // while cond  <- minimum number of tokens in a while loop signature
+                throw SyntaxError(while_sig[0], "Invalid while loop signature");
+
+            this->pcond = parseExpr(TokenArray(while_sig, 1));
+        }
+
+        AstWhile::~AstWhile()
+        {
+            if (pcond)
+                delete pcond;
+        }
+
+        Obj* AstWhile::eval(EvalCtx& ctx, Module& mod)
+        {
+            throw std::logic_error("Not implemented");
         }
 
         AstFor::AstFor(const TokenArray& for_sig, const TokenArray& for_seq, int indent_level) :
             seq(for_seq, indent_level + 1)
         {
-            if (for_sig[0]->ty != TokenType::IDN || static_cast<const TokenImp<TokenType::IDN>*>(for_sig[0])->val != "for")
-                throw SyntaxError(for_sig[0], "Invalid for loop signature");  // should never run
+            assert(for_sig[0]->ty == TokenType::IDN);
+            assert(static_cast<const TokenImp<TokenType::IDN>*>(for_sig[0])->val == "for");
 
             if (for_sig.size() < 5)  // for var i in lst  <- minimum number of tokens in a for loop signature
                 throw SyntaxError(for_sig[0], "Invalid for loop signature");
@@ -42,6 +187,17 @@ namespace nn
                 throw SyntaxError(for_sig[1], "Missing keyword in for loop signature: 'in'");
             this->it = TokenArray(for_sig, 1, in_pos);  // decl init
             this->pexpr = parseExpr(TokenArray(for_sig, in_pos + 1));
+        }
+
+        AstFor::~AstFor()
+        {
+            if (pexpr)
+                delete pexpr;
+        }
+
+        Obj* AstFor::eval(EvalCtx& ctx, Module& mod)
+        {
+            throw std::logic_error("Not implemented");
         }
 
         AstSeq::AstSeq(const TokenArray& tarr, int indent_level)
@@ -135,6 +291,76 @@ namespace nn
                 delete e;
         }
 
+        Obj* AstSeq::eval(EvalCtx& ctx, Module& mod)
+        {
+            throw std::logic_error("Not implemented");
+        }
+
+        AstDefArgSingle::AstDefArgSingle(const TokenArray& tarr)
+        {
+            assert(tarr.size());
+            if (tarr.size() < 2)
+                throw SyntaxError(tarr[0], "Invalid syntax for declaration");
+
+            if (tarr[0]->ty != TokenType::IDN)
+                throw SyntaxError(tarr[0], "Invalid token for type name in declaration");
+            this->type_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val;
+            if (this->type_name == "var")
+            {
+                if (tarr[1]->ty == TokenType::STAR)
+                {
+                    packed = true;
+                    if (tarr.size() != 3)
+                        throw SyntaxError(tarr[0], "Invalid syntax for var* declaration");
+                    if (tarr[2]->ty != TokenType::IDN)
+                        throw SyntaxError(tarr[1], "Invalid token for variable name in var* declaration");
+                    this->var_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[2])->val;
+                }
+                else
+                {
+                    packed = false;
+                    if (tarr.size() != 2)
+                        throw SyntaxError(tarr[0], "Invalid syntax for var declaration");
+                    if (tarr[1]->ty != TokenType::IDN)
+                        throw SyntaxError(tarr[1], "Invalid token for variable name in var declaration");
+                    this->var_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[1])->val;
+                }
+            }
+            else
+            {
+                if (tarr[tarr.size() - 1]->ty != TokenType::IDN)
+                    throw SyntaxError(tarr[tarr.size() - 1], "Invalid token for variable name in declaration");
+                this->var_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[tarr.size() - 1])->val;
+
+                if (tarr[tarr.size() - 2]->ty == TokenType::STAR)
+                {
+                    packed = true;
+                    if (tarr.size() != 3)
+                    {
+                        if (tarr[2]->ty != TokenType::ANGLE_O)
+                            throw SyntaxError(tarr[2], "Expected '<' in type for variable declaration");
+                        if (tarr[tarr.size() - 3]->ty != TokenType::ANGLE_C)
+                            throw SyntaxError(tarr[tarr.size() - 3], "Expected '>' in type for variable declaration");
+                        TokenArray cargs(tarr, 3, tarr.size() - 3);  // T<>*N
+                        parseConstargs(cargs, this->constargs);
+                    }
+                }
+                else
+                {
+                    packed = false;
+                    if (tarr.size() != 2)
+                    {
+                        if (tarr[2]->ty != TokenType::ANGLE_O)
+                            throw SyntaxError(tarr[2], "Expected '<' in type for variable declaration");
+                        if (tarr[tarr.size() - 2]->ty != TokenType::ANGLE_C)
+                            throw SyntaxError(tarr[tarr.size() - 2], "Expected '>' in type for variable declaration");
+                        TokenArray cargs(tarr, 3, tarr.size() - 2);  // T<>N
+                        parseConstargs(cargs, this->constargs);
+                    }
+                }
+            }
+        }
+
         AstDef::AstDef(const TokenArray& def_sig, const TokenArray& def_seq) :
             block(def_seq, 1)
         {
@@ -151,11 +377,12 @@ namespace nn
             int end;
             if (def_sig[start]->ty == TokenType::ANGLE_O)
             {
-                end = def_sig.search<TokenArray::is_same<TokenType::ANGLE_C>>();
+                // TODO: allow for nested <>
+                end = def_sig.search<TokenArray::constargs_end>();
                 if (end < 0)
                     throw SyntaxError(def_sig[start], "Missing closing '>' in function signature");
                 TokenArray constargs_tarr({ def_sig, start, end });
-                parseDeclList(constargs_tarr, this->constargs);
+                parseDefCargs(constargs_tarr, this->constargs);
                 start = end + 1;
                 if (start >= def_sig.size())
                     throw SyntaxError(def_sig[end], "Missing expected '(' in function signature");
@@ -169,7 +396,7 @@ namespace nn
                 throw SyntaxError(def_sig[start], "Missing closing ')' in function signature");
 
             TokenArray varargs_tarr({ def_sig, start, end });
-            parseDeclList(varargs_tarr, this->varargs);
+            paseDefArgs(varargs_tarr, this->varargs);
         }
 
         Obj* AstDef::eval(EvalCtx& ctx, Module& mod)

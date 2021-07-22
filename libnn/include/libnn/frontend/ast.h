@@ -23,12 +23,17 @@ namespace nn
         class AstBlock
         {
         public:
+            virtual ~AstBlock() = 0;
+
             virtual Obj* eval(EvalCtx& ctx, Module& mod) = 0;
         };
 
         class AstExpr :
             public AstBlock
-        {};
+        {
+        public:
+            virtual ~AstExpr() = 0;
+        };
 
         class AstBool :
             public AstExpr
@@ -63,6 +68,9 @@ namespace nn
         {
         public:
             AstTuple(const TokenArray& tarr);
+            virtual ~AstTuple();
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
         class AstIdn :
@@ -84,7 +92,7 @@ namespace nn
         {
         public:
             AstCall(const TokenArray& tarr, int indent_level);
-            ~AstCall();
+            virtual ~AstCall();
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -94,12 +102,18 @@ namespace nn
         // end of expression nodes
         // block nodes
 
+        // simple variable delarations found in sequences
         class AstDecl :
             public AstBlock
         {
+            std::string var_name;
+            std::string type_name;
+            std::vector<AstExpr*> constargs;
+
         public:
             AstDecl();
             AstDecl(const TokenArray& tarr);
+            virtual ~AstDecl();
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -107,9 +121,12 @@ namespace nn
         class AstIf :
             public AstBlock
         {
+            AstExpr* pcond;
+            AstSeq seq;
+
         public:
             AstIf(const TokenArray& if_sig, const TokenArray& if_seq, int indent_level);
-            ~AstIf();
+            virtual ~AstIf();
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -117,9 +134,12 @@ namespace nn
         class AstWhile :
             public AstBlock
         {
+            AstExpr* pcond;
+            AstSeq seq;
+
         public:
             AstWhile(const TokenArray& while_sig, const TokenArray& whlie_seq, int indent_level);
-            ~AstWhile();
+            virtual ~AstWhile();
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -128,12 +148,12 @@ namespace nn
             public AstBlock
         {
             AstDecl it;
-            AstSeq seq;
             AstExpr* pexpr;
+            AstSeq seq;
 
         public:
             AstFor(const TokenArray& for_sig, const TokenArray& for_seq, int indent_level);
-            ~AstFor();
+            virtual ~AstFor();
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -149,13 +169,45 @@ namespace nn
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
+        // constargs can have tuples, varargs can't
+        class AstDefCarg
+        {
+        public:
+            virtual ~AstDefCarg() = 0;
+        };
+
+        // basically AstDecl but with packed parameters
+        class AstDefArgSingle :
+            public AstDefCarg
+        {
+        public:
+            bool packed;
+            std::string var_name;
+            std::string type_name;
+            std::vector<AstExpr*> constargs;
+
+            AstDefArgSingle(const TokenArray& tarr);
+            virtual ~AstDefArgSingle();
+        };
+
+        // Tuple of AstDefCarg s
+        class AstDefCargTuple :
+            public AstDefCarg
+        {
+        public:
+            std::vector<AstDefCarg*> elems;
+
+            AstDefCargTuple(const TokenArray& tarr);
+            virtual ~AstDefCargTuple();
+        };
+
         // root node
         class AstDef
         {
             AstSeq block;
             std::string name;
-            std::vector<AstDecl> constargs;
-            std::vector<AstDecl> varargs;
+            std::vector<AstDefCarg*> constargs;
+            std::vector<AstDefArgSingle> varargs;
 
         public:
             AstDef(const TokenArray& def_sig, const TokenArray& def_block);

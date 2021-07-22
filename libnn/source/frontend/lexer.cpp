@@ -88,9 +88,32 @@ namespace nn
                 throw std::bad_alloc();
         }
 
+        TokenArray::TokenArray(const TokenArray& base, int start)
+        {
+            size_t base_offset = base.offsets[start];
+            size_t base_buflen = ((Token*)(pbuf + base.offsets[base.size() - 1]))->sz + base.offsets[base.size() - 1];
+
+            this->is_slice = true;
+
+            int end = base.size();
+            this->mem_sz = 0;
+            this->rawlen = base_buflen - base_offset;
+            this->pbuf = base.pbuf + base_offset;
+
+            this->off_cap = 0;
+            this->off_len = base.size() - start;
+            this->offsets = (size_t*)std::malloc(sizeof(size_t) * this->off_len);
+            if (!this->offsets)
+                throw std::bad_alloc();
+
+            for (int i = 0; i < this->off_len; i++)
+                this->offsets[i] = base.offsets[start + i] - base_offset;
+        }
+
         TokenArray::TokenArray(const TokenArray& base, int start, int end)
         {
-            end = end % base.size();
+            if (end < 0)
+                end += base.size();
 
             size_t base_offset = base.offsets[start];
             
@@ -159,7 +182,7 @@ namespace nn
         SMALL_PUSH_BACK( COMMA    );
         SMALL_PUSH_BACK( ADD      );
         SMALL_PUSH_BACK( SUB      );
-        SMALL_PUSH_BACK( MUL      );
+        SMALL_PUSH_BACK( STAR     );
         SMALL_PUSH_BACK( DIV      );
         SMALL_PUSH_BACK( IADD     );
         SMALL_PUSH_BACK( ISUB     );
@@ -286,7 +309,7 @@ namespace nn
                         i += 2;
                         continue;
                     }
-                    tarr.push_back(TokenImp<TokenType::MUL>(line_num, i - line_start));
+                    tarr.push_back(TokenImp<TokenType::STAR>(line_num, i - line_start));
                     break;
                 case '/':
                     use_indents = false;

@@ -16,7 +16,8 @@ def rnn_cell<int N, int I, int S>(tensor<N, I> inp, tensor<N, S> state, dict the
 
 def rnn<int N, int I, int S>(tensor<N, I> inp, dict theta):
     static tensor<N, S> state;
-
+    
+    var output;
     state, output = rnn_cell<N, I, S>(inp, state, theta)
     return output
 
