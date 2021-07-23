@@ -12,8 +12,39 @@ namespace nn
 
         }
 
-        AstExpr* parseExpr(const TokenArray& tarr)
+        int opPrec(const Token* ptk)
         {
+            switch (ptk->ty)
+            {
+            case TokenType::DOT:
+                return 5;
+            case TokenType::ADD:
+            case TokenType::SUB:
+                return 3;
+            case TokenType::STAR:
+            case TokenType::DIV:
+                return 4;
+            case TokenType::CMP_EQ:
+            case TokenType::CMP_NE:
+            case TokenType::CMP_GE:
+            case TokenType::CMP_LE:
+            case TokenType::ANGLE_C:  // less than
+            case TokenType::ANGLE_O:  // greater than
+                return 2;
+            case TokenType::IADD:
+            case TokenType::ISUB:
+            case TokenType::IMUL:
+            case TokenType::IDIV:
+            case TokenType::ASSIGN:
+                return 0;
+            case TokenType::IDN:
+                if (static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val == "and")
+                    return 1;
+                if (static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val == "or")
+                    return 1;
+                return -1;
+            }
+            return -1;
         }
 
         // helper for function signatures ie. def my_func<...>(...)
@@ -24,10 +55,12 @@ namespace nn
             do
             {
                 end = tarr.search<TokenArray::args_elem>(start);
+                if (end == -1)
+                    end = tarr.size();
                 TokenArray decl(tarr, start, end);
                 args.push_back({ decl });
                 start = end;
-            } while (end != -1);
+            } while (end != tarr.size());
         }
 
         // helper for function signatures ie. def my_func<...>(...)
@@ -41,6 +74,8 @@ namespace nn
             do
             {
                 end = tarr.search<TokenArray::args_elem>(start);
+                if (end == -1)
+                    end = tarr.size();
                 TokenArray carg(tarr, start, end);
                 if (carg.size() == 0)
                     throw SyntaxError(tarr[0], "Dangling end of constargs in def");
@@ -54,7 +89,7 @@ namespace nn
                 else
                     cargs.push_back(new AstDefArgSingle(carg));
                 start = end + 1;
-            } while (end != -1);
+            } while (end != tarr.size());
         }
 
         // helper for function calls ie. my_func<...>(...)
@@ -68,6 +103,8 @@ namespace nn
             do
             {
                 end = tarr.search<TokenArray::args_elem>(start);
+                if (end == -1)
+                    end = tarr.size();
                 TokenArray carg(tarr, start, end);
                 if (carg.size() == 0)
                     throw SyntaxError(tarr[0], "Dangling end of constargs in block");
@@ -79,9 +116,121 @@ namespace nn
                     exprs.push_back(new AstTuple(cargtuple));
                 }
                 else
-                    exprs.push_back(parseExpr(carg));
+                    exprs.push_back(parseExpr<0>(carg));
                 start = end + 1;
-            } while (end != -1);
+            } while (end != tarr.size());
+        }
+
+        template<int prec>
+        AstExpr* splitExpr(const TokenArray& tarr, int split_point);
+
+        template<>
+        AstExpr* splitExpr<0>(const TokenArray& tarr, int split_point)
+        {
+            assert(split_point < tarr.size() - 1);
+
+            TokenArray left(tarr, 0, split_point);
+            TokenArray right(tarr, split_point + 1);
+
+            switch (tarr[split_point]->ty)
+            {
+            case TokenType::IADD:
+                return new AstIAdd(left, right);
+            case TokenType::ISUB:
+                return new AstISub(left, right);
+            case TokenType::IMUL:
+                return new AstIMul(left, right);
+            case TokenType::IDIV:
+                return new AstIDiv(left, right);
+            case TokenType::ASSIGN:
+                return new AstAssign(left, right);
+            }
+
+            assert(false);
+        }
+
+        template<>
+        AstExpr* splitExpr<1>(const TokenArray& tarr, int split_point)
+        {
+            assert(split_point < tarr.size() - 1);
+            assert(tarr[split_point]->ty == TokenType::IDN);
+
+            TokenArray left(tarr, 0, split_point);
+            TokenArray right(tarr, split_point + 1);
+
+            if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[split_point])->val == "and")
+                return new AstAnd(left, right);
+            if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[split_point])->val == "or")
+                return new AstOr(left, right);
+
+            assert(false);
+        }
+
+        template<int prec>
+        AstExpr* parseExpr(const TokenArray& tarr)
+        {
+            static_assert(prec < 6);
+
+            size_t tsz = tarr.size();
+            assert(tsz);
+
+            // shortcut for bracketed expressions
+            if (tarr[0]->ty == TokenType::ROUND_O && tarr[tsz - 1] == TokenType::ROUND_C)
+                return parseExpr<0>(TokenArray(tarr, 1, tsz - 1));
+            
+            int bbrac = 0;
+            int sbrac = 0;
+            for (int i = 0; i < tsz; i++)
+            {
+                // Checking for brackets
+                if (tarr[i]->ty == TokenType::ROUND_O)
+                {
+                    bbrac++;
+                    continue;
+                }
+                if (tarr[i]->ty == TokenType::ROUND_C)
+                {
+                    bbrac--;
+                    continue;
+                }
+                if (tarr[i]->ty == TokenType::SQUARE_O)
+                {
+                    sbrac++;
+                    continue;
+                }
+                if (tarr[i]->ty == TokenType::SQUARE_O)
+                {
+                    sbrac--;
+                    continue;
+                }
+
+                if (opPrec(tarr[i]) == prec)
+                {
+                    if (i == tarr.size() - 1)
+                        throw SyntaxError(tarr[i], "Missing right side for binary operator");
+                    return splitExpr<prec>(tarr, i);
+                }
+            }
+            if (bbrac < 0)
+                throw SyntaxError(tarr[0], "Missing closing ')' in expression");
+            if (sbrac < 0)
+                throw SyntaxError(tarr[0], "Missing closing ']' in expression");
+
+            return parseExpr<prec + 1>(tarr);
+        }
+
+        // special parsing because of the negative operator
+        template<>
+        AstExpr* parseExpr<3>(const TokenArray& tarr)
+        {
+            // TODO: special case for parsing allowing for negative arguments
+        }
+
+        // special parsing for leaf nodes, parseExpr<7> does not exist
+        template<>
+        AstExpr* parseExpr<6>(const TokenArray& tarr)
+        {
+            // TODO: leaf node expression parsing ; negative operator, indexing, and literal expressions
         }
 
         AstDecl::AstDecl()
@@ -136,7 +285,7 @@ namespace nn
             if (if_sig.size() < 2)  // if cond  <- minimum number of tokens in an if statement signature
                 throw SyntaxError(if_sig[0], "Invalid if statement signature");
 
-            this->pcond = parseExpr(TokenArray(if_sig, 1));
+            this->pcond = parseExpr<0>(TokenArray(if_sig, 1));
         }
 
         AstIf::~AstIf()
@@ -159,18 +308,13 @@ namespace nn
             if (while_sig.size() < 2)  // while cond  <- minimum number of tokens in a while loop signature
                 throw SyntaxError(while_sig[0], "Invalid while loop signature");
 
-            this->pcond = parseExpr(TokenArray(while_sig, 1));
+            this->pcond = parseExpr<0>(TokenArray(while_sig, 1));
         }
 
         AstWhile::~AstWhile()
         {
             if (pcond)
                 delete pcond;
-        }
-
-        Obj* AstWhile::eval(EvalCtx& ctx, Module& mod)
-        {
-            throw std::logic_error("Not implemented");
         }
 
         AstFor::AstFor(const TokenArray& for_sig, const TokenArray& for_seq, int indent_level) :
@@ -186,18 +330,13 @@ namespace nn
             if (in_pos < 0)
                 throw SyntaxError(for_sig[1], "Missing keyword in for loop signature: 'in'");
             this->it = TokenArray(for_sig, 1, in_pos);  // decl init
-            this->pexpr = parseExpr(TokenArray(for_sig, in_pos + 1));
+            this->pexpr = parseExpr<0>(TokenArray(for_sig, in_pos + 1));
         }
 
         AstFor::~AstFor()
         {
             if (pexpr)
                 delete pexpr;
-        }
-
-        Obj* AstFor::eval(EvalCtx& ctx, Module& mod)
-        {
-            throw std::logic_error("Not implemented");
         }
 
         AstSeq::AstSeq(const TokenArray& tarr, int indent_level)
@@ -279,7 +418,7 @@ namespace nn
                 if (end < 0)
                     end = tarr.size();
                 TokenArray expr_tarr(tarr, start, end);
-                this->blocks.push_back(parseExpr(expr_tarr));
+                this->blocks.push_back(parseExpr<0>(expr_tarr));
 
                 start = end + 1 + indent_level;  // eat the ENDL token and the 'indent_level' INDENT tokens.
             }
@@ -289,11 +428,6 @@ namespace nn
         {
             for (auto e : blocks)
                 delete e;
-        }
-
-        Obj* AstSeq::eval(EvalCtx& ctx, Module& mod)
-        {
-            throw std::logic_error("Not implemented");
         }
 
         AstDefArgSingle::AstDefArgSingle(const TokenArray& tarr)
@@ -361,6 +495,23 @@ namespace nn
             }
         }
 
+        AstDefArgSingle::~AstDefArgSingle()
+        {
+            for (auto e : constargs)
+                delete e;
+        }
+
+        AstDefCargTuple::AstDefCargTuple(const TokenArray& tarr)
+        {
+            parseDefCargs(tarr, this->elems);
+        }
+
+        AstDefCargTuple::~AstDefCargTuple()
+        {
+            for (auto e : elems)
+                delete e;
+        }
+
         AstDef::AstDef(const TokenArray& def_sig, const TokenArray& def_seq) :
             block(def_seq, 1)
         {
@@ -397,11 +548,6 @@ namespace nn
 
             TokenArray varargs_tarr({ def_sig, start, end });
             paseDefArgs(varargs_tarr, this->varargs);
-        }
-
-        Obj* AstDef::eval(EvalCtx& ctx, Module& mod)
-        {
-            throw std::logic_error("Not implemented");
         }
 
         Module::Module(const TokenArray& tarr)

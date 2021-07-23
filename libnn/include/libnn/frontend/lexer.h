@@ -289,7 +289,7 @@ namespace nn
             {
                 static int lvl = 0;
 
-                if (ty == TokenType::ANGLE_C)
+                if (ty == TokenType::ANGLE_C)// && (prev == TokenType::CO))
                 {
                     if (lvl == 0)
                         return true;
