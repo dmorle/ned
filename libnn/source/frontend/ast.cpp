@@ -9,15 +9,28 @@ namespace nn
     {
         bool isDecl(const TokenArray& tarr)
         {
+            if (tarr.size() < 2 || tarr[0]->ty != TokenType::IDN)
+                return false;
+            if (tarr[1]->ty == TokenType::IDN)
+                return true;
 
+            if (tarr.size() < 4 || tarr[1]->ty != TokenType::ANGLE_O)
+                return false;
+
+            int ret = tarr.search<TokenArray::constargs_end>(2);
+            if (ret < 0)
+                throw SyntaxError(tarr[1], "Missing closing '>'");
+            assert(tarr[ret]->ty == TokenType::ANGLE_C);
+
+            if (ret + 1 == tarr.size() || tarr[ret + 1]->ty != TokenType::IDN)
+                return false;
+            return true;
         }
 
         int opPrec(const Token* ptk)
         {
             switch (ptk->ty)
             {
-            case TokenType::DOT:
-                return 5;
             case TokenType::ADD:
             case TokenType::SUB:
                 return 3;
@@ -166,6 +179,107 @@ namespace nn
             assert(false);
         }
 
+        template<>
+        AstExpr* splitExpr<2>(const TokenArray& tarr, int split_point)
+        {
+            assert(split_point < tarr.size() - 1);
+            
+            TokenArray left(tarr, 0, split_point);
+            TokenArray right(tarr, split_point + 1);
+
+            switch (tarr[split_point]->ty)
+            {
+            case TokenType::CMP_EQ:
+                return new AstEq(left, right);
+            case TokenType::CMP_NE:
+                return new AstNe(left, right);
+            case TokenType::CMP_GE:
+                return new AstGe(left, right);
+            case TokenType::CMP_LE:
+                return new AstLe(left, right);
+            case TokenType::ANGLE_C:
+                return new AstGt(left, right);
+            case TokenType::ANGLE_O:
+                return new AstLt(left, right);
+            }
+
+            assert(false);
+        }
+
+        template<>
+        AstExpr* splitExpr<3>(const TokenArray& tarr, int split_point)
+        {
+            assert(split_point < tarr.size() - 1);
+
+            TokenArray left(tarr, 0, split_point);
+            TokenArray right(tarr, split_point + 1);
+
+            switch (tarr[split_point]->ty)
+            {
+            case TokenType::ADD:
+                return new AstAdd(left, right);
+            case TokenType::SUB:
+                return new AstSub(left, right);
+            }
+
+            assert(false);
+        }
+
+        template<>
+        AstExpr* splitExpr<4>(const TokenArray& tarr, int split_point)
+        {
+            assert(split_point < tarr.size() - 1);
+
+            TokenArray left(tarr, 0, split_point);
+            TokenArray right(tarr, split_point + 1);
+
+            switch (tarr[split_point]->ty)
+            {
+            case TokenType::STAR:
+                return new AstMul(left, right);
+            case TokenType::DIV:
+                return new AstDiv(left, right);
+            }
+
+            assert(false);
+        }
+
+        AstExpr* parseLeafMods(AstExpr* pleft, const TokenArray& tarr)
+        {
+            // parse member accesses, slices, function calls, etc.
+            // ex: .val<4, 5>.test[0].fn<>()[::].h[5:]()
+            if (tarr.size() == 0)
+                return pleft;
+            
+            int end;
+            switch (tarr[0]->ty)
+            {
+            case TokenType::ROUND_O:
+                // function call
+                end = tarr.search<TokenArray::brac_end<TokenType::ROUND_O, TokenType::ROUND_C>>(1);
+                if (end < 0)
+                    throw SyntaxError(tarr[0], "Missing closing ')'");
+                return parseLeafMods(new AstCall(pleft, { tarr, 1, end }), { tarr, end + 1 });
+            case TokenType::ANGLE_O:
+                // constargs
+                end = tarr.search<TokenArray::brac_end<TokenType::ANGLE_O, TokenType::ANGLE_C>>(1);
+                if (end < 0)
+                    throw SyntaxError(tarr[0], "Missing closing '>'");
+                return parseLeafMods(new AstCargs(pleft, { tarr, 1, end }), { tarr, end + 1 });
+            case TokenType::SQUARE_O:
+                // slice
+                end = tarr.search<TokenArray::brac_end<TokenType::SQUARE_O, TokenType::SQUARE_C>>(1);
+                if (end < 0)
+                    throw SyntaxError(tarr[0], "Missing closing ']'");
+                return parseLeafMods(new AstSlice(pleft, { tarr, 1, end }), { tarr, end + 1 });
+            case TokenType::DOT:
+                // member access
+                if (tarr.size() < 1 || tarr[1]->ty != TokenType::IDN)
+                    throw SyntaxError(tarr[0], "Expected identifier after '.'");
+                return parseLeafMods(new AstDot(pleft, static_cast<const TokenImp<TokenType::IDN>*>(tarr[1])->val), { tarr, 2 });
+            }
+        }
+
         template<int prec>
         AstExpr* parseExpr(const TokenArray& tarr)
         {
@@ -223,14 +337,61 @@ namespace nn
         template<>
         AstExpr* parseExpr<3>(const TokenArray& tarr)
         {
-            // TODO: special case for parsing allowing for negative arguments
+            // TODO: special case of parsing - skip negative arguments
         }
 
-        // special parsing for leaf nodes, parseExpr<7> does not exist
+        // special parsing for leaf nodes, parseExpr<6> does not exist
         template<>
-        AstExpr* parseExpr<6>(const TokenArray& tarr)
+        AstExpr* parseExpr<5>(const TokenArray& tarr)
         {
             // TODO: leaf node expression parsing ; negative operator, indexing, and literal expressions
+            assert(tarr.size() > 0);
+
+            if (tarr.size() == 1)
+            {
+                // single token leaf node
+                switch (tarr[0]->ty)
+                {
+                case TokenType::INT:
+                    return new AstInt(static_cast<const TokenImp<TokenType::INT>*>(tarr[0])->val);
+                case TokenType::FLOAT:
+                    return new AstFloat(static_cast<const TokenImp<TokenType::FLOAT>*>(tarr[0])->val);
+                case TokenType::STRLIT:
+                    return new AstStr(static_cast<const TokenImp<TokenType::STRLIT>*>(tarr[0])->val);
+                case TokenType::IDN:
+                    if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "true")
+                        return new AstBool(true);
+                    if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "false")
+                        return new AstBool(false);
+                    return new AstIdn(static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val);
+                default:
+                    throw SyntaxError(tarr[0], "Unexpected token for single token expression leaf node");
+                }
+            }
+            else
+            {
+                // multi token leaf node
+                switch (tarr[0]->ty)
+                {
+                case TokenType::SUB:
+                    return new AstNeg({tarr, 1});
+                case TokenType::ROUND_O:
+                {
+                    int end = tarr.search<TokenArray::brac_end<TokenType::ROUND_O, TokenType::ROUND_C>>(1);
+                    if (end < 0)
+                        throw SyntaxError(tarr[0], "Missing closing ')'");
+                    return parseLeafMods(parseExpr<0>({ tarr, 1, end }), { tarr, end + 1 });
+                }
+                case TokenType::IDN:
+                    if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "true")
+                        throw SyntaxError(tarr[0], "Unexpected token");
+                    if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "false")
+                        throw SyntaxError(tarr[0], "Unexpected token");
+                    return parseLeafMods(new AstIdn(static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val), { tarr, 1 });
+                default:
+                    throw SyntaxError(tarr[0], "Unexpected start token for multi token expression leaf node");
+                }
+            }
         }
 
         AstDecl::AstDecl()
@@ -292,11 +453,6 @@ namespace nn
         {
             if (pcond)
                 delete pcond;
-        }
-
-        Obj* AstIf::eval(EvalCtx& ctx, Module& mod)
-        {
-            throw std::logic_error("Not implemented");
         }
 
         AstWhile::AstWhile(const TokenArray& while_sig, const TokenArray& while_seq, int indent_level) :

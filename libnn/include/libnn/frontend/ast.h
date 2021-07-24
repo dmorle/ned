@@ -41,7 +41,7 @@ namespace nn
             bool val;
 
         public:
-            AstBool(const TokenArray& tarr);
+            AstBool(bool val);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -52,7 +52,7 @@ namespace nn
             int64_t val;
 
         public:
-            AstInt(const TokenArray& tarr);
+            AstInt(int64_t val);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -63,7 +63,7 @@ namespace nn
             double val;
 
         public:
-            AstFloat(const TokenArray& tarr);
+            AstFloat(double val);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -71,10 +71,10 @@ namespace nn
         class AstStr :
             public AstExpr
         {
-            std::string str;
+            std::string val;
 
         public:
-            AstStr(const TokenArray& tarr);
+            AstStr(const std::string& val);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -97,7 +97,46 @@ namespace nn
             std::string idn;
             
         public:
-            AstIdn(const TokenArray& tarr);
+            AstIdn(const std::string& idn);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstCall :
+            public AstExpr
+        {
+        public:
+            AstCall(AstExpr* pleft, const TokenArray& tarr);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstCargs :
+            public AstExpr
+        {
+        public:
+            AstCargs(AstExpr* pleft, const TokenArray& tarr);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstSlice :
+            public AstExpr
+        {
+        public:
+            AstSlice(AstExpr* pleft, const TokenArray& tarr);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstDot :
+            public AstExpr
+        {
+            AstExpr* pleft;
+            std::string member;
+
+        public:
+            AstDot(AstExpr* pleft, const std::string& member);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -105,52 +144,130 @@ namespace nn
         class AstNeg :
             public AstExpr
         {
+            AstExpr* pexpr;
+
         public:
+            AstNeg(const TokenArray& tarr);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
-        class AstIAdd :
+        class AstAdd :
             public AstExpr
         {
-        public:
-            AstIAdd(const TokenArray& left, TokenArray& right);
-            
-            virtual Obj* eval(EvalCtx& ctx, Module& mod);
-        };
+            AstExpr* pleft;
+            AstExpr* pright;
 
-        class AstISub :
-            public AstExpr
-        {
         public:
-            AstISub(const TokenArray& left, TokenArray& right);
+            AstAdd(const TokenArray& left, const TokenArray& right);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
-
-        class AstIMul :
+        
+        class AstSub :
             public AstExpr
         {
+            AstExpr* pleft;
+            AstExpr* pright;
+
         public:
-            AstIMul(const TokenArray& left, TokenArray& right);
+            AstSub(const TokenArray& left, const TokenArray& right);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+        
+        class AstMul :
+            public AstExpr
+        {
+            AstExpr* pleft;
+            AstExpr* pright;
+
+        public:
+            AstMul(const TokenArray& left, const TokenArray& right);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+        
+        class AstDiv :
+            public AstExpr
+        {
+            AstExpr* pleft;
+            AstExpr* pright;
+
+        public:
+            AstDiv(const TokenArray& left, const TokenArray& right);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
-        class AstIDiv:
+        class AstEq :
             public AstExpr
         {
+            AstExpr* pleft;
+            AstExpr* pright;
+
         public:
-            AstIDiv(const TokenArray& left, TokenArray& right);
+            AstEq(const TokenArray& left, const TokenArray& right);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
-        class AstAssign :
+        class AstNe :
             public AstExpr
         {
+            AstExpr* pleft;
+            AstExpr* pright;
+
         public:
-            AstAssign(const TokenArray& left, TokenArray& right);
+            AstNe(const TokenArray& left, const TokenArray& right);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstGe :
+            public AstExpr
+        {
+            AstExpr* pleft;
+            AstExpr* pright;
+
+        public:
+            AstGe(const TokenArray& left, const TokenArray& right);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstLe :
+            public AstExpr
+        {
+            AstExpr* pleft;
+            AstExpr* pright;
+
+        public:
+            AstLe(const TokenArray& left, const TokenArray& right);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstGt :
+            public AstExpr
+        {
+            AstExpr* pleft;
+            AstExpr* pright;
+
+        public:
+            AstGt(const TokenArray& left, const TokenArray& right);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstLt :
+            public AstExpr
+        {
+            AstExpr* pleft;
+            AstExpr* pright;
+
+        public:
+            AstLt(const TokenArray& left, const TokenArray& right);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -158,8 +275,11 @@ namespace nn
         class AstAnd :
             public AstExpr
         {
+            AstExpr* pleft;
+            AstExpr* pright;
+
         public:
-            AstAnd(const TokenArray& left, TokenArray& right);
+            AstAnd(const TokenArray& left, const TokenArray& right);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -167,18 +287,71 @@ namespace nn
         class AstOr :
             public AstExpr
         {
+            AstExpr* pleft;
+            AstExpr* pright;
+
         public:
-            AstOr(const TokenArray& left, TokenArray& right);
+            AstOr(const TokenArray& left, const TokenArray& right);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
-         };
+        };
 
-        class AstCall :
+        class AstIAdd :
             public AstExpr
         {
+            AstExpr* pleft;
+            AstExpr* pright;
+
         public:
-            AstCall(const TokenArray& tarr, int indent_level);
-            virtual ~AstCall();
+            AstIAdd(const TokenArray& left, const TokenArray& right);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstISub :
+            public AstExpr
+        {
+            AstExpr* pleft;
+            AstExpr* pright;
+
+        public:
+            AstISub(const TokenArray& left, const TokenArray& right);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstIMul :
+            public AstExpr
+        {
+            AstExpr* pleft;
+            AstExpr* pright;
+
+        public:
+            AstIMul(const TokenArray& left, const TokenArray& right);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstIDiv :
+            public AstExpr
+        {
+            AstExpr* pleft;
+            AstExpr* pright;
+
+        public:
+            AstIDiv(const TokenArray& left, const TokenArray& right);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstAssign :
+            public AstExpr
+        {
+            AstExpr* pleft;
+            AstExpr* pright;
+
+        public:
+            AstAssign(const TokenArray& left, const TokenArray& right);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
