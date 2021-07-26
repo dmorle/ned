@@ -17,14 +17,12 @@ namespace nn
             if (tarr.size() < 4 || tarr[1]->ty != TokenType::ANGLE_O)
                 return false;
 
-            int ret = tarr.search<TokenArray::constargs_end>(2);
+            int ret = tarr.search<TokenArray::brac_end<TokenType::ANGLE_O, TokenType::ANGLE_C>>(2);
             if (ret < 0)
                 throw SyntaxError(tarr[1], "Missing closing '>'");
             assert(tarr[ret]->ty == TokenType::ANGLE_C);
 
-            if (ret + 1 == tarr.size() || tarr[ret + 1]->ty != TokenType::IDN)
-                return false;
-            return true;
+            return !(ret + 1 == tarr.size() || tarr[ret + 1]->ty != TokenType::IDN);
         }
 
         int opPrec(const Token* ptk)
@@ -67,7 +65,7 @@ namespace nn
             int end;
             do
             {
-                end = tarr.search<TokenArray::args_elem>(start);
+                end = tarr.search<TokenArray::args_elem<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start);
                 if (end == -1)
                     end = tarr.size();
                 TokenArray decl(tarr, start, end);
@@ -86,7 +84,7 @@ namespace nn
             int end;
             do
             {
-                end = tarr.search<TokenArray::args_elem>(start);
+                end = tarr.search<TokenArray::args_elem<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start);
                 if (end == -1)
                     end = tarr.size();
                 TokenArray carg(tarr, start, end);
@@ -115,7 +113,7 @@ namespace nn
             int end;
             do
             {
-                end = tarr.search<TokenArray::args_elem>(start);
+                end = tarr.search<TokenArray::args_elem<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start);
                 if (end == -1)
                     end = tarr.size();
                 TokenArray carg(tarr, start, end);
@@ -271,7 +269,7 @@ namespace nn
                 end = tarr.search<TokenArray::brac_end<TokenType::SQUARE_O, TokenType::SQUARE_C>>(1);
                 if (end < 0)
                     throw SyntaxError(tarr[0], "Missing closing ']'");
-                return parseLeafMods(new AstSlice(pleft, { tarr, 1, end }), { tarr, end + 1 });
+                return parseLeafMods(new AstIdx(pleft, { tarr, 1, end }), { tarr, end + 1 });
             case TokenType::DOT:
                 // member access
                 if (tarr.size() < 1 || tarr[1]->ty != TokenType::IDN)
@@ -283,40 +281,45 @@ namespace nn
         template<int prec>
         AstExpr* parseExpr(const TokenArray& tarr)
         {
-            static_assert(prec < 6);
+            static_assert(prec < 5);
 
             size_t tsz = tarr.size();
             assert(tsz);
 
             // shortcut for bracketed expressions
-            if (tarr[0]->ty == TokenType::ROUND_O && tarr[tsz - 1] == TokenType::ROUND_C)
+            if (tarr[0]->ty == TokenType::ROUND_O && tarr[tsz - 1]->ty == TokenType::ROUND_C)
                 return parseExpr<0>(TokenArray(tarr, 1, tsz - 1));
             
             int bbrac = 0;
             int sbrac = 0;
+            int abrac = 0;
             for (int i = 0; i < tsz; i++)
             {
                 // Checking for brackets
-                if (tarr[i]->ty == TokenType::ROUND_O)
+                switch (tarr[i]->ty)
                 {
+                case TokenType::ROUND_O:
                     bbrac++;
                     continue;
-                }
-                if (tarr[i]->ty == TokenType::ROUND_C)
-                {
+                case TokenType::ROUND_C:
                     bbrac--;
                     continue;
-                }
-                if (tarr[i]->ty == TokenType::SQUARE_O)
-                {
+                case TokenType::SQUARE_O:
                     sbrac++;
                     continue;
-                }
-                if (tarr[i]->ty == TokenType::SQUARE_O)
-                {
+                case TokenType::SQUARE_C:
                     sbrac--;
                     continue;
+                case TokenType::ANGLE_O:
+                    abrac++;
+                    continue;
+                case TokenType::ANGLE_C:
+                    abrac--;
+                    continue;
                 }
+
+                if (bbrac || sbrac || abrac)
+                    continue;
 
                 if (opPrec(tarr[i]) == prec)
                 {
@@ -337,7 +340,61 @@ namespace nn
         template<>
         AstExpr* parseExpr<3>(const TokenArray& tarr)
         {
-            // TODO: special case of parsing - skip negative arguments
+            constexpr int prec = 3;
+
+            size_t tsz = tarr.size();
+            assert(tsz);
+
+            // shortcut for bracketed expressions
+            if (tarr[0]->ty == TokenType::ROUND_O && tarr[tsz - 1]->ty == TokenType::ROUND_C)
+                return parseExpr<0>(TokenArray(tarr, 1, tsz - 1));
+
+            int bbrac = 0;
+            int sbrac = 0;
+            int abrac = 0;
+            for (int i = 0; i < tsz; i++)
+            {
+                // Checking for brackets
+                switch (tarr[i]->ty)
+                {
+                case TokenType::ROUND_O:
+                    bbrac++;
+                    continue;
+                case TokenType::ROUND_C:
+                    bbrac--;
+                    continue;
+                case TokenType::SQUARE_O:
+                    sbrac++;
+                    continue;
+                case TokenType::SQUARE_C:
+                    sbrac--;
+                    continue;
+                case TokenType::ANGLE_O:
+                    abrac++;
+                    continue;
+                case TokenType::ANGLE_C:
+                    abrac--;
+                    continue;
+                }
+
+                if (bbrac || sbrac || abrac)
+                    continue;
+
+                if (opPrec(tarr[i]) == prec)
+                {
+                    if (i == 0 && tarr[i]->ty == TokenType::SUB)
+                        continue;  // Negation operator
+                    if (i == tarr.size() - 1)
+                        throw SyntaxError(tarr[i], "Missing right side for binary operator");
+                    return splitExpr<prec>(tarr, i);
+                }
+            }
+            if (bbrac < 0)
+                throw SyntaxError(tarr[0], "Missing closing ')' in expression");
+            if (sbrac < 0)
+                throw SyntaxError(tarr[0], "Missing closing ']' in expression");
+
+            return parseExpr<prec + 1>(tarr);
         }
 
         // special parsing for leaf nodes, parseExpr<6> does not exist
@@ -392,6 +449,175 @@ namespace nn
                     throw SyntaxError(tarr[0], "Unexpected start token for multi token expression leaf node");
                 }
             }
+        }
+
+        // Ast Nodes
+
+        AstBinOp::~AstBinOp()
+        {
+            delete pleft;
+            delete pright;
+        }
+
+        AstIdx::AstIdx(AstExpr* pleft, const TokenArray& tarr)
+        {
+            assert(tarr.size() != 0);
+
+            int start = 0;
+            int end;
+            do
+            {
+                end = tarr.search<TokenArray::args_elem<TokenType::SQUARE_O, TokenType::SQUARE_C>>(start);
+                if (end == -1)
+                    end = tarr.size();
+                if (end == start)
+                    throw SyntaxError(tarr[start], "Empty index parameter");  // [...,]
+                parseSlice({ tarr, start, end });
+                start = end + 1;
+                if (start == tarr.size())
+                    throw SyntaxError(tarr[end], "Empty index parameter");  // [..., , ...]
+            } while (end != tarr.size());
+        }
+
+        void AstIdx::parseSlice(const TokenArray& tarr)
+        {
+            assert(tarr.size() != 0);
+
+            std::vector<AstExpr*> slices;
+            int start = 0;
+            int end;
+            do
+            {
+                end = tarr.search<TokenArray::is_same_brac<TokenType::COLON>>(start);
+                if (end == -1)
+                    end = tarr.size();
+                TokenArray tslice(tarr, start, end);
+                if (tslice.size() == 0)
+                    slices.push_back(NULL);  // [...::...]
+                else
+                    slices.push_back(parseExpr<1>(tslice));  // [...:...:...]
+
+                start = end + 1;
+                if (start == tarr.size())  // [...:]
+                {
+                    slices.push_back(NULL);
+                    indicies.push_back(slices);
+                    return;
+                }
+            } while (end != tarr.size());
+        }
+
+        AstDot::AstDot(AstExpr* pleft, const std::string& member)
+        {
+            this->pleft = pleft;
+            this->member = member;
+        }
+
+        AstNeg::AstNeg(const TokenArray& tarr)
+        {
+            pexpr = parseExpr<5>(tarr);
+        }
+
+        AstAdd::AstAdd(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<4>(left);
+            pright = parseExpr<3>(right);
+        }
+
+        AstSub::AstSub(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<4>(left);
+            pright = parseExpr<3>(right);
+        }
+
+        AstMul::AstMul(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<5>(left);
+            pright = parseExpr<4>(right);
+        }
+
+        AstDiv::AstDiv(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<5>(left);
+            pright = parseExpr<4>(right);
+        }
+
+        AstEq::AstEq(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<3>(left);
+            pright = parseExpr<2>(right);
+        }
+
+        AstNe::AstNe(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<3>(left);
+            pright = parseExpr<2>(right);
+        }
+
+        AstGe::AstGe(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<3>(left);
+            pright = parseExpr<2>(right);
+        }
+
+        AstLe::AstLe(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<3>(left);
+            pright = parseExpr<2>(right);
+        }
+
+        AstGt::AstGt(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<3>(left);
+            pright = parseExpr<2>(right);
+        }
+
+        AstLt::AstLt(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<3>(left);
+            pright = parseExpr<2>(right);
+        }
+
+        AstAnd::AstAnd(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<2>(left);
+            pright = parseExpr<1>(right);
+        }
+
+        AstOr::AstOr(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<2>(left);
+            pright = parseExpr<1>(right);
+        }
+
+        AstIAdd::AstIAdd(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<1>(left);
+            pright = parseExpr<0>(right);
+        }
+        
+        AstISub::AstISub(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<1>(left);
+            pright = parseExpr<0>(right);
+        }
+
+        AstIMul::AstIMul(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<1>(left);
+            pright = parseExpr<0>(right);
+        }
+        
+        AstIDiv::AstIDiv(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<1>(left);
+            pright = parseExpr<0>(right);
+        }
+
+        AstAssign::AstAssign(const TokenArray& left, const TokenArray& right)
+        {
+            pleft = parseExpr<1>(left);
+            pright = parseExpr<0>(right);
         }
 
         AstDecl::AstDecl()
@@ -684,8 +910,7 @@ namespace nn
             int end;
             if (def_sig[start]->ty == TokenType::ANGLE_O)
             {
-                // TODO: allow for nested <>
-                end = def_sig.search<TokenArray::constargs_end>();
+                end = def_sig.search<TokenArray::brac_end<TokenType::ANGLE_O, TokenType::ANGLE_C>>();
                 if (end < 0)
                     throw SyntaxError(def_sig[start], "Missing closing '>' in function signature");
                 TokenArray constargs_tarr({ def_sig, start, end });

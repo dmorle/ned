@@ -211,6 +211,40 @@ namespace nn
                 return ty == Ty;
             }
 
+            template<TokenType Ty>
+            static bool is_same_brac(const TokenType ty)
+            {
+                static int rbrac = 0;
+                static int sbrac = 0;
+                static int abrac = 0;
+
+                switch (ty)
+                {
+                case TokenType::ROUND_O:
+                    rbrac++;
+                    return false;
+                case TokenType::ROUND_C:
+                    rbrac--;
+                    return false;
+                case TokenType::SQUARE_O:
+                    sbrac++;
+                    return false;
+                case TokenType::SQUARE_C:
+                    sbrac--;
+                    return false;
+                case TokenType::ANGLE_O:
+                    abrac++;
+                    return false;
+                case TokenType::ANGLE_C:
+                    abrac--;
+                    return false;
+                case Ty:
+                    return !(rbrac || sbrac || abrac);
+                default:
+                    return false;
+                }
+            }
+
             template<Keyword kw>
             static bool is_keyword(const Token* tk);
             template<> static bool is_keyword<Keyword::DEF>(const Token* tk)
@@ -264,22 +298,6 @@ namespace nn
                 return ret;
             }
 
-            static bool constargs_end(const TokenType ty)
-            {
-                static int lvl = 0;
-
-                if (ty == TokenType::ANGLE_C)
-                {
-                    if (lvl == 0)
-                        return true;
-                    lvl--;
-                    return false;
-                }
-                if (ty == TokenType::ANGLE_O)
-                    lvl++;
-                return false;
-            }
-
             template<TokenType OPEN, TokenType CLOSE>
             static bool brac_end(const TokenType ty)
             {
@@ -297,18 +315,19 @@ namespace nn
                 return false;
             }
 
+            template<TokenType OPEN, TokenType CLOSE>
             static bool args_elem(const TokenType ty)
             {
                 static int lvl = 0;
 
-                if (ty == TokenType::ANGLE_C)// && (prev == TokenType::CO))
+                if (ty == CLOSE)
                 {
                     if (lvl == 0)
                         return true;
                     lvl--;
                     return false;
                 }
-                if (ty == TokenType::ANGLE_O)
+                if (ty == OPEN)
                 {
                     lvl++;
                     return false;

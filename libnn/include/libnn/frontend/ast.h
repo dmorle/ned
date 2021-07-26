@@ -35,6 +35,17 @@ namespace nn
             virtual ~AstExpr() = 0;
         };
 
+        class AstBinOp :
+            public AstExpr
+        {
+        protected:
+            AstExpr* pleft;
+            AstExpr* pright;
+
+        public:
+            virtual ~AstBinOp();
+        };
+
         class AstBool :
             public AstExpr
         {
@@ -120,11 +131,14 @@ namespace nn
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
-        class AstSlice :
+        class AstIdx :
             public AstExpr
         {
+            std::vector<std::vector<AstExpr*>> indicies;
+
         public:
-            AstSlice(AstExpr* pleft, const TokenArray& tarr);
+            AstIdx(AstExpr* pleft, const TokenArray& tarr);
+            void parseSlice(const TokenArray& tarr);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -153,11 +167,8 @@ namespace nn
         };
 
         class AstAdd :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstAdd(const TokenArray& left, const TokenArray& right);
 
@@ -165,11 +176,8 @@ namespace nn
         };
         
         class AstSub :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstSub(const TokenArray& left, const TokenArray& right);
 
@@ -177,11 +185,8 @@ namespace nn
         };
         
         class AstMul :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstMul(const TokenArray& left, const TokenArray& right);
 
@@ -189,11 +194,8 @@ namespace nn
         };
         
         class AstDiv :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstDiv(const TokenArray& left, const TokenArray& right);
 
@@ -201,11 +203,8 @@ namespace nn
         };
 
         class AstEq :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstEq(const TokenArray& left, const TokenArray& right);
 
@@ -213,11 +212,8 @@ namespace nn
         };
 
         class AstNe :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstNe(const TokenArray& left, const TokenArray& right);
 
@@ -225,11 +221,8 @@ namespace nn
         };
 
         class AstGe :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstGe(const TokenArray& left, const TokenArray& right);
 
@@ -237,11 +230,8 @@ namespace nn
         };
 
         class AstLe :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstLe(const TokenArray& left, const TokenArray& right);
 
@@ -249,11 +239,8 @@ namespace nn
         };
 
         class AstGt :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstGt(const TokenArray& left, const TokenArray& right);
 
@@ -261,11 +248,8 @@ namespace nn
         };
 
         class AstLt :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstLt(const TokenArray& left, const TokenArray& right);
 
@@ -273,11 +257,8 @@ namespace nn
         };
 
         class AstAnd :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstAnd(const TokenArray& left, const TokenArray& right);
 
@@ -285,11 +266,8 @@ namespace nn
         };
 
         class AstOr :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstOr(const TokenArray& left, const TokenArray& right);
 
@@ -297,11 +275,8 @@ namespace nn
         };
 
         class AstIAdd :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstIAdd(const TokenArray& left, const TokenArray& right);
 
@@ -309,11 +284,8 @@ namespace nn
         };
 
         class AstISub :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstISub(const TokenArray& left, const TokenArray& right);
 
@@ -321,11 +293,8 @@ namespace nn
         };
 
         class AstIMul :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstIMul(const TokenArray& left, const TokenArray& right);
 
@@ -333,11 +302,8 @@ namespace nn
         };
 
         class AstIDiv :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstIDiv(const TokenArray& left, const TokenArray& right);
 
@@ -345,13 +311,11 @@ namespace nn
         };
 
         class AstAssign :
-            public AstExpr
+            public AstBinOp
         {
-            AstExpr* pleft;
-            AstExpr* pright;
-
         public:
             AstAssign(const TokenArray& left, const TokenArray& right);
+            virtual ~AstAssign();
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
