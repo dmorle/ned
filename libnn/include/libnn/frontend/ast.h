@@ -23,6 +23,9 @@ namespace nn
         class AstBlock
         {
         public:
+            uint32_t line_num;
+            uint32_t col_num;
+
             virtual ~AstBlock() = 0;
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod) = 0;
@@ -52,7 +55,7 @@ namespace nn
             bool val;
 
         public:
-            AstBool(bool val);
+            AstBool(const Token* ptk, bool val);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -63,7 +66,7 @@ namespace nn
             int64_t val;
 
         public:
-            AstInt(int64_t val);
+            AstInt(const Token* ptk);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -74,7 +77,7 @@ namespace nn
             double val;
 
         public:
-            AstFloat(double val);
+            AstFloat(const Token* ptk);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -85,7 +88,18 @@ namespace nn
             std::string val;
 
         public:
-            AstStr(const std::string& val);
+            AstStr(const Token* ptk);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstIdn :
+            public AstExpr
+        {
+            std::string idn;
+            
+        public:
+            AstIdn(const Token* ptk);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -102,20 +116,12 @@ namespace nn
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
-        class AstIdn :
-            public AstExpr
-        {
-            std::string idn;
-            
-        public:
-            AstIdn(const std::string& idn);
-
-            virtual Obj* eval(EvalCtx& ctx, Module& mod);
-        };
-
         class AstCall :
             public AstExpr
         {
+            AstExpr* pleft;
+            std::vector<AstExpr*> args;
+
         public:
             AstCall(AstExpr* pleft, const TokenArray& tarr);
 
@@ -125,6 +131,9 @@ namespace nn
         class AstCargs :
             public AstExpr
         {
+            AstExpr* pleft;
+            std::vector<AstExpr*> args;
+
         public:
             AstCargs(AstExpr* pleft, const TokenArray& tarr);
 
@@ -134,6 +143,7 @@ namespace nn
         class AstIdx :
             public AstExpr
         {
+            AstExpr* pleft;
             std::vector<std::vector<AstExpr*>> indicies;
 
         public:
@@ -150,7 +160,7 @@ namespace nn
             std::string member;
 
         public:
-            AstDot(AstExpr* pleft, const std::string& member);
+            AstDot(AstExpr* pleft, const Token* ptk);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -381,6 +391,9 @@ namespace nn
 
         class AstSeq
         {
+            uint32_t line_num;
+            uint32_t col_num;
+
             std::vector<AstBlock*> blocks;
 
         public:
@@ -425,6 +438,9 @@ namespace nn
         // root node
         class AstDef
         {
+            uint32_t line_num;
+            uint32_t col_num;
+
             AstSeq block;
             std::string name;
             std::vector<AstDefCarg*> constargs;

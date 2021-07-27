@@ -274,7 +274,7 @@ namespace nn
                 // member access
                 if (tarr.size() < 1 || tarr[1]->ty != TokenType::IDN)
                     throw SyntaxError(tarr[0], "Expected identifier after '.'");
-                return parseLeafMods(new AstDot(pleft, static_cast<const TokenImp<TokenType::IDN>*>(tarr[1])->val), { tarr, 2 });
+                return parseLeafMods(new AstDot(pleft, tarr[1]), { tarr, 2 });
             }
         }
 
@@ -410,17 +410,17 @@ namespace nn
                 switch (tarr[0]->ty)
                 {
                 case TokenType::INT:
-                    return new AstInt(static_cast<const TokenImp<TokenType::INT>*>(tarr[0])->val);
+                    return new AstInt(tarr[0]);
                 case TokenType::FLOAT:
-                    return new AstFloat(static_cast<const TokenImp<TokenType::FLOAT>*>(tarr[0])->val);
+                    return new AstFloat(tarr[0]);
                 case TokenType::STRLIT:
-                    return new AstStr(static_cast<const TokenImp<TokenType::STRLIT>*>(tarr[0])->val);
+                    return new AstStr(tarr[0]);
                 case TokenType::IDN:
                     if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "true")
-                        return new AstBool(true);
+                        return new AstBool(tarr[0], true);
                     if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "false")
-                        return new AstBool(false);
-                    return new AstIdn(static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val);
+                        return new AstBool(tarr[0], false);
+                    return new AstIdn(tarr[0]);
                 default:
                     throw SyntaxError(tarr[0], "Unexpected token for single token expression leaf node");
                 }
@@ -444,7 +444,7 @@ namespace nn
                         throw SyntaxError(tarr[0], "Unexpected token");
                     if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "false")
                         throw SyntaxError(tarr[0], "Unexpected token");
-                    return parseLeafMods(new AstIdn(static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val), { tarr, 1 });
+                    return parseLeafMods(new AstIdn(tarr[0]), { tarr, 1 });
                 default:
                     throw SyntaxError(tarr[0], "Unexpected start token for multi token expression leaf node");
                 }
@@ -459,23 +459,142 @@ namespace nn
             delete pright;
         }
 
-        AstIdx::AstIdx(AstExpr* pleft, const TokenArray& tarr)
+        AstBool::AstBool(const Token* ptk, bool val)
+        {
+            assert(ptk->ty == TokenType::IDN);
+
+            line_num = ptk->line_num;
+            col_num = ptk->col_num;
+            val = val;
+        }
+
+        AstInt::AstInt(const Token* ptk)
+        {
+            assert(ptk->ty == TokenType::INT);
+
+            line_num = ptk->line_num;
+            col_num = ptk->col_num;
+            val = static_cast<const TokenImp<TokenType::INT>*>(ptk)->val;
+        }
+
+        AstFloat::AstFloat(const Token* ptk)
+        {
+            assert(ptk->ty == TokenType::FLOAT);
+
+            line_num = ptk->line_num;
+            col_num = ptk->col_num;
+            val = static_cast<const TokenImp<TokenType::FLOAT>*>(ptk)->val;
+        }
+
+        AstStr::AstStr(const Token* ptk)
+        {
+            assert(ptk->ty == TokenType::STRLIT);
+
+            line_num = ptk->line_num;
+            col_num = ptk->col_num;
+            val = static_cast<const TokenImp<TokenType::STRLIT>*>(ptk)->val;
+        }
+
+        AstIdn::AstIdn(const Token* ptk)
+        {
+            assert(ptk->ty == TokenType::IDN);
+
+            line_num = ptk->line_num;
+            col_num = ptk->col_num;
+            idn = static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val;
+        }
+
+        AstTuple::AstTuple(const TokenArray& tarr)
         {
             assert(tarr.size() != 0);
+            line_num = tarr[0]->line_num;
+            col_num = tarr[0]->col_num;
 
             int start = 0;
             int end;
             do
             {
-                end = tarr.search<TokenArray::args_elem<TokenType::SQUARE_O, TokenType::SQUARE_C>>(start);
+                end = tarr.search<TokenArray::is_same_brac<TokenType::COMMA>>(start);
                 if (end == -1)
                     end = tarr.size();
                 if (end == start)
-                    throw SyntaxError(tarr[start], "Empty index parameter");  // [...,]
+                    throw SyntaxError(tarr[start], "Empty vararg parameter");
+                elems.push_back(parseExpr<1>({ tarr, start, end }));
+                start = end + 1;
+                if (start == tarr.size())
+                    throw SyntaxError(tarr[end], "Empty vararg parameter");
+            } while (end != tarr.size());
+        }
+
+        AstCall::AstCall(AstExpr* pleft, const TokenArray& tarr)
+        {
+            assert(tarr.size() != 0);
+            line_num = tarr[0]->line_num;
+            col_num = tarr[0]->col_num;
+
+            this->pleft = pleft;
+
+            int start = 0;
+            int end;
+            do
+            {
+                end = tarr.search<TokenArray::is_same_brac<TokenType::COMMA>>(start);
+                if (end == -1)
+                    end = tarr.size();
+                if (end == start)
+                    throw SyntaxError(tarr[start], "Empty vararg parameter");
+                args.push_back(parseExpr<1>({ tarr, start, end }));
+                start = end + 1;
+                if (start == tarr.size())
+                    throw SyntaxError(tarr[end], "Empty vararg parameter");
+            } while (end != tarr.size());
+        }
+
+        AstCargs::AstCargs(AstExpr* pleft, const TokenArray& tarr)
+        {
+            assert(tarr.size() != 0);
+            line_num = tarr[0]->line_num;
+            col_num = tarr[0]->col_num;
+
+            this->pleft = pleft;
+
+            int start = 0;
+            int end;
+            do
+            {
+                end = tarr.search<TokenArray::is_same_brac<TokenType::COMMA>>(start);
+                if (end == -1)
+                    end = tarr.size();
+                if (end == start)
+                    throw SyntaxError(tarr[start], "Empty constarg parameter");
+                args.push_back(parseExpr<1>({ tarr, start, end }));
+                start = end + 1;
+                if (start == tarr.size())
+                    throw SyntaxError(tarr[end], "Empty constarg parameter");
+            } while (end != tarr.size());
+        }
+
+        AstIdx::AstIdx(AstExpr* pleft, const TokenArray& tarr)
+        {
+            assert(tarr.size() != 0);
+            line_num = tarr[0]->line_num;
+            col_num = tarr[0]->col_num;
+
+            this->pleft = pleft;
+
+            int start = 0;
+            int end;
+            do
+            {
+                end = tarr.search<TokenArray::is_same_brac<TokenType::COMMA>>(start);
+                if (end == -1)
+                    end = tarr.size();
+                if (end == start)
+                    throw SyntaxError(tarr[start], "Empty index parameter");  // [..., , ...]
                 parseSlice({ tarr, start, end });
                 start = end + 1;
                 if (start == tarr.size())
-                    throw SyntaxError(tarr[end], "Empty index parameter");  // [..., , ...]
+                    throw SyntaxError(tarr[end], "Empty index parameter");  // [...,]
             } while (end != tarr.size());
         }
 
@@ -507,121 +626,199 @@ namespace nn
             } while (end != tarr.size());
         }
 
-        AstDot::AstDot(AstExpr* pleft, const std::string& member)
+        AstDot::AstDot(AstExpr* pleft, const Token* ptk)
         {
+            assert(ptk->ty == TokenType::IDN);
+
+            line_num = ptk->line_num;
+            col_num = ptk->col_num;
             this->pleft = pleft;
-            this->member = member;
+            this->member = static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val;
         }
 
         AstNeg::AstNeg(const TokenArray& tarr)
         {
+            assert(tarr.size() != 0);
+            line_num = tarr[0]->line_num;
+            col_num = tarr[0]->col_num;
+
             pexpr = parseExpr<5>(tarr);
         }
 
         AstAdd::AstAdd(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<4>(left);
             pright = parseExpr<3>(right);
         }
 
         AstSub::AstSub(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<4>(left);
             pright = parseExpr<3>(right);
         }
 
         AstMul::AstMul(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<5>(left);
             pright = parseExpr<4>(right);
         }
 
         AstDiv::AstDiv(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<5>(left);
             pright = parseExpr<4>(right);
         }
 
         AstEq::AstEq(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<3>(left);
             pright = parseExpr<2>(right);
         }
 
         AstNe::AstNe(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<3>(left);
             pright = parseExpr<2>(right);
         }
 
         AstGe::AstGe(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<3>(left);
             pright = parseExpr<2>(right);
         }
 
         AstLe::AstLe(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<3>(left);
             pright = parseExpr<2>(right);
         }
 
         AstGt::AstGt(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<3>(left);
             pright = parseExpr<2>(right);
         }
 
         AstLt::AstLt(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<3>(left);
             pright = parseExpr<2>(right);
         }
 
         AstAnd::AstAnd(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<2>(left);
             pright = parseExpr<1>(right);
         }
 
         AstOr::AstOr(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<2>(left);
             pright = parseExpr<1>(right);
         }
 
         AstIAdd::AstIAdd(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<1>(left);
             pright = parseExpr<0>(right);
         }
         
         AstISub::AstISub(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<1>(left);
             pright = parseExpr<0>(right);
         }
 
         AstIMul::AstIMul(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<1>(left);
             pright = parseExpr<0>(right);
         }
         
         AstIDiv::AstIDiv(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<1>(left);
             pright = parseExpr<0>(right);
         }
 
         AstAssign::AstAssign(const TokenArray& left, const TokenArray& right)
         {
+            assert(left.size() != 0);
+            line_num = left[0]->line_num;
+            col_num = left[0]->col_num;
+
             pleft = parseExpr<1>(left);
             pright = parseExpr<0>(right);
         }
 
         AstDecl::AstDecl()
         {
+            this->line_num = 0;
+            this->col_num = 0;
             this->var_name = "";
             this->type_name = "";
             this->constargs = {};
@@ -632,6 +829,8 @@ namespace nn
             assert(tarr.size());
             if (tarr.size() < 2)
                 throw SyntaxError(tarr[0], "Invalid syntax for declaration");
+            line_num = tarr[0]->line_num;
+            col_num = tarr[0]->col_num;
 
             if (tarr[0]->ty != TokenType::IDN)
                 throw SyntaxError(tarr[0], "Invalid token for type name in declaration");
@@ -666,8 +865,11 @@ namespace nn
         AstIf::AstIf(const TokenArray& if_sig, const TokenArray& if_seq, int indent_level) :
             seq(if_seq, indent_level + 1)
         {
+            assert(if_sig.size() != 0);
             assert(if_sig[0]->ty == TokenType::IDN);
             assert(static_cast<const TokenImp<TokenType::IDN>*>(if_sig[0])->val == "if");
+            line_num = if_sig[0]->line_num;
+            col_num = if_sig[0]->col_num;
 
             if (if_sig.size() < 2)  // if cond  <- minimum number of tokens in an if statement signature
                 throw SyntaxError(if_sig[0], "Invalid if statement signature");
@@ -684,8 +886,11 @@ namespace nn
         AstWhile::AstWhile(const TokenArray& while_sig, const TokenArray& while_seq, int indent_level) :
             seq(while_seq, indent_level + 1)
         {
+            assert(while_sig.size() != 0);
             assert(while_sig[0]->ty == TokenType::IDN);
             assert(static_cast<const TokenImp<TokenType::IDN>*>(while_sig[0])->val == "while");
+            line_num = while_sig[0]->line_num;
+            col_num = while_sig[0]->col_num;
 
             if (while_sig.size() < 2)  // while cond  <- minimum number of tokens in a while loop signature
                 throw SyntaxError(while_sig[0], "Invalid while loop signature");
@@ -702,8 +907,11 @@ namespace nn
         AstFor::AstFor(const TokenArray& for_sig, const TokenArray& for_seq, int indent_level) :
             seq(for_seq, indent_level + 1)
         {
+            assert(for_sig.size() != 0);
             assert(for_sig[0]->ty == TokenType::IDN);
             assert(static_cast<const TokenImp<TokenType::IDN>*>(for_sig[0])->val == "for");
+            line_num = for_sig[0]->line_num;
+            col_num = for_sig[0]->col_num;
 
             if (for_sig.size() < 5)  // for var i in lst  <- minimum number of tokens in a for loop signature
                 throw SyntaxError(for_sig[0], "Invalid for loop signature");
@@ -723,6 +931,10 @@ namespace nn
 
         AstSeq::AstSeq(const TokenArray& tarr, int indent_level)
         {
+            assert(tarr.size() != 0);
+            line_num = tarr[0]->line_num;
+            col_num = tarr[0]->col_num;
+
             // Assuming the first 'indent_level' tokens are TokenType::INDENT for every line
             int start = indent_level;
             int end;
@@ -897,6 +1109,10 @@ namespace nn
         AstDef::AstDef(const TokenArray& def_sig, const TokenArray& def_seq) :
             block(def_seq, 1)
         {
+            assert(def_sig.size() != 0);
+            line_num = def_sig[0]->line_num;
+            col_num = def_sig[0]->col_num;
+
             // parsing the signature
             // def _() <- minimum allowable signature
             if (def_sig.size() < 4 || def_sig[0]->ty != TokenType::IDN || static_cast<const TokenImp<TokenType::IDN>*>(def_sig[0])->val != "def")
@@ -967,11 +1183,6 @@ namespace nn
                 else
                     throw SyntaxError(tarr[i], "Invalid token");
             }
-        }
-
-        Obj* Module::eval(const std::string& entry_point, EvalCtx& ctx)
-        {
-            throw std::logic_error("Not implemented");
         }
     }
 }
