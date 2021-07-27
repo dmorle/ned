@@ -69,7 +69,7 @@ inline bool is_idnchar(char c)
 
 namespace nn
 {
-    namespace frontend
+    namespace impl
     {
         TokenArray::TokenArray(size_t mem_sz, size_t off_cap)
         {

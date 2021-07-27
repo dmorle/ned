@@ -10,12 +10,11 @@
 
 namespace nn
 {
-    namespace frontend
+    namespace impl
     {
         class Obj;
         using EvalCtx = std::unordered_map<std::string, Obj*>;
 
-        class ModImp;
         class AstSeq;
         class AstDef;
         class Module;
@@ -452,9 +451,20 @@ namespace nn
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
 
+        class AstModImp :
+            AstBlock
+        {
+            std::vector<std::string> imp;
+
+        public:
+            AstModImp(const TokenArray& tarr);
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
         class Module
         {
-            std::vector<ModImp> imps;
+            std::vector<AstModImp> imps;
             std::vector<AstDef> defs;
 
         public:

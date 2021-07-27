@@ -7,7 +7,7 @@
 
 namespace nn
 {
-    namespace frontend
+    namespace impl
     {
         class SyntaxError :
             public std::exception

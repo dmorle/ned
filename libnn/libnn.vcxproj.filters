@@ -30,6 +30,9 @@
     <ClCompile Include="source\frontend\obj.cpp">
       <Filter>source\frontend</Filter>
     </ClCompile>
+    <ClCompile Include="eval.cpp">
+      <Filter>source\frontend</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\libnn\core\graph.h">

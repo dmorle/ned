@@ -5,7 +5,7 @@
 
 namespace nn
 {
-    namespace frontend
+    namespace impl
     {
         bool isDecl(const TokenArray& tarr)
         {
@@ -1147,6 +1147,28 @@ namespace nn
             paseDefArgs(varargs_tarr, this->varargs);
         }
 
+        AstModImp::AstModImp(const TokenArray& tarr)
+        {
+            assert(tarr.size() != 0);
+            line_num = tarr[0]->line_num;
+            col_num = tarr[0]->col_num;
+
+            if (tarr[0]->ty != TokenType::IDN)
+                throw SyntaxError(tarr[0], "Expected identifier");
+            imp.push_back(static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val);
+
+            for (int i = 1; i < tarr.size(); i++)
+            {
+                if (tarr[i]->ty != TokenType::DOT)
+                    throw SyntaxError(tarr[i], "Expected '.'");
+                
+                i++;
+                if (i == tarr.size() || tarr[i]->ty != TokenType::IDN)
+                    throw SyntaxError(tarr[i - 1], "Expected identifier after '.'");
+                imp.push_back(static_cast<const TokenImp<TokenType::IDN>*>(tarr[i])->val);
+            }
+        }
+
         Module::Module(const TokenArray& tarr)
         {
             for (int i = 0; i < tarr.size(); i++)
@@ -1160,7 +1182,11 @@ namespace nn
                 const char* idn_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[i])->val;
                 if (idn_name == "import")
                 {
-                    // TODO: figure out and implement importing
+                    i++;
+                    int end = tarr.search<TokenArray::is_same<TokenType::ENDL>>(i);
+                    if (end == i)
+                        throw SyntaxError(tarr[i], "Expected identifier after 'import'");
+                    this->imps.push_back(AstModImp({ tarr, i, end }));
                 }
                 else if (idn_name == "def")
                 {
