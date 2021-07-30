@@ -9,51 +9,6 @@ namespace nn
 {
     namespace impl
     {
-        class SyntaxError :
-            public std::exception
-        {
-        public:
-            std::string errmsg;
-            size_t line_num;
-            size_t col_num;
-
-            SyntaxError(size_t line_num, size_t col_num, const std::string& fmt)
-            {
-                this->line_num = line_num;
-                this->col_num = col_num;
-                this->errmsg = fmt;
-            }
-
-            template<typename... Args>
-            SyntaxError(size_t line_num, size_t col_num, const std::string& fmt, const Args&... args)
-            {
-                this->line_num = line_num;
-                this->col_num = col_num;
-                this->errmsg = std::format(fmt, args...);
-            }
-
-            template<typename... Args>
-            SyntaxError(Token* ptoken, const std::string& fmt, const Args&... args)
-            {
-                this->line_num = ptoken->line_num;
-                this->col_num = ptoken->col_num;
-                this->errmsg = std::format(fmt, args);
-            }
-
-            template<typename... Args>
-            SyntaxError(Token& token, const std::string& fmt, const Args&... args)
-            {
-                this->line_num = token.line_num;
-                this->col_num = token.col_num;
-                this->errmsg = std::format(fmt, args);
-            }
-
-            virtual char const* what() const
-            {
-                return errmsg.c_str();
-            }
-        };
-
         enum class TokenType
         {
             INVALID,
@@ -114,6 +69,51 @@ namespace nn
                 line_num(line_num),
                 col_num(col_num)
             {}
+        };
+
+        class SyntaxError :
+            public std::exception
+        {
+        public:
+            std::string errmsg;
+            size_t line_num;
+            size_t col_num;
+
+            SyntaxError(size_t line_num, size_t col_num, const std::string& fmt)
+            {
+                this->line_num = line_num;
+                this->col_num = col_num;
+                this->errmsg = fmt;
+            }
+
+            template<typename... Args>
+            SyntaxError(size_t line_num, size_t col_num, const std::string& fmt, const Args&... args)
+            {
+                this->line_num = line_num;
+                this->col_num = col_num;
+                this->errmsg = std::format(fmt, args...);
+            }
+
+            template<typename... Args>
+            SyntaxError(const Token* ptoken, const std::string& fmt, const Args&... args)
+            {
+                this->line_num = ptoken->line_num;
+                this->col_num = ptoken->col_num;
+                this->errmsg = std::format(fmt, args...);
+            }
+
+            template<typename... Args>
+            SyntaxError(const Token& token, const std::string& fmt, const Args&... args)
+            {
+                this->line_num = token.line_num;
+                this->col_num = token.col_num;
+                this->errmsg = std::format(fmt, args...);
+            }
+
+            virtual char const* what() const
+            {
+                return errmsg.c_str();
+            }
         };
 
         template<TokenType T>
@@ -303,14 +303,14 @@ namespace nn
             {
                 static int lvl = 0;
 
-                if (ty == TokenType::CLOSE)
+                if (ty == CLOSE)
                 {
                     if (lvl == 0)
                         return true;
                     lvl--;
                     return false;
                 }
-                if (ty == TokenType::OPEN)
+                if (ty ==  OPEN)
                     lvl++;
                 return false;
             }
@@ -343,13 +343,13 @@ namespace nn
             {
                 // A bit better cache utilization than rfind
                 int result = start;
-                const Token* pstart = static_cast<const Token*>(this->pbuf + this->offsets[start]);
+                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
                 while (result < size())
                 {
                     if (F(pstart->ty))
                         return result;
                     result++;
-                    pstart = static_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
+                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
                 }
 
                 return -1;
@@ -362,13 +362,13 @@ namespace nn
 
                 // A bit better cache utilization than rfind
                 int result = start;
-                const Token* pstart = static_cast<const Token*>(this->pbuf + this->offsets[start]);
+                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
                 while (result < end)
                 {
                     if (F(pstart->ty))
                         return result;
                     result++;
-                    pstart = static_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
+                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
                 }
 
                 return -1;
@@ -379,13 +379,13 @@ namespace nn
             {
                 // A bit better cache utilization than rfind
                 int result = start;
-                const Token* pstart = static_cast<const Token*>(this->pbuf + this->offsets[start]);
+                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
                 while (result < size())
                 {
                     if (F(pstart))
                         return result;
                     result++;
-                    pstart = static_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
+                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
                 }
 
                 return -1;
@@ -398,13 +398,13 @@ namespace nn
 
                 // A bit better cache utilization than rfind
                 int result = start;
-                const Token* pstart = static_cast<const Token*>(this->pbuf + this->offsets[start]);
+                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
                 while (result < end)
                 {
                     if (F(pstart))
                         return result;
                     result++;
-                    pstart = static_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
+                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
                 }
 
                 return -1;
@@ -416,14 +416,14 @@ namespace nn
                 // A bit better cache utilization than rfind
                 int ret;
                 int idx = start;
-                const Token* pstart = static_cast<const Token*>(this->pbuf + this->offsets[start]);
-                while (idx < end)
+                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
+                while (idx < size())
                 {
                     ret = F(pstart->ty, idx);
                     if (ret >= 0)
                         return ret;
                     idx++;
-                    pstart = static_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
+                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
                 }
 
                 return -1;
@@ -437,14 +437,14 @@ namespace nn
                 // A bit better cache utilization than rfind
                 int ret;
                 int idx = start;
-                const Token* pstart = static_cast<const Token*>(this->pbuf + this->offsets[start]);
+                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
                 while (idx < end)
                 {
                     ret = F(pstart->ty, idx);
                     if (ret >= 0)
                         return ret;
                     idx++;
-                    pstart = static_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
+                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
                 }
 
                 return -1;
@@ -456,14 +456,14 @@ namespace nn
                 // A bit better cache utilization than rfind
                 int ret;
                 int idx = start;
-                const Token* pstart = static_cast<const Token*>(this->pbuf + this->offsets[start]);
-                while (idx < end)
+                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
+                while (idx < size())
                 {
                     ret = F(pstart, idx);
                     if (ret >= 0)
                         return ret;
                     idx++;
-                    pstart = static_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
+                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
                 }
 
                 return -1;
@@ -477,14 +477,14 @@ namespace nn
                 // A bit better cache utilization than rfind
                 int ret;
                 int idx = start;
-                const Token* pstart = static_cast<const Token*>(this->pbuf + this->offsets[start]);
+                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
                 while (idx < end)
                 {
                     ret = F(pstart, idx);
                     if (ret >= 0)
                         return ret;
                     idx++;
-                    pstart = static_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
+                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
                 }
 
                 return -1;
@@ -499,7 +499,7 @@ namespace nn
                 end %= this->off_len;
 
                 for (int i = start % this->off_len; i >= end; i--)
-                    if (F(static_cast<const Token*>(this->pbuf + this->offsets[i])->ty))
+                    if (F(reinterpret_cast<const Token*>(this->pbuf + this->offsets[i])->ty))
                         return i;
                 return -1;
             }
@@ -510,7 +510,7 @@ namespace nn
                 end %= this->off_len;
 
                 for (int i = start % this->off_len; i >= end; i--)
-                    if (F(static_cast<const Token*>(this->pbuf + this->offsets[i])))
+                    if (F(reinterpret_cast<const Token*>(this->pbuf + this->offsets[i])))
                         return i;
                 return -1;
             }
@@ -523,7 +523,7 @@ namespace nn
                 int ret;
                 for (int i = start % this->off_len; i >= end; i--)
                 {
-                    ret = F(static_cast<const Token*>(this->pbuf + this->offsets[i])->ty, i);
+                    ret = F(reinterpret_cast<const Token*>(this->pbuf + this->offsets[i])->ty, i);
                     if (ret >= 0)
                         return ret;
                 }
@@ -538,7 +538,7 @@ namespace nn
                 int ret;
                 for (int i = start % this->off_len; i >= end; i--)
                 {
-                    ret = F(static_cast<const Token*>(this->pbuf + this->offsets[i]), i);
+                    ret = F(reinterpret_cast<const Token*>(this->pbuf + this->offsets[i]), i);
                     if (ret >= 0)
                         return ret;
                 }

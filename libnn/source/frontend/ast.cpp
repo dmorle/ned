@@ -58,80 +58,6 @@ namespace nn
             return -1;
         }
 
-        // helper for function signatures ie. def my_func<...>(...)
-        void paseDefArgs(const TokenArray& tarr, std::vector<AstDefArgSingle>& args)
-        {
-            int start = 0;
-            int end;
-            do
-            {
-                end = tarr.search<TokenArray::args_elem<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start);
-                if (end == -1)
-                    end = tarr.size();
-                TokenArray decl(tarr, start, end);
-                args.push_back({ decl });
-                start = end;
-            } while (end != tarr.size());
-        }
-
-        // helper for function signatures ie. def my_func<...>(...)
-        void parseDefCargs(const TokenArray& tarr, std::vector<AstDefCarg*>& cargs)
-        {
-            if (tarr.size() == 0)
-                return;
-
-            int start = 0;
-            int end;
-            do
-            {
-                end = tarr.search<TokenArray::args_elem<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start);
-                if (end == -1)
-                    end = tarr.size();
-                TokenArray carg(tarr, start, end);
-                if (carg.size() == 0)
-                    throw SyntaxError(tarr[0], "Dangling end of constargs in def");
-                if (carg[0]->ty == TokenType::ANGLE_O)
-                {
-                    if (carg[carg.size() - 1]->ty != TokenType::ANGLE_C)
-                        throw SyntaxError(carg[0], "Missing closing '>' for constarg tuple in def");
-                    TokenArray cargtuple(carg, 1, -1);
-                    cargs.push_back(new AstDefCargTuple(carg));
-                }
-                else
-                    cargs.push_back(new AstDefArgSingle(carg));
-                start = end + 1;
-            } while (end != tarr.size());
-        }
-
-        // helper for function calls ie. my_func<...>(...)
-        void parseConstargs(const TokenArray& tarr, std::vector<AstExpr*>& exprs)
-        {
-            if (tarr.size() == 0)
-                return;
-
-            int start = 0;
-            int end;
-            do
-            {
-                end = tarr.search<TokenArray::args_elem<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start);
-                if (end == -1)
-                    end = tarr.size();
-                TokenArray carg(tarr, start, end);
-                if (carg.size() == 0)
-                    throw SyntaxError(tarr[0], "Dangling end of constargs in block");
-                if (carg[0]->ty == TokenType::ANGLE_O)
-                {
-                    if (carg[carg.size() - 1]->ty != TokenType::ANGLE_C)
-                        throw SyntaxError(carg[0], "Missing closing '>' for constarg tuple in block");
-                    TokenArray cargtuple(carg, 1, -1);
-                    exprs.push_back(new AstTuple(cargtuple));
-                }
-                else
-                    exprs.push_back(parseExpr<0>(carg));
-                start = end + 1;
-            } while (end != tarr.size());
-        }
-
         template<int prec>
         AstExpr* splitExpr(const TokenArray& tarr, int split_point);
 
@@ -449,6 +375,80 @@ namespace nn
                     throw SyntaxError(tarr[0], "Unexpected start token for multi token expression leaf node");
                 }
             }
+        }
+
+        // helper for function signatures ie. def my_func<...>(...)
+        void paseDefArgs(const TokenArray& tarr, std::vector<AstDefArgSingle>& args)
+        {
+            int start = 0;
+            int end;
+            do
+            {
+                end = tarr.search<TokenArray::args_elem<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start);
+                if (end == -1)
+                    end = tarr.size();
+                TokenArray decl(tarr, start, end);
+                args.push_back({ decl });
+                start = end;
+            } while (end != tarr.size());
+        }
+
+        // helper for function signatures ie. def my_func<...>(...)
+        void parseDefCargs(const TokenArray& tarr, std::vector<AstDefCarg*>& cargs)
+        {
+            if (tarr.size() == 0)
+                return;
+
+            int start = 0;
+            int end;
+            do
+            {
+                end = tarr.search<TokenArray::args_elem<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start);
+                if (end == -1)
+                    end = tarr.size();
+                TokenArray carg(tarr, start, end);
+                if (carg.size() == 0)
+                    throw SyntaxError(tarr[0], "Dangling end of constargs in def");
+                if (carg[0]->ty == TokenType::ANGLE_O)
+                {
+                    if (carg[carg.size() - 1]->ty != TokenType::ANGLE_C)
+                        throw SyntaxError(carg[0], "Missing closing '>' for constarg tuple in def");
+                    TokenArray cargtuple(carg, 1, -1);
+                    cargs.push_back(new AstDefCargTuple(carg));
+                }
+                else
+                    cargs.push_back(new AstDefArgSingle(carg));
+                start = end + 1;
+            } while (end != tarr.size());
+        }
+
+        // helper for function calls ie. my_func<...>(...)
+        void parseConstargs(const TokenArray& tarr, std::vector<AstExpr*>& exprs)
+        {
+            if (tarr.size() == 0)
+                return;
+
+            int start = 0;
+            int end;
+            do
+            {
+                end = tarr.search<TokenArray::args_elem<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start);
+                if (end == -1)
+                    end = tarr.size();
+                TokenArray carg(tarr, start, end);
+                if (carg.size() == 0)
+                    throw SyntaxError(tarr[0], "Dangling end of constargs in block");
+                if (carg[0]->ty == TokenType::ANGLE_O)
+                {
+                    if (carg[carg.size() - 1]->ty != TokenType::ANGLE_C)
+                        throw SyntaxError(carg[0], "Missing closing '>' for constarg tuple in block");
+                    TokenArray cargtuple(carg, 1, -1);
+                    exprs.push_back(new AstTuple(cargtuple));
+                }
+                else
+                    exprs.push_back(parseExpr<0>(carg));
+                start = end + 1;
+            } while (end != tarr.size());
         }
 
         // Ast Nodes
@@ -811,7 +811,11 @@ namespace nn
             line_num = left[0]->line_num;
             col_num = left[0]->col_num;
 
-            pleft = parseExpr<1>(left);
+            decl_assign = isDecl(left);
+            if (decl_assign)
+                pleft = new AstDecl(left);
+            else
+                pleft = parseExpr<1>(left);
             pright = parseExpr<0>(right);
         }
 
@@ -860,6 +864,12 @@ namespace nn
                     parseConstargs(cargs, this->constargs);
                 }
             }
+        }
+
+        AstDecl::~AstDecl()
+        {
+            for (auto e : constargs)
+                delete e;
         }
 
         AstIf::AstIf(const TokenArray& if_sig, const TokenArray& if_seq, int indent_level) :
@@ -994,17 +1004,6 @@ namespace nn
                         this->blocks.push_back(new AstFor(for_sig, for_seq, indent_level));
                         start = end + indent_level;
                         continue;
-                    }
-                }
-
-                int assign_pos = tarr.search<TokenArray::is_same<TokenType::ASSIGN>>(start);
-                if (assign_pos >= start + 2)  // minimum requirement for a decl, ie. int x = 1
-                {
-                    TokenArray decl_tarr(tarr, start, assign_pos);
-                    if (isDecl(decl_tarr))
-                    {
-                        this->blocks.push_back(new AstDecl(decl_tarr));
-                        start = assign_pos - 1;  // setup for parsing the expression seperately
                     }
                 }
 
@@ -1163,9 +1162,13 @@ namespace nn
                     throw SyntaxError(tarr[i], "Expected '.'");
                 
                 i++;
-                if (i == tarr.size() || tarr[i]->ty != TokenType::IDN)
-                    throw SyntaxError(tarr[i - 1], "Expected identifier after '.'");
-                imp.push_back(static_cast<const TokenImp<TokenType::IDN>*>(tarr[i])->val);
+                if (i == tarr.size())
+                    throw SyntaxError(tarr[i - 1], "Expected token after '.'");
+                if (tarr[i]->ty == TokenType::STAR)
+                    imp.push_back("");  // empty string means *
+                if (tarr[i]->ty != TokenType::IDN)
+                    imp.push_back(static_cast<const TokenImp<TokenType::IDN>*>(tarr[i])->val);
+                throw SyntaxError(tarr[i - 1], "Expected identifier or '*' after '.'"); 
             }
         }
 

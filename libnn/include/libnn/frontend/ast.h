@@ -3,25 +3,26 @@
 
 #include <string>
 #include <vector>
+#include <stack>
 #include <unordered_map>
 
 #include <libnn/core/graph.h>
+#include <libnn/frontend/eval.h>
 #include <libnn/frontend/lexer.h>
 
 namespace nn
 {
     namespace impl
     {
-        class Obj;
-        using EvalCtx = std::unordered_map<std::string, Obj*>;
-
         class AstSeq;
         class AstDef;
+        class AstIntr;
         class Module;
 
         class AstBlock
         {
         public:
+            std::string file_name;
             uint32_t line_num;
             uint32_t col_num;
 
@@ -322,6 +323,8 @@ namespace nn
         class AstAssign :
             public AstBinOp
         {
+            bool decl_assign;
+
         public:
             AstAssign(const TokenArray& left, const TokenArray& right);
             virtual ~AstAssign();
@@ -334,7 +337,7 @@ namespace nn
 
         // simple variable delarations found in sequences
         class AstDecl :
-            public AstBlock
+            public AstExpr
         {
             std::string var_name;
             std::string type_name;
@@ -344,6 +347,20 @@ namespace nn
             AstDecl();
             AstDecl(const TokenArray& tarr);
             virtual ~AstDecl();
+
+            virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstSeq
+        {
+            uint32_t line_num;
+            uint32_t col_num;
+
+            std::vector<AstBlock*> blocks;
+
+        public:
+            AstSeq(const TokenArray& tarr, int indent_level);
+            ~AstSeq();
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -384,20 +401,6 @@ namespace nn
         public:
             AstFor(const TokenArray& for_sig, const TokenArray& for_seq, int indent_level);
             virtual ~AstFor();
-
-            virtual Obj* eval(EvalCtx& ctx, Module& mod);
-        };
-
-        class AstSeq
-        {
-            uint32_t line_num;
-            uint32_t col_num;
-
-            std::vector<AstBlock*> blocks;
-
-        public:
-            AstSeq(const TokenArray& tarr, int indent_level);
-            ~AstSeq();
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
         };
@@ -449,6 +452,11 @@ namespace nn
             AstDef(const TokenArray& def_sig, const TokenArray& def_block);
 
             virtual Obj* eval(EvalCtx& ctx, Module& mod);
+        };
+
+        class AstIntr
+        {
+            // TODO: figure out instrinsics
         };
 
         class AstModImp :

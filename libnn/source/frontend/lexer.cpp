@@ -187,8 +187,6 @@ namespace nn
         SMALL_PUSH_BACK( IADD     );
         SMALL_PUSH_BACK( ISUB     );
         SMALL_PUSH_BACK( IMUL     );
-        SMALL_PUSH_BACK( IMUL     );
-        SMALL_PUSH_BACK( IMUL     );
         SMALL_PUSH_BACK( IDIV     );
         SMALL_PUSH_BACK( ASSIGN   );
         SMALL_PUSH_BACK( CMP_EQ   );

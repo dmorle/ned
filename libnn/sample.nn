@@ -1,6 +1,9 @@
 import stdlib.*
 
 
+block linear<>
+
+
 def reshape<int *out_shape, <int *in_shape>>(tensor<*in_shape> inp):
     return _reshape<*out_shape>(inp)
 

@@ -12,16 +12,17 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="eval.cpp" />
-    <ClCompile Include="source\frontend\obj.cpp" />
     <ClCompile Include="source\frontend\lexer.cpp" />
     <ClCompile Include="source\frontend\ast.cpp" />
+    <ClCompile Include="source\frontend\obj.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\libnn\core\graph.h" />
     <ClInclude Include="include\libnn\core\tensor.h" />
-    <ClInclude Include="include\libnn\frontend\obj.h" />
+    <ClInclude Include="include\libnn\frontend\eval.h" />
     <ClInclude Include="include\libnn\frontend\lexer.h" />
     <ClInclude Include="include\libnn\frontend\ast.h" />
+    <ClInclude Include="include\libnn\frontend\obj.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="sample.nn" />
