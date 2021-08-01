@@ -11,15 +11,24 @@ namespace nn
         {
             if (tarr.size() < 2 || tarr[0]->ty != TokenType::IDN)
                 return false;
-            if (tarr[1]->ty == TokenType::IDN)
+
+            size_t pos = 1;
+            if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "static")
+            {
+                if (tarr.size() < 3 || tarr[1]->ty != TokenType::IDN)
+                    return false;
+                pos = 2;
+            }
+
+            if (tarr[pos]->ty == TokenType::IDN)
                 return true;
 
-            if (tarr.size() < 4 || tarr[1]->ty != TokenType::ANGLE_O)
+            if (tarr.size() < pos + 3 || tarr[pos]->ty != TokenType::ANGLE_O)  // [static] ty<> name
                 return false;
 
-            int ret = tarr.search<TokenArray::brac_end<TokenType::ANGLE_O, TokenType::ANGLE_C>>(2);
+            int ret = tarr.search<TokenArray::brac_end<TokenType::ANGLE_O, TokenType::ANGLE_C>>(pos + 1);
             if (ret < 0)
-                throw SyntaxError(tarr[1], "Missing closing '>'");
+                throw SyntaxError(tarr[pos], "Missing closing '>'");
             assert(tarr[ret]->ty == TokenType::ANGLE_C);
 
             return !(ret + 1 == tarr.size() || tarr[ret + 1]->ty != TokenType::IDN);
@@ -836,11 +845,21 @@ namespace nn
             line_num = tarr[0]->line_num;
             col_num = tarr[0]->col_num;
 
-            if (tarr[0]->ty != TokenType::IDN)
-                throw SyntaxError(tarr[0], "Invalid token for type name in declaration");
-            this->type_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val;
+            size_t start = 0;
+            is_static = false;
+            if (tarr[0]->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "static")
+            {
+                is_static = true;
+                start++;
+            }
+
+            if (tarr[start]->ty != TokenType::IDN)
+                throw SyntaxError(tarr[start], "Invalid token for type name in declaration");
+            this->type_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val;
             if (this->type_name == "var")
             {
+                if (is_static)
+                    throw SyntaxError(tarr[start], "static var declarations are not allowed");
                 if (tarr.size() != 2)
                     throw SyntaxError(tarr[0], "Invalid syntax for var declaration");
                 if (tarr[1]->ty != TokenType::IDN)
@@ -854,13 +873,13 @@ namespace nn
                     throw SyntaxError(tarr[var_idx], "Invalid token for variable name in declaration");
                 this->var_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[var_idx])->val;
                 
-                if (tarr.size() != 2)
+                if (tarr.size() != start + 2)
                 {
-                    if (tarr[2]->ty != TokenType::ANGLE_O)
-                        throw SyntaxError(tarr[2], "Expected '<' in type for variable declaration");
+                    if (tarr[start + 2]->ty != TokenType::ANGLE_O)
+                        throw SyntaxError(tarr[start + 2], "Expected '<' in type for variable declaration");
                     if (tarr[tarr.size() - 2]->ty != TokenType::ANGLE_C)
                         throw SyntaxError(tarr[tarr.size() - 2], "Expected '>' in type for variable declaration");
-                    TokenArray cargs(tarr, 3, tarr.size() - 2);
+                    TokenArray cargs(tarr, start + 3, tarr.size() - 2);
                     parseConstargs(cargs, this->constargs);
                 }
             }
@@ -1172,7 +1191,7 @@ namespace nn
             }
         }
 
-        Module::Module(const TokenArray& tarr)
+        AstModule::AstModule(const TokenArray& tarr)
         {
             for (int i = 0; i < tarr.size(); i++)
             {

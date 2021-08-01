@@ -26,15 +26,54 @@ namespace nn
             data({})
         {}
 
+        Scope::~Scope()
+        {
+            for (auto& [k, v] : this->data)
+                delete v;
+        }
+
         Obj* Scope::operator[](const std::string& idn)
         {
             return data[idn];
         }
 
-        void Scope::release()
+        EvalCtx::EvalCtx()
         {
-            for (auto& [k, v] : this->data)
-                delete v;
+        }
+
+
+
+        EvalCtx* AstModule::eval(const std::string& entry_point, std::vector<Obj*>& args)
+        {
+            EvalCtx* pctx = new EvalCtx();
+
+            // Building EvalCtx
+            for (auto e : imps)
+                e.eval(*pctx);
+
+            for (auto e : fns)
+                e.eval(*pctx);
+            for (auto e : intrs)
+                e.eval(*pctx);
+            for (auto e : defs)
+                e.eval(*pctx);
+
+            // Generating the model
+            decltype(pctx->defs)::iterator it = pctx->defs.find(entry_point);
+            if (it == pctx->defs.end())
+                throw GenerationError("Unable to find a valid entry point with name " + entry_point);
+            Obj* entry_def = it->second;
+            entry_def = entry_def->cargs(args);
+
+            const auto& varargs = static_cast<ObjDef*>(entry_def)->getData().def.varargs;
+            for (auto& e : varargs)
+            {
+                if (e.type_name != "tensor")
+                    throw GenerationError("'def' must have only tensor types for varargs");
+                // TODO: make the input tensor nodes
+            }
+
+            // TODO: entry_def->call()
         }
     }
 }

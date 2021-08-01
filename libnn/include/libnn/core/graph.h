@@ -15,9 +15,11 @@ namespace nn
     {
     public:
         bool is_static;
+        std::string name;
         tensor_dsc dsc;
         Node* input;
-        std::vector<Node*> outputs;
+        int inpid;
+        std::vector<std::pair<Node*, int>> outputs;
     };
 
     class Node
@@ -31,7 +33,8 @@ namespace nn
 	class Graph
 	{
     public:
-
+        std::vector<Edge*> inputs;
+        std::vector<Edge*> outputs;
 	};
 }
 

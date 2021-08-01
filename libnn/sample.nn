@@ -1,39 +1,110 @@
-import stdlib.*
+fn range(int n):
+    array<int, n> data
+    int i = 0
+    while i < n:
+        data[i] = i
+        i += 1
+    return data
 
 
-block linear<>
+intrinsic reshape<int *out_shape, <int *inp_shape>>(tensor<*inp_shape> inp):
+    int inp_size = 1
+    for int dim_size in inp_shape:
+        inp_size *= dim_size
+
+    int out_size = 1
+    int unknown_idx = -1
+    for int i in range(out_shape.length):
+        if out_shape[i] == -1:
+            if unknown_idx != -1:
+                error("Multiple -1 values in output shape")
+            unknown_idx = i
+        else:
+            out_size *= out_shape[i]
+
+    if unknown_idx != -1:
+        out_shape[unknown_idx] = inp_size / out_size
+        out_size *= out_shape[unknown_idx]
+
+    if out_size != inp_size:
+        error(format("Unable to transform tensor with size {} to size {}", inp_size, out_size))
+    tensor<*out_shape> out
+    return out
 
 
-def reshape<int *out_shape, <int *in_shape>>(tensor<*in_shape> inp):
-    return _reshape<*out_shape>(inp)
+intrinsic concat<int dim, <int *t1_shape>, <int *t2_shape>>(tensor<*t1_shape> t1, tensor<*t2_shape> t2):
+    if t1_shape.length != t2_shape.length:
+        error("Mismatching tensor ranks")
+    if t1_shape.length <= dim:
+        error("Invalid concatenation dimension")
+    
+    for int i in range(t1_shape.length):
+        if i != dim and t1_shape[i] != t2_shape[i]:
+            error("Mismatching tensor shapes")
+
+    t1_shape[dim] += t2_shape[dim]
+    tensor<*t1_shape> out
+    return out
 
 
-def rnn_cell<int N, int I, int S>(tensor<N, I> inp, tensor<N, S> state, dict theta):
+intrinsic relu<int *shape>(tensor<*shape> t1):
+    tensor<*shape> out
+    return out
+
+
+intrinsic softmax<int *shape>(tensor<*shape> t1):
+    tensor<*shape> out
+    return out
+
+
+intrinsic matmul<int N, int M, int S>(tensor<N, S> t1, tensor<S, M> t2):
+    tensor<N, M> out
+    return out
+
+
+intrinsic conv2d_intr<int C, int H, int W, int K, int M, int N>(tensor<C, H, W> inp, tensor<K, C, M, N> kernel):
+    tensor<K, H, W> out
+    return out
+
+
+def linear<int N, int M>(tensor<N> inp):
+    tensor<M, N> w
+    tensor<M> b
+
+    return matmul(w, reshape<N, 1>(inp)) + b
+
+
+def conv2d<int K, int M, int N, int C, int H, int W>(tensor<C, H, W> inp):
+    tensor<K, C, M, N> kernel
+    
+    return conv2d_intr(inp, kernel)
+
+
+def rnn_cell<int I, int S>(tensor<I> inp, tensor<S> state):
     var combined = concat<1>(reshape<N, -1>(inp), reshape<N, -1>(state))
-    var layer1 = relu(linear(combined, theta["rnn-l1"]))
-    var output = softmax<1>(linear(layer1, theta["rnn-lo"]))
-    var nstate = relu(linear(layer1, theta["rnn-ls"]))
-
+    var layer1 = relu(linear(combined))
+    var output = softmax(linear(layer1))
+    var nstate = relu(linear(layer1))
     return nstate, output
 
 
-def rnn<int N, int I, int S>(tensor<N, I> inp, dict theta):
+def rnn<int I, int S>(tensor<I> inp):
     static tensor<N, S> state;
     
-    var output;
-    state, output = rnn_cell<N, I, S>(inp, state, theta)
-    return output
+    var result = rnn_cell<I, S>(inp, state)
+    state = result[0]
+    return result[1]
 
 
-def model<int N, int G>(tensor<N, 3, 312, 312> img, dict theta):
-    var layer1 = relu(conv2d<<>, 1>(img, theta["layer1"]))
-    var layer2 = relu(conv2d(layer1, theta["layer2"]))
+def model<int G>(tensor<3, 312, 312> img):
+    var layer1 = relu(conv2d<8, 3, 3>(img))
+    var layer2 = relu(conv2d<16, 3, 3>(layer1))
 
-    tensor<N, 16, 6, 6> tmp = layer2
+    tensor<16, 312, 312> tmp = layer2
     for int i in range(G):
-        tmp = relu(conv2d(tmp, theta[strfmt("res-l{}", i)]))
+        tmp = relu(conv2d<16, 3, 3>(tmp))
     
     var flattened = reshape<N, -1>(tmp);
-    var output = rnn<N, shape(flattened)[-1], 128>(flattened, theta)
+    var output = rnn<N, flattened.shape[-1], 128>(flattened)
 
     return output

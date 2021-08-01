@@ -1,8 +1,10 @@
 #ifndef NN_EVAL_H
 #define NN_EVAL_H
 
+#include <libnn/core/graph.h>
+
 #include <string>
-#include <unordered_map>
+#include <map>
 
 namespace nn
 {
@@ -10,6 +12,7 @@ namespace nn
     {
         class Obj;
         class AstBlock;
+        class AstModImp;
 
         class GenerationError :
             public std::exception
@@ -26,27 +29,52 @@ namespace nn
 
         class Scope
         {
-            std::unordered_map<std::string, Obj*> data;
+            std::map<std::string, Obj*> data;
             
         public:
             Scope();
+            ~Scope();
 
             Obj* operator[](const std::string& idn);
+        };
 
-            void release();
+        enum class EvalState
+        {
+            PACKAGE,
+            MODULE,
+            DEF,
+            INTR,
+            FN
         };
 
         class EvalCtx
         {
-            std::vector<Scope> scope_stack;
+            friend class AstDef;
+            friend class AstFn;
+            friend class AstIntr;
+            friend class AstModule;
+            friend class AstModImp;
+
+            std::map<std::string, Obj*> defs;
+            std::map<std::string, Obj*> fns;
+            std::map<std::string, Obj*> intrs;
+            std::map<std::string, Obj*> mods;
+            std::map<std::string, Obj*> packs;
 
         public:
             EvalCtx();
 
-            Obj* operator[](std::string& idn);
+            Obj* operator[](const std::string& idn);
+
+            bool contains(const std::string& name);
+            void insert(std::pair<std::string, Obj*> val);
+            
+            Graph* pgraph;
+            Scope* pscope;
+
+            EvalState state;
         };
     }
 }
 
 #endif
-

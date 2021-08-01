@@ -1,5 +1,7 @@
 #include <libnn/frontend/obj.h>
 
+#include <string>
+
 namespace nn
 {
     namespace impl
@@ -38,21 +40,29 @@ namespace nn
             init(false)
         {}
 
-        template<> ObjImp<ObjType::BOOL>::~ObjImp() {}
-        template<> ObjImp<ObjType::INT>::~ObjImp() {}
-        template<> ObjImp<ObjType::FLOAT>::~ObjImp() {}
-        template<> ObjImp<ObjType::STR>::~ObjImp() {}
-        template<> ObjImp<ObjType::TUPLE>::~ObjImp() {}
-        template<> ObjImp<ObjType::TENSOR>::~ObjImp() {}
+        ObjBool::~ObjImp() {}
+        ObjInt::~ObjImp() {}
+        ObjFloat::~ObjImp() {}
+        ObjStr::~ObjImp() {}
+        ObjTuple::~ObjImp() {}
+        ObjTensor::~ObjImp() {}
 
-        template<> bool ObjImp<ObjType::BOOL>::bval() const
+        ObjBool::ObjImp(EvalCtx& ctx, const AstDecl* decl, const std::vector<Obj*>& cargs) :
+            Obj(ObjType::BOOL)
+        {
+            ctx.insert({ decl->var_name, this });
+            init = false;
+            data.val = false;
+        }
+
+        bool ObjBool::bval() const
         {
             if (!init)
                 throw GenerationError("Uninitialized variable");
             return data.val;
         }
 
-        template<> void ObjImp<ObjType::BOOL>::assign(const Obj* val)
+        void ObjBool::assign(const Obj* val)
         {
             if (val->ty != ObjType::BOOL)
                 throw GenerationError("Unable to assign type " + objTypeName(val->ty) + " to type " + type_name);
@@ -61,35 +71,75 @@ namespace nn
             init = true;
         }
 
-        template<> bool ObjImp<ObjType::INT>::bval() const
+        bool ObjInt::bval() const
         {
             if (!init)
                 throw GenerationError("Uninitialized variable"); 
             throw GenerationError("'int' variable does not have a truth value");
         }
 
-        template<> bool ObjImp<ObjType::FLOAT>::bval() const
+        bool ObjFloat::bval() const
         {
             if (!init)
                 throw GenerationError("Uninitialized variable"); 
             throw GenerationError("'float' variable does not have a truth value");
         }
 
-        template<> bool ObjImp<ObjType::STR>::bval() const
+        bool ObjStr::bval() const
         {
             if (!init)
                 throw GenerationError("Uninitialized variable"); 
             throw GenerationError("'str' variable does not have a truth value");
         }
 
-        template<> bool ObjImp<ObjType::TUPLE>::bval() const
+        bool ObjTuple::bval() const
         {
             if (!init)
                 throw GenerationError("Uninitialized variable"); 
             throw GenerationError("'tuple' variable does not have a truth value");
         }
 
-        template<> bool ObjImp<ObjType::TENSOR>::bval() const
+        static std::unordered_map<std::string, int> varcounts = {};
+
+        // input node declaration
+        ObjTensor::ObjImp(EvalCtx& ctx, const AstDecl* decl, const std::vector<Obj*>& cargs) :
+            Obj(ObjType::TENSOR)
+        {
+            // reading the tensor dimensions
+            for (auto e : cargs)
+            {
+                if (e->ty != ObjType::INT)
+                    throw GenerationError("Unexpected carg type in tensor declaration");
+                data.dims.push_back(static_cast<ObjInt*>(e)->getData().val);
+            }
+            if (data.dims.size() == 0)
+                throw GenerationError("A tensor must have at least one carg");
+
+            // adding the variable to the scope
+            ctx.insert({ decl->var_name, this });
+
+            // Creating an input edge node
+            auto result = varcounts.find(decl->var_name);
+            int count = 0;
+            if (result == varcounts.end())
+                varcounts.insert({ decl->var_name, 1 });
+            else
+                count = result->second++;
+            
+            Edge* pEdge = new Edge();
+            pEdge->is_static = decl->is_static;
+            pEdge->name = decl->var_name + ':' + std::to_string(count);
+            pEdge->dsc.rk = data.dims.size();
+            pEdge->dsc.dims = data.dims;
+            pEdge->input = nullptr;
+            pEdge->outputs = {};
+            ctx.pgraph->inputs.push_back(pEdge);
+            data.pEdge = pEdge;
+
+            init = true;
+        }
+
+        bool ObjTensor::bval() const
         {
             if (!init)
                 throw GenerationError("Uninitialized variable");
