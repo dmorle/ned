@@ -1,6 +1,7 @@
 #ifndef NN_GRAPH_H
 #define NN_GRAPH_H
 
+#include <map>
 #include <tuple>
 #include <vector>
 #include <string>
@@ -15,7 +16,6 @@ namespace nn
     {
     public:
         bool is_static;
-        std::string name;
         tensor_dsc dsc;
         Node* input;
         int inpid;
@@ -33,8 +33,8 @@ namespace nn
 	class Graph
 	{
     public:
-        std::vector<Edge*> inputs;
-        std::vector<Edge*> outputs;
+        std::map<std::string, Edge*> inputs;
+        std::map<std::string, Edge*> outputs;
 	};
 }
 

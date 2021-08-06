@@ -28,7 +28,17 @@ namespace nn
 
             virtual ~AstBlock() = 0;
 
-            virtual Obj* eval(EvalCtx& ctx) = 0;
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx) const = 0;
+        };
+
+        class AstCargsDecl
+        {
+        public:
+            virtual ~AstCargsDecl() = 0;
+
+            // does not evaluate anything or add new elements to the scope
+            // potentially 
+            virtual void match_args(Scope& scope, std::vector<std::unique_ptr<Obj>>& cargs) const = 0;
         };
 
         class AstExpr :
@@ -36,6 +46,8 @@ namespace nn
         {
         public:
             virtual ~AstExpr() = 0;
+            
+            virtual void append_cargs(EvalCtx&, std::vector<std::unique_ptr<Obj>>&) const;
         };
 
         class AstBinOp :
@@ -57,7 +69,7 @@ namespace nn
         public:
             AstBool(const Token* ptk, bool val);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstInt :
@@ -68,7 +80,7 @@ namespace nn
         public:
             AstInt(const Token* ptk);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstFloat :
@@ -79,7 +91,7 @@ namespace nn
         public:
             AstFloat(const Token* ptk);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstStr :
@@ -90,7 +102,7 @@ namespace nn
         public:
             AstStr(const Token* ptk);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstIdn :
@@ -101,7 +113,7 @@ namespace nn
         public:
             AstIdn(const Token* ptk);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstTuple :
@@ -113,7 +125,7 @@ namespace nn
             AstTuple(const TokenArray& tarr);
             virtual ~AstTuple();
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstCall :
@@ -124,8 +136,7 @@ namespace nn
 
         public:
             AstCall(AstExpr* pleft, const TokenArray& tarr);
-
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstCargs :
@@ -137,7 +148,7 @@ namespace nn
         public:
             AstCargs(AstExpr* pleft, const TokenArray& tarr);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstIdx :
@@ -150,7 +161,7 @@ namespace nn
             AstIdx(AstExpr* pleft, const TokenArray& tarr);
             void parseSlice(const TokenArray& tarr);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstDot :
@@ -162,7 +173,7 @@ namespace nn
         public:
             AstDot(AstExpr* pleft, const Token* ptk);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstNeg :
@@ -173,7 +184,19 @@ namespace nn
         public:
             AstNeg(const TokenArray& tarr);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
+        };
+
+        class AstPack :
+            public AstExpr
+        {
+            AstExpr* pexpr;
+
+        public:
+            AstPack(const TokenArray& tarr);
+
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
+            virtual void append_cargs(EvalCtx&, std::vector<std::unique_ptr<Obj>>&);
         };
 
         class AstAdd :
@@ -182,7 +205,7 @@ namespace nn
         public:
             AstAdd(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
         
         class AstSub :
@@ -191,7 +214,7 @@ namespace nn
         public:
             AstSub(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
         
         class AstMul :
@@ -200,7 +223,7 @@ namespace nn
         public:
             AstMul(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
         
         class AstDiv :
@@ -209,7 +232,7 @@ namespace nn
         public:
             AstDiv(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstEq :
@@ -218,7 +241,7 @@ namespace nn
         public:
             AstEq(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstNe :
@@ -227,7 +250,7 @@ namespace nn
         public:
             AstNe(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstGe :
@@ -236,7 +259,7 @@ namespace nn
         public:
             AstGe(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstLe :
@@ -245,7 +268,7 @@ namespace nn
         public:
             AstLe(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstGt :
@@ -254,7 +277,7 @@ namespace nn
         public:
             AstGt(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstLt :
@@ -263,7 +286,7 @@ namespace nn
         public:
             AstLt(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstAnd :
@@ -272,7 +295,7 @@ namespace nn
         public:
             AstAnd(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstOr :
@@ -281,7 +304,7 @@ namespace nn
         public:
             AstOr(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstIAdd :
@@ -290,7 +313,7 @@ namespace nn
         public:
             AstIAdd(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstISub :
@@ -299,7 +322,7 @@ namespace nn
         public:
             AstISub(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstIMul :
@@ -308,7 +331,7 @@ namespace nn
         public:
             AstIMul(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstIDiv :
@@ -317,7 +340,7 @@ namespace nn
         public:
             AstIDiv(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstAssign :
@@ -329,31 +352,39 @@ namespace nn
             AstAssign(const TokenArray& left, const TokenArray& right);
             virtual ~AstAssign();
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         // end of expression nodes
         // block nodes
 
         // simple variable delarations found in sequences
-        enum class ObjType;
         class AstDecl :
-            public AstExpr
+            public AstExpr,
+            public AstCargsDecl
         {
-            template<ObjType TY>
-            friend class ObjImp;
+            friend class AstModule;
 
             bool is_static;
             std::string var_name;
             std::string type_name;
-            std::vector<AstExpr*> constargs;
+            std::vector<AstExpr*> cargs;
 
         public:
             AstDecl();
             AstDecl(const TokenArray& tarr);
             virtual ~AstDecl();
 
-            virtual Obj* eval(EvalCtx& ctx);
+            //  constructs a new object with the given cargs
+            //  adds the new object's name to the scope
+            //  if state is CALL:
+            //      assert cargs are fully initialized
+            //  elif state is DEFSEQ and type is tensor: 
+            //      add the tensor as a graph input edge
+            //
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx) const;  // returns null
+            virtual void append_cargs(EvalCtx&, std::vector<std::unique_ptr<Obj>>&) const;
+            virtual void match_args(Scope& scope, std::vector<std::unique_ptr<Obj>>& cargs) const;
         };
 
         class AstSeq
@@ -367,7 +398,7 @@ namespace nn
             AstSeq(const TokenArray& tarr, int indent_level);
             ~AstSeq();
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstIf :
@@ -380,7 +411,7 @@ namespace nn
             AstIf(const TokenArray& if_sig, const TokenArray& if_seq, int indent_level);
             virtual ~AstIf();
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstWhile :
@@ -393,7 +424,7 @@ namespace nn
             AstWhile(const TokenArray& while_sig, const TokenArray& whlie_seq, int indent_level);
             virtual ~AstWhile();
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
         class AstFor :
@@ -407,39 +438,19 @@ namespace nn
             AstFor(const TokenArray& for_sig, const TokenArray& for_seq, int indent_level);
             virtual ~AstFor();
 
-            virtual Obj* eval(EvalCtx& ctx);
+            virtual std::unique_ptr<Obj> eval(EvalCtx& ctx);
         };
 
-        // constargs can have tuples, varargs can't
-        class AstDefCarg
+        class AstCargsTuple :
+            public AstCargsDecl
         {
+            std::vector<AstCargsDecl*> elems;
+
         public:
-            virtual ~AstDefCarg() = 0;
-        };
+            AstCargsTuple(const TokenArray& tarr);
+            virtual ~AstCargsTuple();
 
-        // basically AstDecl but with packed parameters
-        class AstDefArgSingle :
-            public AstDefCarg
-        {
-        public:
-            bool packed;
-            std::string var_name;
-            std::string type_name;
-            std::vector<AstExpr*> constargs;
-
-            AstDefArgSingle(const TokenArray& tarr);
-            virtual ~AstDefArgSingle();
-        };
-
-        // Tuple of AstDefCarg s
-        class AstDefCargTuple :
-            public AstDefCarg
-        {
-        public:
-            std::vector<AstDefCarg*> elems;
-
-            AstDefCargTuple(const TokenArray& tarr);
-            virtual ~AstDefCargTuple();
+            virtual void match_args(Scope& scope, std::vector<std::unique_ptr<Obj>>& cargs);
         };
 
         // root node
@@ -452,8 +463,9 @@ namespace nn
 
             AstSeq block;
             std::string name;
-            std::vector<AstDefCarg*> constargs;
-            std::vector<AstDefArgSingle> varargs;
+
+            std::vector<AstCargsDecl*> cargs;
+            std::vector<AstDecl> vargs;
 
         public:
             AstDef(const TokenArray& def_sig, const TokenArray& def_block);
@@ -477,6 +489,9 @@ namespace nn
         {
             friend class AstModule;
 
+            uint32_t line_num;
+            uint32_t col_num;
+
             std::vector<std::string> imp;
 
         public:
@@ -495,7 +510,7 @@ namespace nn
         public:
             AstModule(const TokenArray& tarr);
 
-            EvalCtx* eval(const std::string& entry_point, std::vector<Obj*>& cargs);
+            std::unique_ptr<EvalCtx> eval(const std::string& entry_point, std::vector<std::unique_ptr<Obj>>& cargs);
         };
     }
 }

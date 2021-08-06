@@ -39,25 +39,26 @@ namespace nn
             virtual ~Obj() = 0;
 
             virtual bool bval() const = 0;
-            virtual void assign(const Obj* val) = 0;
+            virtual void assign(const std::unique_ptr<Obj> val) = 0;
 
-            virtual Obj* get(const std::string& item) = 0;
-            virtual Obj* cargs(const std::vector<Obj*> args) const = 0;
-            virtual Obj* call(const std::vector<Obj*> args) const = 0;
-            virtual Obj* idx(const std::vector<std::vector<Obj*>> val) = 0;
-            virtual Obj* neg() = 0;
+            virtual std::unique_ptr<Obj> get(const std::string& item) = 0;
+            virtual std::unique_ptr<Obj> cargs(const std::vector<std::unique_ptr<Obj>> args) const = 0;
+            virtual std::unique_ptr<Obj> call(EvalCtx& ctx, const std::vector<std::unique_ptr<Obj>> args) const = 0;
+            virtual std::vector<std::unique_ptr<Obj>> iter(EvalCtx& ctx) = 0;
+            virtual std::unique_ptr<Obj> idx(const std::vector<std::vector<std::unique_ptr<Obj>>> val) = 0;
+            virtual std::unique_ptr<Obj> neg() = 0;
 
-            virtual Obj* add(const Obj* val) = 0;
-            virtual Obj* sub(const Obj* val) = 0;
-            virtual Obj* mul(const Obj* val) = 0;
-            virtual Obj* div(const Obj* val) = 0;
+            virtual std::unique_ptr<Obj> add(const std::unique_ptr<Obj>& val) = 0;
+            virtual std::unique_ptr<Obj> sub(const std::unique_ptr<Obj>& val) = 0;
+            virtual std::unique_ptr<Obj> mul(const std::unique_ptr<Obj>& val) = 0;
+            virtual std::unique_ptr<Obj> div(const std::unique_ptr<Obj>& val) = 0;
 
-            virtual Obj* eq(const Obj* val) = 0;
-            virtual Obj* ne(const Obj* val) = 0;
-            virtual Obj* ge(const Obj* val) = 0;
-            virtual Obj* le(const Obj* val) = 0;
-            virtual Obj* gt(const Obj* val) = 0;
-            virtual Obj* lt(const Obj* val) = 0;
+            virtual std::unique_ptr<Obj> eq(const std::unique_ptr<Obj>& val) = 0;
+            virtual std::unique_ptr<Obj> ne(const std::unique_ptr<Obj>& val) = 0;
+            virtual std::unique_ptr<Obj> ge(const std::unique_ptr<Obj>& val) = 0;
+            virtual std::unique_ptr<Obj> le(const std::unique_ptr<Obj>& val) = 0;
+            virtual std::unique_ptr<Obj> gt(const std::unique_ptr<Obj>& val) = 0;
+            virtual std::unique_ptr<Obj> lt(const std::unique_ptr<Obj>& val) = 0;
         };
 
         template<ObjType TY>
@@ -67,40 +68,40 @@ namespace nn
         class ObjImp :
             public Obj
         {
-            auto mty(const Obj* p) noexcept { return (const decltype(this))p; }
-            auto mty(Obj* p) noexcept { return static_cast<decltype(this)>(p); }
+            auto mty(const std::unique_ptr<Obj>& p) noexcept { return (const decltype(this))p.get(); }
+            auto mty(std::unique_ptr<Obj>& p) noexcept { return static_cast<decltype(this)>(p.get()); }
 
             static constexpr std::string type_name = objTypeName(TY);
             ObjData<TY> data;
 
         public:
-            ObjImp(EvalCtx&, const AstDecl*, const std::vector<Obj*>&);                     // constructor for standalone declaration
-            ObjImp(EvalCtx&, const AstDecl*, const std::vector<Obj*>&, const ObjImp<TY>*);  // constructor for assignment declaration
+            ObjImp(const std::vector<std::unique_ptr<Obj>>&);                      // constructor for standalone declaration
+            ObjImp(const std::vector<std::unique_ptr<Obj>>&, const ObjData<TY>&);  // constructor for assignment declaration
 
             const ObjData<TY>& getData() const { return data; }
 
             virtual ~ObjImp();
 
             virtual bool bval() const override;
-            virtual void assign(const Obj* val) override;
+            virtual void assign(const std::unique_ptr<Obj> val) override;
 
-            virtual Obj* get(const std::string& item) override;
-            virtual Obj* cargs(const std::vector<Obj*> args) const override;
-            virtual Obj* call(const std::vector<Obj*> args) const override;
-            virtual Obj* idx(const std::vector<std::vector<Obj*>> val) override;
-            virtual Obj* neg() override;
+            virtual std::unique_ptr<Obj> get(const std::string& item) override;
+            virtual std::unique_ptr<Obj> cargs(const std::vector<std::unique_ptr<Obj>> args) const override;
+            virtual std::unique_ptr<Obj> call(EvalCtx& ctx, const std::vector<std::unique_ptr<Obj>> args) const override;
+            virtual std::unique_ptr<Obj> idx(const std::vector<std::vector<std::unique_ptr<Obj>>> val) override;
+            virtual std::unique_ptr<Obj> neg() override;
 
-            virtual Obj* add(const Obj* val) override;
-            virtual Obj* sub(const Obj* val) override;
-            virtual Obj* mul(const Obj* val) override;
-            virtual Obj* div(const Obj* val) override;
+            virtual std::unique_ptr<Obj> add(const std::unique_ptr<Obj>& val) override;
+            virtual std::unique_ptr<Obj> sub(const std::unique_ptr<Obj>& val) override;
+            virtual std::unique_ptr<Obj> mul(const std::unique_ptr<Obj>& val) override;
+            virtual std::unique_ptr<Obj> div(const std::unique_ptr<Obj>& val) override;
 
-            virtual Obj* eq(const Obj* val) override;
-            virtual Obj* ne(const Obj* val) override;
-            virtual Obj* ge(const Obj* val) override;
-            virtual Obj* le(const Obj* val) override;
-            virtual Obj* gt(const Obj* val) override;
-            virtual Obj* lt(const Obj* val) override;
+            virtual std::unique_ptr<Obj> eq(const std::unique_ptr<Obj>& val) override;
+            virtual std::unique_ptr<Obj> ne(const std::unique_ptr<Obj>& val) override;
+            virtual std::unique_ptr<Obj> ge(const std::unique_ptr<Obj>& val) override;
+            virtual std::unique_ptr<Obj> le(const std::unique_ptr<Obj>& val) override;
+            virtual std::unique_ptr<Obj> gt(const std::unique_ptr<Obj>& val) override;
+            virtual std::unique_ptr<Obj> lt(const std::unique_ptr<Obj>& val) override;
         };
 
         using ObjBool = ObjImp<ObjType::BOOL>;
@@ -133,9 +134,11 @@ namespace nn
         template<> struct ObjData<ObjType::TENSOR> {
             Edge* pEdge;
             std::vector<uint32_t> dims;
+            std::string graph_name;  // only initialized for input edges
         };
         template<> struct ObjData<ObjType::DEF> {
             AstDef def;
+            std::map<std::string, std::unique_ptr<Obj>> cargs;
         };
         template<> struct ObjData<ObjType::FN> {
             AstFn fn;

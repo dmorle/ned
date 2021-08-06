@@ -318,7 +318,68 @@ namespace nn
                 if (opPrec(tarr[i]) == prec)
                 {
                     if (i == 0 && tarr[i]->ty == TokenType::SUB)
-                        continue;  // Negation operator
+                        continue;  // Leaving the negation operator to be parsed with leaf nodes
+                    if (i == tarr.size() - 1)
+                        throw SyntaxError(tarr[i], "Missing right side for binary operator");
+                    return splitExpr<prec>(tarr, i);
+                }
+            }
+            if (bbrac < 0)
+                throw SyntaxError(tarr[0], "Missing closing ')' in expression");
+            if (sbrac < 0)
+                throw SyntaxError(tarr[0], "Missing closing ']' in expression");
+
+            return parseExpr<prec + 1>(tarr);
+        }
+
+        // special parsing because of the packing operator
+        template<>
+        AstExpr* parseExpr<4>(const TokenArray& tarr)
+        {
+            constexpr int prec = 3;
+
+            size_t tsz = tarr.size();
+            assert(tsz);
+
+            // shortcut for bracketed expressions
+            if (tarr[0]->ty == TokenType::ROUND_O && tarr[tsz - 1]->ty == TokenType::ROUND_C)
+                return parseExpr<0>(TokenArray(tarr, 1, tsz - 1));
+
+            int bbrac = 0;
+            int sbrac = 0;
+            int abrac = 0;
+            for (int i = 0; i < tsz; i++)
+            {
+                // Checking for brackets
+                switch (tarr[i]->ty)
+                {
+                case TokenType::ROUND_O:
+                    bbrac++;
+                    continue;
+                case TokenType::ROUND_C:
+                    bbrac--;
+                    continue;
+                case TokenType::SQUARE_O:
+                    sbrac++;
+                    continue;
+                case TokenType::SQUARE_C:
+                    sbrac--;
+                    continue;
+                case TokenType::ANGLE_O:
+                    abrac++;
+                    continue;
+                case TokenType::ANGLE_C:
+                    abrac--;
+                    continue;
+                }
+
+                if (bbrac || sbrac || abrac)
+                    continue;
+
+                if (opPrec(tarr[i]) == prec)
+                {
+                    if (i == 0 && tarr[i]->ty == TokenType::STAR)
+                        continue;  // Leaving the packing operator to be parsed with leaf nodes
                     if (i == tarr.size() - 1)
                         throw SyntaxError(tarr[i], "Missing right side for binary operator");
                     return splitExpr<prec>(tarr, i);
@@ -366,7 +427,9 @@ namespace nn
                 switch (tarr[0]->ty)
                 {
                 case TokenType::SUB:
-                    return new AstNeg({tarr, 1});
+                    return new AstNeg({ tarr, 1 });
+                case TokenType::STAR:
+                    return new AstPack({ tarr, 1 });
                 case TokenType::ROUND_O:
                 {
                     int end = tarr.search<TokenArray::brac_end<TokenType::ROUND_O, TokenType::ROUND_C>>(1);
@@ -387,7 +450,7 @@ namespace nn
         }
 
         // helper for function signatures ie. def my_func<...>(...)
-        void paseDefArgs(const TokenArray& tarr, std::vector<AstDefArgSingle>& args)
+        void paseDefArgs(const TokenArray& tarr, std::vector<AstDecl>& args)
         {
             int start = 0;
             int end;
@@ -403,7 +466,7 @@ namespace nn
         }
 
         // helper for function signatures ie. def my_func<...>(...)
-        void parseDefCargs(const TokenArray& tarr, std::vector<AstDefCarg*>& cargs)
+        void parseDefCargs(const TokenArray& tarr, std::vector<AstCargsDecl*>& cargs)
         {
             if (tarr.size() == 0)
                 return;
@@ -417,16 +480,16 @@ namespace nn
                     end = tarr.size();
                 TokenArray carg(tarr, start, end);
                 if (carg.size() == 0)
-                    throw SyntaxError(tarr[0], "Dangling end of constargs in def");
+                    throw SyntaxError(tarr[0], "Dangling end of cargs in def");
                 if (carg[0]->ty == TokenType::ANGLE_O)
                 {
                     if (carg[carg.size() - 1]->ty != TokenType::ANGLE_C)
                         throw SyntaxError(carg[0], "Missing closing '>' for constarg tuple in def");
                     TokenArray cargtuple(carg, 1, -1);
-                    cargs.push_back(new AstDefCargTuple(carg));
+                    cargs.push_back(new AstCargsTuple(carg));
                 }
                 else
-                    cargs.push_back(new AstDefArgSingle(carg));
+                    cargs.push_back(new AstDecl(carg));
                 start = end + 1;
             } while (end != tarr.size());
         }
@@ -446,7 +509,7 @@ namespace nn
                     end = tarr.size();
                 TokenArray carg(tarr, start, end);
                 if (carg.size() == 0)
-                    throw SyntaxError(tarr[0], "Dangling end of constargs in block");
+                    throw SyntaxError(tarr[0], "Dangling end of cargs in block");
                 if (carg[0]->ty == TokenType::ANGLE_O)
                 {
                     if (carg[carg.size() - 1]->ty != TokenType::ANGLE_C)
@@ -654,6 +717,15 @@ namespace nn
             pexpr = parseExpr<5>(tarr);
         }
 
+        AstPack::AstPack(const TokenArray& tarr)
+        {
+            assert(tarr.size() != 0);
+            line_num = tarr[0]->line_num;
+            col_num = tarr[0]->col_num;
+
+            pexpr = parseExpr<5>(tarr);
+        }
+
         AstAdd::AstAdd(const TokenArray& left, const TokenArray& right)
         {
             assert(left.size() != 0);
@@ -834,7 +906,7 @@ namespace nn
             this->col_num = 0;
             this->var_name = "";
             this->type_name = "";
-            this->constargs = {};
+            this->cargs = {};
         }
 
         AstDecl::AstDecl(const TokenArray& tarr)
@@ -880,14 +952,14 @@ namespace nn
                     if (tarr[tarr.size() - 2]->ty != TokenType::ANGLE_C)
                         throw SyntaxError(tarr[tarr.size() - 2], "Expected '>' in type for variable declaration");
                     TokenArray cargs(tarr, start + 3, tarr.size() - 2);
-                    parseConstargs(cargs, this->constargs);
+                    parseConstargs(cargs, this->cargs);
                 }
             }
         }
 
         AstDecl::~AstDecl()
         {
-            for (auto e : constargs)
+            for (auto e : cargs)
                 delete e;
         }
 
@@ -956,6 +1028,17 @@ namespace nn
         {
             if (pexpr)
                 delete pexpr;
+        }
+
+        AstCargsTuple::AstCargsTuple(const TokenArray& tarr)
+        {
+            parseDefCargs(tarr, this->elems);
+        }
+
+        AstCargsTuple::~AstCargsTuple()
+        {
+            for (auto e : elems)
+                delete e;
         }
 
         AstSeq::AstSeq(const TokenArray& tarr, int indent_level)
@@ -1042,88 +1125,6 @@ namespace nn
                 delete e;
         }
 
-        AstDefArgSingle::AstDefArgSingle(const TokenArray& tarr)
-        {
-            assert(tarr.size());
-            if (tarr.size() < 2)
-                throw SyntaxError(tarr[0], "Invalid syntax for declaration");
-
-            if (tarr[0]->ty != TokenType::IDN)
-                throw SyntaxError(tarr[0], "Invalid token for type name in declaration");
-            this->type_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val;
-            if (this->type_name == "var")
-            {
-                if (tarr[1]->ty == TokenType::STAR)
-                {
-                    packed = true;
-                    if (tarr.size() != 3)
-                        throw SyntaxError(tarr[0], "Invalid syntax for var* declaration");
-                    if (tarr[2]->ty != TokenType::IDN)
-                        throw SyntaxError(tarr[1], "Invalid token for variable name in var* declaration");
-                    this->var_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[2])->val;
-                }
-                else
-                {
-                    packed = false;
-                    if (tarr.size() != 2)
-                        throw SyntaxError(tarr[0], "Invalid syntax for var declaration");
-                    if (tarr[1]->ty != TokenType::IDN)
-                        throw SyntaxError(tarr[1], "Invalid token for variable name in var declaration");
-                    this->var_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[1])->val;
-                }
-            }
-            else
-            {
-                if (tarr[tarr.size() - 1]->ty != TokenType::IDN)
-                    throw SyntaxError(tarr[tarr.size() - 1], "Invalid token for variable name in declaration");
-                this->var_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[tarr.size() - 1])->val;
-
-                if (tarr[tarr.size() - 2]->ty == TokenType::STAR)
-                {
-                    packed = true;
-                    if (tarr.size() != 3)
-                    {
-                        if (tarr[2]->ty != TokenType::ANGLE_O)
-                            throw SyntaxError(tarr[2], "Expected '<' in type for variable declaration");
-                        if (tarr[tarr.size() - 3]->ty != TokenType::ANGLE_C)
-                            throw SyntaxError(tarr[tarr.size() - 3], "Expected '>' in type for variable declaration");
-                        TokenArray cargs(tarr, 3, tarr.size() - 3);  // T<>*N
-                        parseConstargs(cargs, this->constargs);
-                    }
-                }
-                else
-                {
-                    packed = false;
-                    if (tarr.size() != 2)
-                    {
-                        if (tarr[2]->ty != TokenType::ANGLE_O)
-                            throw SyntaxError(tarr[2], "Expected '<' in type for variable declaration");
-                        if (tarr[tarr.size() - 2]->ty != TokenType::ANGLE_C)
-                            throw SyntaxError(tarr[tarr.size() - 2], "Expected '>' in type for variable declaration");
-                        TokenArray cargs(tarr, 3, tarr.size() - 2);  // T<>N
-                        parseConstargs(cargs, this->constargs);
-                    }
-                }
-            }
-        }
-
-        AstDefArgSingle::~AstDefArgSingle()
-        {
-            for (auto e : constargs)
-                delete e;
-        }
-
-        AstDefCargTuple::AstDefCargTuple(const TokenArray& tarr)
-        {
-            parseDefCargs(tarr, this->elems);
-        }
-
-        AstDefCargTuple::~AstDefCargTuple()
-        {
-            for (auto e : elems)
-                delete e;
-        }
-
         AstDef::AstDef(const TokenArray& def_sig, const TokenArray& def_seq) :
             block(def_seq, 1)
         {
@@ -1148,7 +1149,7 @@ namespace nn
                 if (end < 0)
                     throw SyntaxError(def_sig[start], "Missing closing '>' in function signature");
                 TokenArray constargs_tarr({ def_sig, start, end });
-                parseDefCargs(constargs_tarr, this->constargs);
+                parseDefCargs(constargs_tarr, cargs);
                 start = end + 1;
                 if (start >= def_sig.size())
                     throw SyntaxError(def_sig[end], "Missing expected '(' in function signature");
@@ -1162,7 +1163,7 @@ namespace nn
                 throw SyntaxError(def_sig[start], "Missing closing ')' in function signature");
 
             TokenArray varargs_tarr({ def_sig, start, end });
-            paseDefArgs(varargs_tarr, this->varargs);
+            paseDefArgs(varargs_tarr, this->vargs);
         }
 
         AstModImp::AstModImp(const TokenArray& tarr)

@@ -1,6 +1,7 @@
 #include <libnn/frontend/obj.h>
 
 #include <string>
+#include <cassert>
 
 namespace nn
 {
@@ -47,10 +48,11 @@ namespace nn
         ObjTuple::~ObjImp() {}
         ObjTensor::~ObjImp() {}
 
-        ObjBool::ObjImp(EvalCtx& ctx, const AstDecl* decl, const std::vector<Obj*>& cargs) :
+        ObjBool::ObjImp(const std::vector<std::unique_ptr<Obj>>& cargs) :
             Obj(ObjType::BOOL)
         {
-            ctx.insert({ decl->var_name, this });
+            if (cargs.size() != 0)
+                throw GenerationError("bool type does not accept any cargs");
             init = false;
             data.val = false;
         }
@@ -62,7 +64,7 @@ namespace nn
             return data.val;
         }
 
-        void ObjBool::assign(const Obj* val)
+        void ObjBool::assign(const std::unique_ptr<Obj> val)
         {
             if (val->ty != ObjType::BOOL)
                 throw GenerationError("Unable to assign type " + objTypeName(val->ty) + " to type " + type_name);
@@ -101,41 +103,46 @@ namespace nn
 
         static std::unordered_map<std::string, int> varcounts = {};
 
-        // input node declaration
-        ObjTensor::ObjImp(EvalCtx& ctx, const AstDecl* decl, const std::vector<Obj*>& cargs) :
+        ObjTensor::ObjImp(const std::vector<std::unique_ptr<Obj>>& cargs) :
             Obj(ObjType::TENSOR)
         {
             // reading the tensor dimensions
-            for (auto e : cargs)
+            for (auto& e : cargs)
             {
                 if (e->ty != ObjType::INT)
                     throw GenerationError("Unexpected carg type in tensor declaration");
-                data.dims.push_back(static_cast<ObjInt*>(e)->getData().val);
+                data.dims.push_back(static_cast<ObjInt*>(e.get())->getData().val);
             }
             if (data.dims.size() == 0)
                 throw GenerationError("A tensor must have at least one carg");
 
-            // adding the variable to the scope
-            ctx.insert({ decl->var_name, this });
+            // creating the new edge
+            data.pEdge = new Edge();
+            data.pEdge->is_static = false;
+            data.pEdge->dsc.rk = data.dims.size();
+            data.pEdge->dsc.dims = data.dims;
+            data.pEdge->input = nullptr;
+            data.pEdge->inpid = -1;
+            data.pEdge->outputs = {};
+            init = true;
+        }
 
-            // Creating an input edge node
-            auto result = varcounts.find(decl->var_name);
-            int count = 0;
-            if (result == varcounts.end())
-                varcounts.insert({ decl->var_name, 1 });
-            else
-                count = result->second++;
-            
-            Edge* pEdge = new Edge();
-            pEdge->is_static = decl->is_static;
-            pEdge->name = decl->var_name + ':' + std::to_string(count);
-            pEdge->dsc.rk = data.dims.size();
-            pEdge->dsc.dims = data.dims;
-            pEdge->input = nullptr;
-            pEdge->outputs = {};
-            ctx.pgraph->inputs.push_back(pEdge);
-            data.pEdge = pEdge;
+        ObjTensor::ObjImp(const std::vector<std::unique_ptr<Obj>>& cargs, const ObjData<ObjType::TENSOR>& val) :
+            Obj(ObjType::TENSOR)
+        {
+            // reading the tensor dimensions
+            for (auto& e : cargs)
+            {
+                if (e->ty != ObjType::INT)
+                    throw GenerationError("Unexpected carg type in tensor declaration");
+                data.dims.push_back(static_cast<ObjInt*>(e.get())->getData().val);
+            }
+            if (data.dims.size() == 0)
+                throw GenerationError("A tensor must have at least one carg");
 
+            assert(val.dims.size() != 0);  // uninitialized
+
+            data.pEdge = val.pEdge;
             init = true;
         }
 

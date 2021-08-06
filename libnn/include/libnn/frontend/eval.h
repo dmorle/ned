@@ -5,6 +5,7 @@
 
 #include <string>
 #include <map>
+#include <memory>
 
 namespace nn
 {
@@ -27,25 +28,16 @@ namespace nn
             void tb_touch(const std::string& file_name, uint32_t line_num, uint32_t col_num);
         };
 
-        class Scope
-        {
-            std::map<std::string, Obj*> data;
-            
-        public:
-            Scope();
-            ~Scope();
-
-            Obj* operator[](const std::string& idn);
-        };
-
         enum class EvalState
         {
-            PACKAGE,
-            MODULE,
-            DEF,
-            INTR,
-            FN
+            CALL,     // evaluating call arguments
+            DEFSEQ,   // raw statements in a def
+            DEFEXPR,  // part of an expression in a def
+            INTR,     // intrinsic
+            FN        // function
         };
+
+        using Scope = std::map<std::string, std::unique_ptr<Obj>>;
 
         class EvalCtx
         {
@@ -55,22 +47,31 @@ namespace nn
             friend class AstModule;
             friend class AstModImp;
 
-            std::map<std::string, Obj*> defs;
-            std::map<std::string, Obj*> fns;
-            std::map<std::string, Obj*> intrs;
-            std::map<std::string, Obj*> mods;
-            std::map<std::string, Obj*> packs;
+            std::map<std::string, std::unique_ptr<Obj>> defs;
+            std::map<std::string, std::unique_ptr<Obj>> fns;
+            std::map<std::string, std::unique_ptr<Obj>> intrs;
+            std::map<std::string, std::unique_ptr<Obj>> mods;
+            std::map<std::string, std::unique_ptr<Obj>> packs;
+
+            std::vector<std::string> model_params;
+            Graph* pgraph;
+            Scope* pscope;
 
         public:
             EvalCtx();
 
-            Obj* operator[](const std::string& idn);
+            std::unique_ptr<Obj> operator[](const std::string& idn);
 
             bool contains(const std::string& name);
-            void insert(std::pair<std::string, Obj*> val);
-            
-            Graph* pgraph;
-            Scope* pscope;
+            void insert(std::pair<std::string, std::unique_ptr<Obj>> val);
+
+            Graph& graph() noexcept;
+            Scope& scope() noexcept;
+
+            Scope* swap_scope(Scope* npscope);
+
+            // identify an edge as a model parameter
+            void add_param(const std::string& param_name);
 
             EvalState state;
         };
