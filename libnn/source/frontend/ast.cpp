@@ -234,27 +234,27 @@ namespace nn
             int bbrac = 0;
             int sbrac = 0;
             int abrac = 0;
-            for (int i = 0; i < tsz; i++)
+            for (int i = tsz - 1; i >= 0; i--)
             {
                 // Checking for brackets
                 switch (tarr[i]->ty)
                 {
-                case TokenType::ROUND_O:
+                case TokenType::ROUND_C:
                     bbrac++;
                     continue;
-                case TokenType::ROUND_C:
+                case TokenType::ROUND_O:
                     bbrac--;
                     continue;
-                case TokenType::SQUARE_O:
+                case TokenType::SQUARE_C:
                     sbrac++;
                     continue;
-                case TokenType::SQUARE_C:
+                case TokenType::SQUARE_O:
                     sbrac--;
                     continue;
-                case TokenType::ANGLE_O:
+                case TokenType::ANGLE_C:
                     abrac++;
                     continue;
-                case TokenType::ANGLE_C:
+                case TokenType::ANGLE_O:
                     abrac--;
                     continue;
                 }
@@ -264,7 +264,7 @@ namespace nn
 
                 if (opPrec(tarr[i]) == prec)
                 {
-                    if (i == tarr.size() - 1)
+                    if (i == tsz - 1)
                         throw SyntaxError(tarr[i], "Missing right side for binary operator");
                     return splitExpr<prec>(tarr, i);
                 }
@@ -273,6 +273,8 @@ namespace nn
                 throw SyntaxError(tarr[0], "Missing closing ')' in expression");
             if (sbrac < 0)
                 throw SyntaxError(tarr[0], "Missing closing ']' in expression");
+            if (abrac < 0)
+                throw SyntaxError(tarr[0], "Missing closing '>' in expression");
 
             return parseExpr<prec + 1>(tarr);
         }
@@ -293,27 +295,27 @@ namespace nn
             int bbrac = 0;
             int sbrac = 0;
             int abrac = 0;
-            for (int i = 0; i < tsz; i++)
+            for (int i = tsz - 1; i >= 0; i--)
             {
                 // Checking for brackets
                 switch (tarr[i]->ty)
                 {
-                case TokenType::ROUND_O:
+                case TokenType::ROUND_C:
                     bbrac++;
                     continue;
-                case TokenType::ROUND_C:
+                case TokenType::ROUND_O:
                     bbrac--;
                     continue;
-                case TokenType::SQUARE_O:
+                case TokenType::SQUARE_C:
                     sbrac++;
                     continue;
-                case TokenType::SQUARE_C:
+                case TokenType::SQUARE_O:
                     sbrac--;
                     continue;
-                case TokenType::ANGLE_O:
+                case TokenType::ANGLE_C:
                     abrac++;
                     continue;
-                case TokenType::ANGLE_C:
+                case TokenType::ANGLE_O:
                     abrac--;
                     continue;
                 }
@@ -325,7 +327,7 @@ namespace nn
                 {
                     if (i == 0 && tarr[i]->ty == TokenType::SUB)
                         continue;  // Leaving the negation operator to be parsed with leaf nodes
-                    if (i == tarr.size() - 1)
+                    if (i == tsz - 1)
                         throw SyntaxError(tarr[i], "Missing right side for binary operator");
                     return splitExpr<prec>(tarr, i);
                 }
@@ -334,6 +336,8 @@ namespace nn
                 throw SyntaxError(tarr[0], "Missing closing ')' in expression");
             if (sbrac < 0)
                 throw SyntaxError(tarr[0], "Missing closing ']' in expression");
+            if (abrac < 0)
+                throw SyntaxError(tarr[0], "Missing closing '>' in expression");
 
             return parseExpr<prec + 1>(tarr);
         }
@@ -354,27 +358,27 @@ namespace nn
             int bbrac = 0;
             int sbrac = 0;
             int abrac = 0;
-            for (int i = 0; i < tsz; i++)
+            for (int i = tsz - 1; i >= 0; i--)
             {
                 // Checking for brackets
                 switch (tarr[i]->ty)
                 {
-                case TokenType::ROUND_O:
+                case TokenType::ROUND_C:
                     bbrac++;
                     continue;
-                case TokenType::ROUND_C:
+                case TokenType::ROUND_O:
                     bbrac--;
                     continue;
-                case TokenType::SQUARE_O:
+                case TokenType::SQUARE_C:
                     sbrac++;
                     continue;
-                case TokenType::SQUARE_C:
+                case TokenType::SQUARE_O:
                     sbrac--;
                     continue;
-                case TokenType::ANGLE_O:
+                case TokenType::ANGLE_C:
                     abrac++;
                     continue;
-                case TokenType::ANGLE_C:
+                case TokenType::ANGLE_O:
                     abrac--;
                     continue;
                 }
@@ -386,7 +390,7 @@ namespace nn
                 {
                     if (i == 0 && tarr[i]->ty == TokenType::STAR)
                         continue;  // Leaving the packing operator to be parsed with leaf nodes
-                    if (i == tarr.size() - 1)
+                    if (i == tsz - 1)
                         throw SyntaxError(tarr[i], "Missing right side for binary operator");
                     return splitExpr<prec>(tarr, i);
                 }
@@ -395,6 +399,8 @@ namespace nn
                 throw SyntaxError(tarr[0], "Missing closing ')' in expression");
             if (sbrac < 0)
                 throw SyntaxError(tarr[0], "Missing closing ']' in expression");
+            if (abrac < 0)
+                throw SyntaxError(tarr[0], "Missing closing '>' in expression");
 
             return parseExpr<prec + 1>(tarr);
         }

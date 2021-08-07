@@ -27,10 +27,10 @@
     <ClCompile Include="source\frontend\ast.cpp">
       <Filter>source\frontend</Filter>
     </ClCompile>
-    <ClCompile Include="eval.cpp">
+    <ClCompile Include="source\frontend\obj.cpp">
       <Filter>source\frontend</Filter>
     </ClCompile>
-    <ClCompile Include="source\frontend\obj.cpp">
+    <ClCompile Include="source\frontend\eval.cpp">
       <Filter>source\frontend</Filter>
     </ClCompile>
   </ItemGroup>

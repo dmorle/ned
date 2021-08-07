@@ -9,12 +9,8 @@ namespace nn
     {
         void check_init(const Obj* pobj)
         {
-            if (!pobj->init) throw GenerationError("Uninitialized variable");
-        }
-
-        void check_init(const std::unique_ptr<Obj>& pobj)
-        {
-            if (!pobj->init) throw GenerationError("Uninitialized variable");
+            if (!pobj->init)
+                throw GenerationError("Uninitialized variable");
         }
 
         constexpr std::string objTypeName(ObjType ty)
@@ -51,13 +47,14 @@ namespace nn
             init(false)
         {}
 
-        ObjBool::~ObjImp() {}
-        ObjInt::~ObjImp() {}
-        ObjFloat::~ObjImp() {}
-        ObjStr::~ObjImp() {}
-        ObjTuple::~ObjImp() {}
-        ObjTensor::~ObjImp() {}
+        template<> ObjBool::~ObjImp() {}
+        template<> ObjInt::~ObjImp() {}
+        template<> ObjFloat::~ObjImp() {}
+        template<> ObjStr::~ObjImp() {}
+        template<> ObjTuple::~ObjImp() {}
+        template<> ObjTensor::~ObjImp() {}
 
+        template<>
         ObjBool::ObjImp() :
             Obj(ObjType::BOOL)
         {
@@ -65,13 +62,15 @@ namespace nn
             data.val = false;
         }
 
+        template<>
         bool ObjBool::bval() const
         {
             check_init(this);
             return data.val;
         }
 
-        void ObjBool::assign(const std::unique_ptr<Obj>& val)
+        template<>
+        void ObjBool::assign(const Obj* val)
         {
             check_type(val);
             check_init(val);
@@ -79,54 +78,59 @@ namespace nn
             init = true;
         }
 
-        std::unique_ptr<Obj> ObjBool::andop(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjBool::andop(const Obj* val) const
         {
             check_init(this);
             check_init(val);
             check_type(val);
 
-            std::unique_ptr<ObjBool> nobj = std::make_unique<ObjBool>();
+            ObjBool* nobj = new ObjBool();
             nobj->data.val = data.val && mty(val)->data.val;
             nobj->init = true;
             return nobj;
         }
 
-        std::unique_ptr<Obj> ObjBool::orop(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjBool::orop(const Obj* val) const
         {
             check_init(this);
             check_init(val);
             check_type(val);
 
-            std::unique_ptr<ObjBool> nobj = std::make_unique<ObjBool>();
+            ObjBool* nobj = new ObjBool();
             nobj->data.val = data.val || mty(val)->data.val;
             nobj->init = true;
             return nobj;
         }
 
-        std::unique_ptr<Obj> ObjBool::eq(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjBool::eq(const Obj* val) const
         {
             check_init(this);
             check_init(val);
             check_type(val);
 
-            std::unique_ptr<ObjBool> nobj = std::make_unique<ObjBool>();
+            ObjBool* nobj = new ObjBool();
             nobj->data.val = data.val == mty(val)->data.val;
             nobj->init = true;
             return nobj;
         }
 
-        std::unique_ptr<Obj> ObjBool::ne(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjBool::ne(const Obj* val) const
         {
             check_init(this);
             check_init(val);
             check_type(val);
 
-            std::unique_ptr<ObjBool> nobj = std::make_unique<ObjBool>();
+            ObjBool* nobj = new ObjBool();
             nobj->data.val = data.val != mty(val)->data.val;
             nobj->init = true;
             return nobj;
         }
 
+        template<>
         ObjInt::ObjImp() :
             Obj(ObjType::INT)
         {
@@ -134,7 +138,8 @@ namespace nn
             data.val = 0;
         }
 
-        void ObjInt::assign(const std::unique_ptr<Obj>& val)
+        template<>
+        void ObjInt::assign(const Obj* val)
         {
             check_type(val);
             check_init(val);
@@ -142,31 +147,33 @@ namespace nn
             init = true;
         }
 
-        std::unique_ptr<Obj> ObjInt::neg() const
+        template<>
+        Obj* ObjInt::neg() const
         {
             check_init(this);
-            std::unique_ptr<ObjInt> nobj = std::make_unique<ObjInt>();
+            ObjInt* nobj = new ObjInt();
             nobj->data.val = -data.val;
             nobj->init = true;
             return nobj;
         }
 
-        std::unique_ptr<Obj> ObjInt::add(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjInt::add(const Obj* val) const
         {
             check_init(this);
             check_init(val);
 
             if (val->ty == ObjType::INT)
             {
-                std::unique_ptr<ObjInt> nobj = std::make_unique<ObjInt>();
-                nobj->data.val = data.val + static_cast<ObjInt*>(val.get())->data.val;
+                ObjInt* nobj = new ObjInt();
+                nobj->data.val = data.val + static_cast<const ObjInt*>(val)->data.val;
                 nobj->init = true;
                 return nobj;
             }
             else if (val->ty == ObjType::FLOAT)
             {
-                std::unique_ptr<ObjFloat> nobj = std::make_unique<ObjFloat>();
-                nobj->data.val = data.val + static_cast<ObjFloat*>(val.get())->data.val;
+                ObjFloat* nobj = new ObjFloat();
+                nobj->data.val = data.val + static_cast<const ObjFloat*>(val)->data.val;
                 nobj->init = true;
                 return nobj;
             }
@@ -174,22 +181,23 @@ namespace nn
                 throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
         }
 
-        std::unique_ptr<Obj> ObjInt::sub(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjInt::sub(const Obj* val) const
         {
             check_init(this);
             check_init(val);
 
             if (val->ty == ObjType::INT)
             {
-                std::unique_ptr<ObjInt> nobj = std::make_unique<ObjInt>();
-                nobj->data.val = data.val - static_cast<ObjInt*>(val.get())->data.val;
+                ObjInt* nobj = new ObjInt();
+                nobj->data.val = data.val - static_cast<const ObjInt*>(val)->data.val;
                 nobj->init = true;
                 return nobj;
             }
             else if (val->ty == ObjType::FLOAT)
             {
-                std::unique_ptr<ObjFloat> nobj = std::make_unique<ObjFloat>();
-                nobj->data.val = data.val - static_cast<ObjFloat*>(val.get())->data.val;
+                ObjFloat* nobj = new ObjFloat();
+                nobj->data.val = data.val - static_cast<const ObjFloat*>(val)->data.val;
                 nobj->init = true;
                 return nobj;
             }
@@ -197,22 +205,23 @@ namespace nn
                 throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
         }
 
-        std::unique_ptr<Obj> ObjInt::mul(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjInt::mul(const Obj* val) const
         {
             check_init(this);
             check_init(val);
 
             if (val->ty == ObjType::INT)
             {
-                std::unique_ptr<ObjInt> nobj = std::make_unique<ObjInt>();
-                nobj->data.val = data.val * static_cast<ObjInt*>(val.get())->data.val;
+                ObjInt* nobj = new ObjInt();
+                nobj->data.val = data.val * static_cast<const ObjInt*>(val)->data.val;
                 nobj->init = true;
                 return nobj;
             }
             else if (val->ty == ObjType::FLOAT)
             {
-                std::unique_ptr<ObjFloat> nobj = std::make_unique<ObjFloat>();
-                nobj->data.val = data.val * static_cast<ObjFloat*>(val.get())->data.val;
+                ObjFloat* nobj = new ObjFloat();
+                nobj->data.val = data.val * static_cast<const ObjFloat*>(val)->data.val;
                 nobj->init = true;
                 return nobj;
             }
@@ -220,22 +229,23 @@ namespace nn
                 throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
         }
 
-        std::unique_ptr<Obj> ObjInt::div(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjInt::div(const Obj* val) const
         {
             check_init(this);
             check_init(val);
 
             if (val->ty == ObjType::INT)
             {
-                std::unique_ptr<ObjInt> nobj = std::make_unique<ObjInt>();
-                nobj->data.val = data.val / static_cast<ObjInt*>(val.get())->data.val;
+                ObjInt* nobj = new ObjInt();
+                nobj->data.val = data.val / static_cast<const ObjInt*>(val)->data.val;
                 nobj->init = true;
                 return nobj;
             }
             else if (val->ty == ObjType::FLOAT)
             {
-                std::unique_ptr<ObjFloat> nobj = std::make_unique<ObjFloat>();
-                nobj->data.val = data.val / static_cast<ObjFloat*>(val.get())->data.val;
+                ObjFloat* nobj = new ObjFloat();
+                nobj->data.val = data.val / static_cast<const ObjFloat*>(val)->data.val;
                 nobj->init = true;
                 return nobj;
             }
@@ -243,120 +253,127 @@ namespace nn
                 throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
         }
 
-        std::unique_ptr<Obj> ObjInt::eq(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjInt::eq(const Obj* val) const
         {
             check_init(this);
             check_init(val);
 
-            std::unique_ptr<ObjBool> nobj = std::make_unique<ObjBool>();
+            ObjBool* nobj = new ObjBool();
             nobj->init = true;
             switch (val->ty)
             {
             case ObjType::INT:
-                nobj->data.val = data.val == static_cast<ObjInt*>(val.get())->data.val;
+                nobj->data.val = data.val == static_cast<const ObjInt*>(val)->data.val;
                 return nobj;
             case ObjType::FLOAT:
-                nobj->data.val = data.val == static_cast<ObjFloat*>(val.get())->data.val;
+                nobj->data.val = data.val == static_cast<const ObjFloat*>(val)->data.val;
                 return nobj;
             }
             throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
         }
 
-        std::unique_ptr<Obj> ObjInt::ne(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjInt::ne(const Obj* val) const
         {
             check_init(this);
             check_init(val);
 
-            std::unique_ptr<ObjBool> nobj = std::make_unique<ObjBool>();
+            ObjBool* nobj = new ObjBool();
             nobj->init = true;
             switch (val->ty)
             {
             case ObjType::INT:
-                nobj->data.val = data.val != static_cast<ObjInt*>(val.get())->data.val;
+                nobj->data.val = data.val != static_cast<const ObjInt*>(val)->data.val;
                 return nobj;
             case ObjType::FLOAT:
-                nobj->data.val = data.val != static_cast<ObjFloat*>(val.get())->data.val;
+                nobj->data.val = data.val != static_cast<const ObjFloat*>(val)->data.val;
                 return nobj;
             }
             throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
         }
 
-        std::unique_ptr<Obj> ObjInt::ge(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjInt::ge(const Obj* val) const
         {
             check_init(this);
             check_init(val);
 
-            std::unique_ptr<ObjBool> nobj = std::make_unique<ObjBool>();
+            ObjBool* nobj = new ObjBool();
             nobj->init = true;
             switch (val->ty)
             {
             case ObjType::INT:
-                nobj->data.val = data.val >= static_cast<ObjInt*>(val.get())->data.val;
+                nobj->data.val = data.val >= static_cast<const ObjInt*>(val)->data.val;
                 return nobj;
             case ObjType::FLOAT:
-                nobj->data.val = data.val >= static_cast<ObjFloat*>(val.get())->data.val;
+                nobj->data.val = data.val >= static_cast<const ObjFloat*>(val)->data.val;
                 return nobj;
             }
             throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
         }
 
-        std::unique_ptr<Obj> ObjInt::le(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjInt::le(const Obj* val) const
         {
             check_init(this);
             check_init(val);
 
-            std::unique_ptr<ObjBool> nobj = std::make_unique<ObjBool>();
+            ObjBool* nobj = new ObjBool();
             nobj->init = true;
             switch (val->ty)
             {
             case ObjType::INT:
-                nobj->data.val = data.val <= static_cast<ObjInt*>(val.get())->data.val;
+                nobj->data.val = data.val <= static_cast<const ObjInt*>(val)->data.val;
                 return nobj;
             case ObjType::FLOAT:
-                nobj->data.val = data.val <= static_cast<ObjFloat*>(val.get())->data.val;
+                nobj->data.val = data.val <= static_cast<const ObjFloat*>(val)->data.val;
                 return nobj;
             }
             throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
         }
 
-        std::unique_ptr<Obj> ObjInt::gt(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjInt::gt(const Obj* val) const
         {
             check_init(this);
             check_init(val);
 
-            std::unique_ptr<ObjBool> nobj = std::make_unique<ObjBool>();
+            ObjBool* nobj = new ObjBool();
             nobj->init = true;
             switch (val->ty)
             {
             case ObjType::INT:
-                nobj->data.val = data.val > static_cast<ObjInt*>(val.get())->data.val;
+                nobj->data.val = data.val > static_cast<const ObjInt*>(val)->data.val;
                 return nobj;
             case ObjType::FLOAT:
-                nobj->data.val = data.val > static_cast<ObjFloat*>(val.get())->data.val;
+                nobj->data.val = data.val > static_cast<const ObjFloat*>(val)->data.val;
                 return nobj;
             }
             throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
         }
 
-        std::unique_ptr<Obj> ObjInt::lt(const std::unique_ptr<Obj>& val) const
+        template<>
+        Obj* ObjInt::lt(const Obj* val) const
         {
             check_init(this);
             check_init(val);
 
-            std::unique_ptr<ObjBool> nobj = std::make_unique<ObjBool>();
+            ObjBool* nobj = new ObjBool();
             nobj->init = true;
             switch (val->ty)
             {
             case ObjType::INT:
-                nobj->data.val = data.val < static_cast<ObjInt*>(val.get())->data.val;
+                nobj->data.val = data.val < static_cast<const ObjInt*>(val)->data.val;
                 return nobj;
             case ObjType::FLOAT:
-                nobj->data.val = data.val < static_cast<ObjFloat*>(val.get())->data.val;
+                nobj->data.val = data.val < static_cast<const ObjFloat*>(val)->data.val;
                 return nobj;
             }
             throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
         }
 
+        template<>
         ObjFloat::ObjImp() :
             Obj(ObjType::FLOAT)
         {
@@ -364,6 +381,7 @@ namespace nn
             data.val = 1.0;
         }
 
+        template<>
         ObjTensor::ObjImp() :
             Obj(ObjType::TENSOR)
         {
@@ -372,7 +390,7 @@ namespace nn
             data.pEdge = nullptr;
         }
 
-        void ObjTensor::assign(const std::unique_ptr<Obj>& val)
+        void ObjTensor::assign(const Obj* val)
         {
             check_type(val);
             check_init(val);
@@ -406,7 +424,8 @@ namespace nn
             init = true;
         }
 
-        void ObjTensor::cargs(const std::vector<std::unique_ptr<Obj>>& cargs)
+        template<>
+        Obj* ObjTensor::cargs(const std::vector<Obj*>& cargs)
         {
             if (data.carg_init)
                 throw GenerationError("Cannot apply constant args to a pre-defined tensor");
@@ -416,7 +435,7 @@ namespace nn
             {
                 if (e->ty != ObjType::INT)
                     throw GenerationError("Unexpected carg type in tensor declaration");
-                data.dims.push_back(static_cast<ObjInt*>(e.get())->data.val);
+                data.dims.push_back(static_cast<ObjInt*>(e)->data.val);
             }
             if (data.dims.size() == 0)
                 throw GenerationError("A tensor must have at least one carg");

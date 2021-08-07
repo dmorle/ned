@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="eval.cpp" />
+    <ClCompile Include="source\frontend\eval.cpp" />
     <ClCompile Include="source\frontend\lexer.cpp" />
     <ClCompile Include="source\frontend\ast.cpp" />
     <ClCompile Include="source\frontend\obj.cpp" />
