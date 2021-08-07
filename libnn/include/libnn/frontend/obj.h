@@ -18,6 +18,7 @@ namespace nn
             INT,      // Integer
             FLOAT,    // Floating point
             STR,      // String
+            ARRAY,    // Array - Fixed length
             TUPLE,    // Tuple - mainly for cargs
             TENSOR,   // Tensor - Graph edge
             DEF,      // Non-intrinsic block
@@ -39,70 +40,34 @@ namespace nn
             virtual ~Obj() = 0;
 
             virtual bool bval() const = 0;
-            virtual void assign(const std::unique_ptr<Obj> val) = 0;
+            virtual void assign(const std::unique_ptr<Obj>& val) = 0;
+            virtual void cargs(const std::vector<std::unique_ptr<Obj>>& args) = 0;
 
             virtual std::unique_ptr<Obj> get(const std::string& item) = 0;
-            virtual std::unique_ptr<Obj> cargs(const std::vector<std::unique_ptr<Obj>> args) const = 0;
-            virtual std::unique_ptr<Obj> call(EvalCtx& ctx, const std::vector<std::unique_ptr<Obj>> args) const = 0;
+            virtual std::unique_ptr<Obj> call(EvalCtx& ctx, const std::vector<std::unique_ptr<Obj>>& args) const = 0;
             virtual std::vector<std::unique_ptr<Obj>> iter(EvalCtx& ctx) = 0;
-            virtual std::unique_ptr<Obj> idx(const std::vector<std::vector<std::unique_ptr<Obj>>> val) = 0;
-            virtual std::unique_ptr<Obj> neg() = 0;
+            virtual std::unique_ptr<Obj> idx(const std::vector<std::vector<std::unique_ptr<Obj>>>& val) = 0;
+            virtual std::unique_ptr<Obj> neg() const = 0;
 
-            virtual std::unique_ptr<Obj> add(const std::unique_ptr<Obj>& val) = 0;
-            virtual std::unique_ptr<Obj> sub(const std::unique_ptr<Obj>& val) = 0;
-            virtual std::unique_ptr<Obj> mul(const std::unique_ptr<Obj>& val) = 0;
-            virtual std::unique_ptr<Obj> div(const std::unique_ptr<Obj>& val) = 0;
+            virtual std::unique_ptr<Obj> add(const std::unique_ptr<Obj>& val) const = 0;
+            virtual std::unique_ptr<Obj> sub(const std::unique_ptr<Obj>& val) const = 0;
+            virtual std::unique_ptr<Obj> mul(const std::unique_ptr<Obj>& val) const = 0;
+            virtual std::unique_ptr<Obj> div(const std::unique_ptr<Obj>& val) const = 0;
 
-            virtual std::unique_ptr<Obj> eq(const std::unique_ptr<Obj>& val) = 0;
-            virtual std::unique_ptr<Obj> ne(const std::unique_ptr<Obj>& val) = 0;
-            virtual std::unique_ptr<Obj> ge(const std::unique_ptr<Obj>& val) = 0;
-            virtual std::unique_ptr<Obj> le(const std::unique_ptr<Obj>& val) = 0;
-            virtual std::unique_ptr<Obj> gt(const std::unique_ptr<Obj>& val) = 0;
-            virtual std::unique_ptr<Obj> lt(const std::unique_ptr<Obj>& val) = 0;
+            // Why C++?  Wasn't && enough?
+            virtual std::unique_ptr<Obj> andop(const std::unique_ptr<Obj>& val) const = 0;
+            virtual std::unique_ptr<Obj> orop(const std::unique_ptr<Obj>& val) const = 0;
+
+            virtual std::unique_ptr<Obj> eq(const std::unique_ptr<Obj>& val) const = 0;
+            virtual std::unique_ptr<Obj> ne(const std::unique_ptr<Obj>& val) const = 0;
+            virtual std::unique_ptr<Obj> ge(const std::unique_ptr<Obj>& val) const = 0;
+            virtual std::unique_ptr<Obj> le(const std::unique_ptr<Obj>& val) const = 0;
+            virtual std::unique_ptr<Obj> gt(const std::unique_ptr<Obj>& val) const = 0;
+            virtual std::unique_ptr<Obj> lt(const std::unique_ptr<Obj>& val) const = 0;
         };
 
         template<ObjType TY>
-        struct ObjData;
-
-        template<ObjType TY>
-        class ObjImp :
-            public Obj
-        {
-            auto mty(const std::unique_ptr<Obj>& p) noexcept { return (const decltype(this))p.get(); }
-            auto mty(std::unique_ptr<Obj>& p) noexcept { return static_cast<decltype(this)>(p.get()); }
-
-            static constexpr std::string type_name = objTypeName(TY);
-            ObjData<TY> data;
-
-        public:
-            ObjImp(const std::vector<std::unique_ptr<Obj>>&);                      // constructor for standalone declaration
-            ObjImp(const std::vector<std::unique_ptr<Obj>>&, const ObjData<TY>&);  // constructor for assignment declaration
-
-            const ObjData<TY>& getData() const { return data; }
-
-            virtual ~ObjImp();
-
-            virtual bool bval() const override;
-            virtual void assign(const std::unique_ptr<Obj> val) override;
-
-            virtual std::unique_ptr<Obj> get(const std::string& item) override;
-            virtual std::unique_ptr<Obj> cargs(const std::vector<std::unique_ptr<Obj>> args) const override;
-            virtual std::unique_ptr<Obj> call(EvalCtx& ctx, const std::vector<std::unique_ptr<Obj>> args) const override;
-            virtual std::unique_ptr<Obj> idx(const std::vector<std::vector<std::unique_ptr<Obj>>> val) override;
-            virtual std::unique_ptr<Obj> neg() override;
-
-            virtual std::unique_ptr<Obj> add(const std::unique_ptr<Obj>& val) override;
-            virtual std::unique_ptr<Obj> sub(const std::unique_ptr<Obj>& val) override;
-            virtual std::unique_ptr<Obj> mul(const std::unique_ptr<Obj>& val) override;
-            virtual std::unique_ptr<Obj> div(const std::unique_ptr<Obj>& val) override;
-
-            virtual std::unique_ptr<Obj> eq(const std::unique_ptr<Obj>& val) override;
-            virtual std::unique_ptr<Obj> ne(const std::unique_ptr<Obj>& val) override;
-            virtual std::unique_ptr<Obj> ge(const std::unique_ptr<Obj>& val) override;
-            virtual std::unique_ptr<Obj> le(const std::unique_ptr<Obj>& val) override;
-            virtual std::unique_ptr<Obj> gt(const std::unique_ptr<Obj>& val) override;
-            virtual std::unique_ptr<Obj> lt(const std::unique_ptr<Obj>& val) override;
-        };
+        class ObjImp;
 
         using ObjBool = ObjImp<ObjType::BOOL>;
         using ObjInt = ObjImp<ObjType::INT>;
@@ -116,6 +81,76 @@ namespace nn
         using ObjModule = ObjImp<ObjType::MODULE>;
         using ObjPackage = ObjImp<ObjType::PACKAGE>;
 
+        template<ObjType TY>
+        struct ObjData;
+
+        template<ObjType TY>
+        class ObjImp :
+            public Obj
+        {
+            friend void check_init(const std::unique_ptr<Obj>&);
+            friend void check_init(const Obj* pobj);
+
+            auto mty(const std::unique_ptr<Obj>& p) const noexcept { return (const decltype(this))p.get(); }
+            auto mty(std::unique_ptr<Obj>& p) const noexcept { return static_cast<decltype(this)>(p.get()); }
+
+        public:
+            ObjData<TY> data;
+
+            ObjImp();
+
+            virtual ~ObjImp();
+
+            const ObjData<TY>& getData() const { return data; }
+            void check_type(const std::unique_ptr<Obj>& pobj) const {
+                if (pobj->ty != TY) throw GenerationError("Expected " + objTypeName(TY) + ", recieved " + objTypeName(pobj->ty)); }
+
+            virtual bool bval() const override {
+                throw GenerationError(objTypeName(TY) + " type does not have a truth value"); }
+            virtual void assign(const std::unique_ptr<Obj>& val) override {
+                throw GenerationError(objTypeName(TY) + " type does not support assignment"); }
+            virtual void cargs(const std::vector<std::unique_ptr<Obj>>& args) override {
+                throw GenerationError(objTypeName(TY) + " type does not support constant arguments"); }
+
+            virtual std::unique_ptr<Obj> get(const std::string& item) override {
+                throw GenerationError(objTypeName(TY) + " type does not support the get operator"); }
+            virtual std::unique_ptr<Obj> call(EvalCtx& ctx, const std::vector<std::unique_ptr<Obj>>& args) const override {
+                throw GenerationError(objTypeName(TY) + " type does not support the call operator"); }
+            virtual std::vector<std::unique_ptr<Obj>> iter(EvalCtx& ctx) override {
+                throw GenerationError(objTypeName(TY) + " type does not support iteration"); }
+            virtual std::unique_ptr<Obj> idx(const std::vector<std::vector<std::unique_ptr<Obj>>>& val) override {
+                throw GenerationError(objTypeName(TY) + " type does not support the index operator"); }
+            virtual std::unique_ptr<Obj> neg() const override {
+                throw GenerationError(objTypeName(TY) + " type does not support the negation operator"); }
+
+            virtual std::unique_ptr<Obj> add(const std::unique_ptr<Obj>& val) const override {
+                throw GenerationError(objTypeName(TY) + " type does not support the addition operator"); }
+            virtual std::unique_ptr<Obj> sub(const std::unique_ptr<Obj>& val) const override {
+                throw GenerationError(objTypeName(TY) + " type does not support the subtraction operator"); }
+            virtual std::unique_ptr<Obj> mul(const std::unique_ptr<Obj>& val) const override {
+                throw GenerationError(objTypeName(TY) + " type does not support the multiplication operator"); }
+            virtual std::unique_ptr<Obj> div(const std::unique_ptr<Obj>& val) const override {
+                throw GenerationError(objTypeName(TY) + " type does not support the division operator"); }
+
+            virtual std::unique_ptr<Obj> andop(const std::unique_ptr<Obj>& val) const override  {
+                throw GenerationError(objTypeName(TY) + " type does not support the and operator"); }
+            virtual std::unique_ptr<Obj> orop(const std::unique_ptr<Obj>& val) const override  {
+                throw GenerationError(objTypeName(TY) + " type does not support the or operator"); }
+
+            virtual std::unique_ptr<Obj> eq(const std::unique_ptr<Obj>& val) const override {
+                throw GenerationError(objTypeName(TY) + " type does not support the equality operator"); }
+            virtual std::unique_ptr<Obj> ne(const std::unique_ptr<Obj>& val) const override {
+                throw GenerationError(objTypeName(TY) + " type does not support the inequality operator"); }
+            virtual std::unique_ptr<Obj> ge(const std::unique_ptr<Obj>& val) const override {
+                throw GenerationError(objTypeName(TY) + " type does not support the greater than or equal operator"); }
+            virtual std::unique_ptr<Obj> le(const std::unique_ptr<Obj>& val) const override {
+                throw GenerationError(objTypeName(TY) + " type does not support the less than or equal operator"); }
+            virtual std::unique_ptr<Obj> gt(const std::unique_ptr<Obj>& val) const override {
+                throw GenerationError(objTypeName(TY) + " type does not support the greater than operator"); }
+            virtual std::unique_ptr<Obj> lt(const std::unique_ptr<Obj>& val) const override {
+                throw GenerationError(objTypeName(TY) + " type does not support the less than operator"); }
+        };
+
         template<> struct ObjData<ObjType::BOOL> {
             bool val;
         };
@@ -128,17 +163,20 @@ namespace nn
         template<> struct ObjData<ObjType::STR> {
             std::string val;
         };
+        template<> struct ObjData<ObjType::ARRAY> {
+            std::vector<std::unique_ptr<Obj>> elems;
+            int size;
+        };
         template<> struct ObjData<ObjType::TUPLE> {
-            std::vector<std::string> val;
+            std::vector<std::unique_ptr<Obj>> elems;
         };
         template<> struct ObjData<ObjType::TENSOR> {
             Edge* pEdge;
             std::vector<uint32_t> dims;
-            std::string graph_name;  // only initialized for input edges
+            bool carg_init;
         };
         template<> struct ObjData<ObjType::DEF> {
             AstDef def;
-            std::map<std::string, std::unique_ptr<Obj>> cargs;
         };
         template<> struct ObjData<ObjType::FN> {
             AstFn fn;

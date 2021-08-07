@@ -8,6 +8,8 @@ namespace nn
 {
     namespace impl
     {
+        // Definitions for eval.h
+
         void AstExpr::append_cargs(EvalCtx& ctx, std::vector<std::unique_ptr<Obj>>& cargs) const
         {
             cargs.push_back(eval(ctx));
@@ -39,18 +41,16 @@ namespace nn
 
         EvalCtx::EvalCtx()
         {
-            defs = {};
-            fns = {};
-            intrs = {};
-            mods = {};
-            packs = {};
-
             model_params = {};
             pgraph = new Graph();
             pscope = nullptr;
 
             state = EvalState::CALL;
         }
+
+        // AST node evaluation
+
+        static std::unordered_map<std::string, int> varcounts = {};
 
         std::unique_ptr<EvalCtx> AstModule::eval(const std::string& entry_point, std::vector<std::unique_ptr<Obj>>& cargs)
         {
@@ -74,12 +74,7 @@ namespace nn
             std::unique_ptr<Obj> entry_def = std::move(it->second);
             
             // applying cargs to the entry def
-            entry_def = entry_def->cargs(cargs);
-
-            // Checking to make sure all the cargs were initialized
-            for (const auto& [k, v] : static_cast<ObjDef*>(entry_def.get())->getData().cargs)
-                if (!v)
-                    throw GenerationError("Unable to initialize carg " + k + " in entry point");
+            entry_def->cargs(cargs);
 
             // Generating the arguments for the entry point
             const auto& vargs = static_cast<ObjDef*>(entry_def.get())->getData().def.vargs;

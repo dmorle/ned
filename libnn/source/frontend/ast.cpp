@@ -214,10 +214,16 @@ namespace nn
         }
 
         template<int prec>
-        AstExpr* parseExpr(const TokenArray& tarr)
-        {
-            static_assert(prec < 5);
+        AstExpr* parseExpr(const TokenArray& tarr);
 
+        // specializations
+        template<> AstExpr* parseExpr<3>(const TokenArray& tarr);
+        template<> AstExpr* parseExpr<4>(const TokenArray& tarr);
+        template<> AstExpr* parseExpr<5>(const TokenArray& tarr);
+
+        template<int prec>
+        AstExpr* parseExpr<prec>(const TokenArray& tarr)
+        {
             size_t tsz = tarr.size();
             assert(tsz);
 
@@ -336,7 +342,7 @@ namespace nn
         template<>
         AstExpr* parseExpr<4>(const TokenArray& tarr)
         {
-            constexpr int prec = 3;
+            constexpr int prec = 4;
 
             size_t tsz = tarr.size();
             assert(tsz);
