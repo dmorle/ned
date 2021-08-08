@@ -28,7 +28,7 @@ namespace nn
 
             virtual ~AstBlock() = 0;
 
-            virtual Obj* eval(EvalCtx& ctx) const = 0;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const = 0;
         };
 
         class AstCargsDecl
@@ -38,7 +38,7 @@ namespace nn
 
             // does not evaluate anything or add new elements to the scope
             // potentially 
-            virtual void match_args(Scope& scope, std::vector<Obj*>& cargs) const = 0;
+            virtual void match_args(Scope& scope, std::vector<std::shared_ptr<Obj>>& cargs) const = 0;
         };
 
         class AstExpr :
@@ -47,7 +47,7 @@ namespace nn
         public:
             virtual ~AstExpr() = 0;
             
-            virtual void append_cargs(EvalCtx&, std::vector<Obj*>&) const;
+            virtual void append_vec(EvalCtx&, std::vector<std::shared_ptr<Obj>>&) const;
         };
 
         class AstBinOp :
@@ -69,7 +69,7 @@ namespace nn
         public:
             AstBool(const Token* ptk, bool val);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstInt :
@@ -80,7 +80,7 @@ namespace nn
         public:
             AstInt(const Token* ptk);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstFloat :
@@ -91,7 +91,7 @@ namespace nn
         public:
             AstFloat(const Token* ptk);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstStr :
@@ -102,7 +102,7 @@ namespace nn
         public:
             AstStr(const Token* ptk);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstIdn :
@@ -113,7 +113,7 @@ namespace nn
         public:
             AstIdn(const Token* ptk);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstTuple :
@@ -125,7 +125,7 @@ namespace nn
             AstTuple(const TokenArray& tarr);
             virtual ~AstTuple();
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstCall :
@@ -136,7 +136,7 @@ namespace nn
 
         public:
             AstCall(AstExpr* pleft, const TokenArray& tarr);
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstCargs :
@@ -148,7 +148,7 @@ namespace nn
         public:
             AstCargs(AstExpr* pleft, const TokenArray& tarr);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstIdx :
@@ -161,7 +161,7 @@ namespace nn
             AstIdx(AstExpr* pleft, const TokenArray& tarr);
             void parseSlice(const TokenArray& tarr);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstDot :
@@ -173,7 +173,7 @@ namespace nn
         public:
             AstDot(AstExpr* pleft, const Token* ptk);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstNeg :
@@ -184,7 +184,7 @@ namespace nn
         public:
             AstNeg(const TokenArray& tarr);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstPack :
@@ -195,8 +195,8 @@ namespace nn
         public:
             AstPack(const TokenArray& tarr);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
-            virtual void append_cargs(EvalCtx&, std::vector<Obj*>&);
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
+            virtual void append_vec(EvalCtx&, std::vector<std::shared_ptr<Obj>>&);
         };
 
         class AstAdd :
@@ -205,7 +205,7 @@ namespace nn
         public:
             AstAdd(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
         
         class AstSub :
@@ -214,7 +214,7 @@ namespace nn
         public:
             AstSub(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
         
         class AstMul :
@@ -223,7 +223,7 @@ namespace nn
         public:
             AstMul(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
         
         class AstDiv :
@@ -232,7 +232,7 @@ namespace nn
         public:
             AstDiv(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstEq :
@@ -241,7 +241,7 @@ namespace nn
         public:
             AstEq(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstNe :
@@ -250,7 +250,7 @@ namespace nn
         public:
             AstNe(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstGe :
@@ -259,7 +259,7 @@ namespace nn
         public:
             AstGe(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstLe :
@@ -268,7 +268,7 @@ namespace nn
         public:
             AstLe(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstGt :
@@ -277,7 +277,7 @@ namespace nn
         public:
             AstGt(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstLt :
@@ -286,7 +286,7 @@ namespace nn
         public:
             AstLt(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstAnd :
@@ -295,7 +295,7 @@ namespace nn
         public:
             AstAnd(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstOr :
@@ -304,7 +304,7 @@ namespace nn
         public:
             AstOr(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstIAdd :
@@ -313,7 +313,7 @@ namespace nn
         public:
             AstIAdd(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstISub :
@@ -322,7 +322,7 @@ namespace nn
         public:
             AstISub(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstIMul :
@@ -331,7 +331,7 @@ namespace nn
         public:
             AstIMul(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstIDiv :
@@ -340,7 +340,7 @@ namespace nn
         public:
             AstIDiv(const TokenArray& left, const TokenArray& right);
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstAssign :
@@ -352,7 +352,7 @@ namespace nn
             AstAssign(const TokenArray& left, const TokenArray& right);
             virtual ~AstAssign();
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         // end of expression nodes
@@ -382,9 +382,9 @@ namespace nn
             //  elif state is DEFSEQ and type is tensor: 
             //      add the tensor as a graph input edge
             //
-            virtual Obj* eval(EvalCtx& ctx) const;  // returns null
-            virtual void append_cargs(EvalCtx&, std::vector<Obj*>&) const;
-            virtual void match_args(Scope& scope, std::vector<Obj*>& cargs) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;  // returns null
+            virtual void append_vec(EvalCtx&, std::vector<std::shared_ptr<Obj>>&) const;
+            virtual void match_args(Scope& scope, std::vector<std::shared_ptr<Obj>>& cargs) const;
         };
 
         class AstSeq
@@ -398,7 +398,7 @@ namespace nn
             AstSeq(const TokenArray& tarr, int indent_level);
             ~AstSeq();
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstIf :
@@ -411,7 +411,7 @@ namespace nn
             AstIf(const TokenArray& if_sig, const TokenArray& if_seq, int indent_level);
             virtual ~AstIf();
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstWhile :
@@ -424,7 +424,7 @@ namespace nn
             AstWhile(const TokenArray& while_sig, const TokenArray& whlie_seq, int indent_level);
             virtual ~AstWhile();
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstFor :
@@ -438,7 +438,7 @@ namespace nn
             AstFor(const TokenArray& for_sig, const TokenArray& for_seq, int indent_level);
             virtual ~AstFor();
 
-            virtual Obj* eval(EvalCtx& ctx) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstCargsTuple :
@@ -450,7 +450,7 @@ namespace nn
             AstCargsTuple(const TokenArray& tarr);
             virtual ~AstCargsTuple();
 
-            virtual void match_args(Scope& scope, std::vector<Obj*>& cargs) const;
+            virtual void match_args(Scope& scope, std::vector<std::shared_ptr<Obj>>& cargs) const;
         };
 
         // root node
@@ -510,7 +510,7 @@ namespace nn
         public:
             AstModule(const TokenArray& tarr);
 
-            EvalCtx* eval(const std::string& entry_point, std::vector<Obj*>& cargs);
+            EvalCtx* eval(const std::string& entry_point, std::vector<std::shared_ptr<Obj>>& cargs);
         };
     }
 }

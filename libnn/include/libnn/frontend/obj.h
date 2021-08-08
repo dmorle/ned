@@ -40,30 +40,30 @@ namespace nn
             virtual ~Obj() = 0;
 
             virtual bool bval() const = 0;
-            virtual void assign(const Obj* val) = 0;
+            virtual void assign(const std::shared_ptr<Obj>& val) = 0;
 
-            virtual Obj* get(const std::string& item) = 0;
-            virtual Obj* cargs(const std::vector<Obj*>& args) = 0;
-            virtual Obj* call(EvalCtx& ctx, const std::vector<Obj*>& args) const = 0;
-            virtual std::vector<Obj*> iter(EvalCtx& ctx) = 0;
-            virtual Obj* idx(const std::vector<std::vector<Obj*>>& val) = 0;
-            virtual Obj* neg() const = 0;
+            virtual std::shared_ptr<Obj> get(const std::string& item) = 0;
+            virtual std::shared_ptr<Obj> cargs(const std::vector<std::shared_ptr<Obj>>& args) = 0;
+            virtual std::shared_ptr<Obj> call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const = 0;
+            virtual std::vector<std::shared_ptr<Obj>> iter(EvalCtx& ctx) = 0;
+            virtual std::shared_ptr<Obj> idx(const std::vector<std::vector<std::shared_ptr<Obj>>>& val) = 0;
+            virtual std::shared_ptr<Obj> neg() const = 0;
 
-            virtual Obj* add(const Obj* val) const = 0;
-            virtual Obj* sub(const Obj* val) const = 0;
-            virtual Obj* mul(const Obj* val) const = 0;
-            virtual Obj* div(const Obj* val) const = 0;
+            virtual std::shared_ptr<Obj> add(const std::shared_ptr<Obj>& val) const = 0;
+            virtual std::shared_ptr<Obj> sub(const std::shared_ptr<Obj>& val) const = 0;
+            virtual std::shared_ptr<Obj> mul(const std::shared_ptr<Obj>& val) const = 0;
+            virtual std::shared_ptr<Obj> div(const std::shared_ptr<Obj>& val) const = 0;
 
             // Why C++?  Wasn't && enough?
-            virtual Obj* andop(const Obj* val) const = 0;
-            virtual Obj* orop(const Obj* val) const = 0;
+            virtual std::shared_ptr<Obj> andop(const std::shared_ptr<Obj>& val) const = 0;
+            virtual std::shared_ptr<Obj> orop(const std::shared_ptr<Obj>& val) const = 0;
 
-            virtual Obj* eq(const Obj* val) const = 0;
-            virtual Obj* ne(const Obj* val) const = 0;
-            virtual Obj* ge(const Obj* val) const = 0;
-            virtual Obj* le(const Obj* val) const = 0;
-            virtual Obj* gt(const Obj* val) const = 0;
-            virtual Obj* lt(const Obj* val) const = 0;
+            virtual std::shared_ptr<Obj> eq(const std::shared_ptr<Obj>& val) const = 0;
+            virtual std::shared_ptr<Obj> ne(const std::shared_ptr<Obj>& val) const = 0;
+            virtual std::shared_ptr<Obj> ge(const std::shared_ptr<Obj>& val) const = 0;
+            virtual std::shared_ptr<Obj> le(const std::shared_ptr<Obj>& val) const = 0;
+            virtual std::shared_ptr<Obj> gt(const std::shared_ptr<Obj>& val) const = 0;
+            virtual std::shared_ptr<Obj> lt(const std::shared_ptr<Obj>& val) const = 0;
         };
 
         template<ObjType TY>
@@ -73,6 +73,7 @@ namespace nn
         using ObjInt = ObjImp<ObjType::INT>;
         using ObjFloat = ObjImp<ObjType::FLOAT>;
         using ObjStr = ObjImp<ObjType::STR>;
+        using ObjArray = ObjImp<ObjType::ARRAY>;
         using ObjTuple = ObjImp<ObjType::TUPLE>;
         using ObjTensor = ObjImp<ObjType::TENSOR>;
         using ObjDef = ObjImp<ObjType::DEF>;
@@ -88,65 +89,67 @@ namespace nn
         class ObjImp :
             public Obj
         {
-            friend void check_init(const Obj*);
-            friend void check_init(const Obj* pobj);
+            friend void check_init(const std::shared_ptr<Obj>& pobj);
 
-            auto mty(const Obj* p) const noexcept { return (const decltype(this))p; }
-            auto mty(Obj* p) const noexcept { return static_cast<decltype(this)>(p); }
+            template<ObjType T, typename... Args>
+            friend std::shared_ptr<ObjImp<T>> create_obj(Args...);
+
+            auto mty(const std::shared_ptr<Obj>& p) const noexcept { return (const decltype(this))p.get(); }
+            auto mty(std::shared_ptr<Obj> &p) const noexcept { return static_cast<decltype(this)>(p.get()); }
+
+            ObjImp();
 
         public:
             ObjData<TY> data;
 
-            ObjImp();
-
             virtual ~ObjImp();
 
-            void check_type(const Obj* pobj) const {
+            void check_type(const std::shared_ptr<Obj>& pobj) const {
                 if (pobj->ty != TY) throw GenerationError("Expected " + objTypeName(TY) + ", recieved " + objTypeName(pobj->ty)); }
 
             virtual bool bval() const override {
                 throw GenerationError(objTypeName(TY) + " type does not have a truth value"); }
-            virtual void assign(const Obj* val) override {
+            virtual void assign(const std::shared_ptr<Obj>& val) override {
                 throw GenerationError(objTypeName(TY) + " type does not support assignment"); }
-            virtual Obj* cargs(const std::vector<Obj*>& args) override {
-                throw GenerationError(objTypeName(TY) + " type does not support constant arguments"); }
 
-            virtual Obj* get(const std::string& item) override {
+            virtual std::shared_ptr<Obj> get(const std::string& item) override {
                 throw GenerationError(objTypeName(TY) + " type does not support the get operator"); }
-            virtual Obj* call(EvalCtx& ctx, const std::vector<Obj*>& args) const override {
+            virtual std::shared_ptr<Obj> call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const override {
                 throw GenerationError(objTypeName(TY) + " type does not support the call operator"); }
-            virtual std::vector<Obj*> iter(EvalCtx& ctx) override {
+            virtual std::shared_ptr<Obj> cargs(const std::vector<std::shared_ptr<Obj>>& args) override {
+                throw GenerationError(objTypeName(TY) + " type does not support constant arguments"); }
+            virtual std::vector<std::shared_ptr<Obj>> iter(EvalCtx& ctx) override {
                 throw GenerationError(objTypeName(TY) + " type does not support iteration"); }
-            virtual Obj* idx(const std::vector<std::vector<Obj*>>& val) override {
+            virtual std::shared_ptr<Obj> idx(const std::vector<std::vector<std::shared_ptr<Obj>>>& val) override {
                 throw GenerationError(objTypeName(TY) + " type does not support the index operator"); }
-            virtual Obj* neg() const override {
+            virtual std::shared_ptr<Obj> neg() const override {
                 throw GenerationError(objTypeName(TY) + " type does not support the negation operator"); }
 
-            virtual Obj* add(const Obj* val) const override {
+            virtual std::shared_ptr<Obj> add(const std::shared_ptr<Obj>& val) const override {
                 throw GenerationError(objTypeName(TY) + " type does not support the addition operator"); }
-            virtual Obj* sub(const Obj* val) const override {
+            virtual std::shared_ptr<Obj> sub(const std::shared_ptr<Obj>& val) const override {
                 throw GenerationError(objTypeName(TY) + " type does not support the subtraction operator"); }
-            virtual Obj* mul(const Obj* val) const override {
+            virtual std::shared_ptr<Obj> mul(const std::shared_ptr<Obj>& val) const override {
                 throw GenerationError(objTypeName(TY) + " type does not support the multiplication operator"); }
-            virtual Obj* div(const Obj* val) const override {
+            virtual std::shared_ptr<Obj> div(const std::shared_ptr<Obj>& val) const override {
                 throw GenerationError(objTypeName(TY) + " type does not support the division operator"); }
 
-            virtual Obj* andop(const Obj* val) const override  {
+            virtual std::shared_ptr<Obj> andop(const std::shared_ptr<Obj>& val) const override  {
                 throw GenerationError(objTypeName(TY) + " type does not support the and operator"); }
-            virtual Obj* orop(const Obj* val) const override  {
+            virtual std::shared_ptr<Obj> orop(const std::shared_ptr<Obj>& val) const override  {
                 throw GenerationError(objTypeName(TY) + " type does not support the or operator"); }
 
-            virtual Obj* eq(const Obj* val) const override {
+            virtual std::shared_ptr<Obj> eq(const std::shared_ptr<Obj>& val) const override {
                 throw GenerationError(objTypeName(TY) + " type does not support the equality operator"); }
-            virtual Obj* ne(const Obj* val) const override {
+            virtual std::shared_ptr<Obj> ne(const std::shared_ptr<Obj>& val) const override {
                 throw GenerationError(objTypeName(TY) + " type does not support the inequality operator"); }
-            virtual Obj* ge(const Obj* val) const override {
+            virtual std::shared_ptr<Obj> ge(const std::shared_ptr<Obj>& val) const override {
                 throw GenerationError(objTypeName(TY) + " type does not support the greater than or equal operator"); }
-            virtual Obj* le(const Obj* val) const override {
+            virtual std::shared_ptr<Obj> le(const std::shared_ptr<Obj>& val) const override {
                 throw GenerationError(objTypeName(TY) + " type does not support the less than or equal operator"); }
-            virtual Obj* gt(const Obj* val) const override {
+            virtual std::shared_ptr<Obj> gt(const std::shared_ptr<Obj>& val) const override {
                 throw GenerationError(objTypeName(TY) + " type does not support the greater than operator"); }
-            virtual Obj* lt(const Obj* val) const override {
+            virtual std::shared_ptr<Obj> lt(const std::shared_ptr<Obj>& val) const override {
                 throw GenerationError(objTypeName(TY) + " type does not support the less than operator"); }
         };
 
@@ -163,11 +166,11 @@ namespace nn
             std::string val;
         };
         template<> struct ObjData<ObjType::ARRAY> {
-            std::vector<Obj*> elems;
+            std::vector<std::shared_ptr<Obj>> elems;
             int size;
         };
         template<> struct ObjData<ObjType::TUPLE> {
-            std::vector<Obj*> elems;
+            std::vector<std::shared_ptr<Obj>> elems;
         };
         template<> struct ObjData<ObjType::TENSOR> {
             Edge* pEdge;
@@ -175,7 +178,8 @@ namespace nn
             bool carg_init;
         };
         template<> struct ObjData<ObjType::DEF> {
-            AstDef def;
+            AstDef* def;
+            Scope* nscope;  // non-null for .cargs()
         };
         template<> struct ObjData<ObjType::FN> {
             AstFn fn;
@@ -190,6 +194,28 @@ namespace nn
             std::unordered_map<std::string, ObjModule> mods;
             std::unordered_map<std::string, ObjPackage> packs;
         };
+
+        template<ObjType T, typename... Args>
+        std::shared_ptr<ObjImp<T>> create_obj(Args...);
+
+        template<> std::shared_ptr<ObjBool> create_obj<ObjType::BOOL>();
+        template<> std::shared_ptr<ObjBool> create_obj<ObjType::BOOL, bool>(bool val);
+        template<> std::shared_ptr<ObjInt> create_obj<ObjType::INT>();
+        template<> std::shared_ptr<ObjInt> create_obj<ObjType::INT, int64_t>(int64_t val);
+        template<> std::shared_ptr<ObjFloat> create_obj<ObjType::FLOAT>();
+        template<> std::shared_ptr<ObjFloat> create_obj<ObjType::FLOAT, double>(double val);
+        template<> std::shared_ptr<ObjStr> create_obj<ObjType::STR>();
+        template<> std::shared_ptr<ObjStr> create_obj<ObjType::STR, const std::string&>(const std::string& val);
+        template<> std::shared_ptr<ObjArray> create_obj<ObjType::ARRAY>();
+        template<> std::shared_ptr<ObjArray> create_obj<ObjType::ARRAY, size_t, ObjType>(size_t sz, ObjType ty);
+        template<> std::shared_ptr<ObjTuple> create_obj<ObjType::TUPLE>();
+        template<> std::shared_ptr<ObjTuple> create_obj<ObjType::TUPLE, const std::vector<ObjType>&>(const std::vector<ObjType>& elems);
+        template<> std::shared_ptr<ObjTensor> create_obj<ObjType::TENSOR>();
+        template<> std::shared_ptr<ObjDef> create_obj<ObjType::DEF>();
+        template<> std::shared_ptr<ObjFn> create_obj<ObjType::FN>();
+        template<> std::shared_ptr<ObjIntr> create_obj<ObjType::INTR>();
+        template<> std::shared_ptr<ObjModule> create_obj<ObjType::MODULE>();
+        template<> std::shared_ptr<ObjPackage> create_obj<ObjType::PACKAGE>();
     }
 }
 

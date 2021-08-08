@@ -37,7 +37,7 @@ namespace nn
             FN        // function
         };
 
-        using Scope = std::map<std::string, Obj*>;
+        using Scope = std::map<std::string, std::shared_ptr<Obj>>;
 
         class EvalCtx
         {
@@ -47,11 +47,11 @@ namespace nn
             friend class AstModule;
             friend class AstModImp;
 
-            std::map<std::string, Obj*> defs;
-            std::map<std::string, Obj*> fns;
-            std::map<std::string, Obj*> intrs;
-            std::map<std::string, Obj*> mods;
-            std::map<std::string, Obj*> packs;
+            std::map<std::string, std::shared_ptr<Obj>> defs;
+            std::map<std::string, std::shared_ptr<Obj>> fns;
+            std::map<std::string, std::shared_ptr<Obj>> intrs;
+            std::map<std::string, std::shared_ptr<Obj>> mods;
+            std::map<std::string, std::shared_ptr<Obj>> packs;
 
             std::vector<std::string> model_params;
             Graph* pgraph;
@@ -60,10 +60,10 @@ namespace nn
         public:
             EvalCtx();
 
-            Obj* operator[](const std::string& idn);
+            std::shared_ptr<Obj> operator[](const std::string& idn);
 
             bool contains(const std::string& name);
-            void insert(std::pair<std::string, Obj*>& val);
+            void insert(std::pair<std::string, std::shared_ptr<Obj>>& val);
 
             Graph& graph() noexcept;
             Scope& scope() noexcept;
