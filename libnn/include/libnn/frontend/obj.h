@@ -69,6 +69,7 @@ namespace nn
         template<ObjType TY>
         class ObjImp;
 
+        using ObjInvalid = ObjImp<ObjType::INVALID>;
         using ObjBool = ObjImp<ObjType::BOOL>;
         using ObjInt = ObjImp<ObjType::INT>;
         using ObjFloat = ObjImp<ObjType::FLOAT>;
@@ -153,6 +154,7 @@ namespace nn
                 throw GenerationError(objTypeName(TY) + " type does not support the less than operator"); }
         };
 
+        template<> struct ObjData<ObjType::INVALID> {};
         template<> struct ObjData<ObjType::BOOL> {
             bool val;
         };
@@ -178,14 +180,15 @@ namespace nn
             bool carg_init;
         };
         template<> struct ObjData<ObjType::DEF> {
-            AstDef* def;
-            Scope* nscope;  // non-null for .cargs()
+            const AstDef* pdef;
+            Scope* pscope;  // non-null for .cargs()
         };
         template<> struct ObjData<ObjType::FN> {
-            AstFn fn;
+            const AstFn* pfn;
         };
         template<> struct ObjData<ObjType::INTR> {
-            AstIntr intr;
+            const AstIntr* pintr;
+            Scope* pscope;
         };
         template<> struct ObjData<ObjType::MODULE> {
             AstModule mod;
@@ -198,6 +201,7 @@ namespace nn
         template<ObjType T, typename... Args>
         std::shared_ptr<ObjImp<T>> create_obj(Args...);
 
+        template<> std::shared_ptr<ObjInvalid> create_obj<ObjType::INVALID>();
         template<> std::shared_ptr<ObjBool> create_obj<ObjType::BOOL>();
         template<> std::shared_ptr<ObjBool> create_obj<ObjType::BOOL, bool>(bool val);
         template<> std::shared_ptr<ObjInt> create_obj<ObjType::INT>();
@@ -211,11 +215,9 @@ namespace nn
         template<> std::shared_ptr<ObjTuple> create_obj<ObjType::TUPLE>();
         template<> std::shared_ptr<ObjTuple> create_obj<ObjType::TUPLE, const std::vector<ObjType>&>(const std::vector<ObjType>& elems);
         template<> std::shared_ptr<ObjTensor> create_obj<ObjType::TENSOR>();
-        template<> std::shared_ptr<ObjDef> create_obj<ObjType::DEF>();
-        template<> std::shared_ptr<ObjFn> create_obj<ObjType::FN>();
-        template<> std::shared_ptr<ObjIntr> create_obj<ObjType::INTR>();
-        template<> std::shared_ptr<ObjModule> create_obj<ObjType::MODULE>();
-        template<> std::shared_ptr<ObjPackage> create_obj<ObjType::PACKAGE>();
+        template<> std::shared_ptr<ObjDef> create_obj<ObjType::DEF, const AstDef*>(const AstDef* pdef);
+        template<> std::shared_ptr<ObjFn> create_obj<ObjType::FN, const AstFn*>(const AstFn* pfn);
+        template<> std::shared_ptr<ObjIntr> create_obj<ObjType::INTR, const AstIntr*>(const AstIntr* pintr);
     }
 }
 

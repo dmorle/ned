@@ -63,7 +63,7 @@ namespace nn
             std::shared_ptr<Obj> operator[](const std::string& idn);
 
             bool contains(const std::string& name);
-            void insert(std::pair<std::string, std::shared_ptr<Obj>>& val);
+            void insert(std::string name, std::shared_ptr<Obj> val);
 
             Graph& graph() noexcept;
             Scope& scope() noexcept;

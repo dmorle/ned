@@ -424,6 +424,8 @@ namespace nn
                 for (auto e : mty(val)->data.dims)
                     data.dims.push_back(e);
                 data.carg_init = true;
+
+                // TODO: apply the cargs to the graph edge
             }
 
             // doing the actual assignment
@@ -448,6 +450,8 @@ namespace nn
                 throw GenerationError("A tensor must have at least one carg");
 
             data.carg_init = true;
+
+            // TODO: apply the cargs to the graph edge
         }
 
         template<>

@@ -377,14 +377,24 @@ namespace nn
 
             //  constructs a new object with the given cargs
             //  adds the new object's name to the scope
-            //  if state is CALL:
-            //      assert cargs are fully initialized
-            //  elif state is DEFSEQ and type is tensor: 
+            //  if state is DEFSEQ and type is tensor: 
             //      add the tensor as a graph input edge
             //
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;  // returns null
             virtual void append_vec(EvalCtx&, std::vector<std::shared_ptr<Obj>>&) const;
             virtual void match_args(Scope& scope, std::vector<std::shared_ptr<Obj>>& cargs) const;
+        };
+
+        class AstReturn :
+            public AstBlock
+        {
+            AstExpr* ret;
+
+        public:
+            AstReturn(const TokenArray& tarr);
+            virtual ~AstReturn();
+
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstSeq
@@ -475,12 +485,28 @@ namespace nn
 
         class AstIntr
         {
+            uint32_t line_num;
+            uint32_t col_num;
+            
+            AstSeq block;
+            std::string name;
+
+            std::vector<AstCargsDecl*> cargs;
+            std::vector<AstDecl> vargs;
+
         public:
+            AstIntr(const TokenArray& intr_sig, const TokenArray& intr_block);
+
             void eval(EvalCtx& ctx) const;
         };
 
         class AstFn
         {
+            AstSeq block;
+            std::string name;
+
+            std::vector<AstDecl> vargs;
+
         public:
             void eval(EvalCtx& ctx) const;
         };
