@@ -19,7 +19,7 @@ namespace nn
                 throw GenerationError("Uninitialized variable");
         }
 
-        constexpr std::string objTypeName(ObjType ty)
+        constexpr std::string obj_type_name(ObjType ty)
         {
             switch(ty)
             {
@@ -184,7 +184,7 @@ namespace nn
                 return nobj;
             }
             else
-                throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
 
         template<>
@@ -208,7 +208,7 @@ namespace nn
                 return nobj;
             }
             else
-                throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
 
         template<>
@@ -232,7 +232,7 @@ namespace nn
                 return nobj;
             }
             else
-                throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
 
         template<>
@@ -256,7 +256,7 @@ namespace nn
                 return nobj;
             }
             else
-                throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
 
         template<>
@@ -276,7 +276,7 @@ namespace nn
                 nobj->data.val = data.val == static_cast<const ObjFloat*>(val.get())->data.val;
                 return nobj;
             }
-            throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
+            throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
 
         template<>
@@ -296,7 +296,7 @@ namespace nn
                 nobj->data.val = data.val != static_cast<const ObjFloat*>(val.get())->data.val;
                 return nobj;
             }
-            throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
+            throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
 
         template<>
@@ -316,7 +316,7 @@ namespace nn
                 nobj->data.val = data.val >= static_cast<const ObjFloat*>(val.get())->data.val;
                 return nobj;
             }
-            throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
+            throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
 
         template<>
@@ -336,7 +336,7 @@ namespace nn
                 nobj->data.val = data.val <= static_cast<const ObjFloat*>(val.get())->data.val;
                 return nobj;
             }
-            throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
+            throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
 
         template<>
@@ -356,7 +356,7 @@ namespace nn
                 nobj->data.val = data.val > static_cast<const ObjFloat*>(val.get())->data.val;
                 return nobj;
             }
-            throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
+            throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
 
         template<>
@@ -376,7 +376,7 @@ namespace nn
                 nobj->data.val = data.val < static_cast<const ObjFloat*>(val.get())->data.val;
                 return nobj;
             }
-            throw GenerationError("Expected int or float, recieved " + objTypeName(val->ty));
+            throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
 
         template<>
@@ -457,6 +457,166 @@ namespace nn
         template<>
         ObjDef::ObjImp() :
             Obj(ObjType::DEF)
+        {
+
+        }
+
+        // Object contructors, not going to use factories
+
+        std::shared_ptr<Obj> create_obj_type(ObjType ty)
+        {
+            std::shared_ptr<Obj> pelem;
+            switch (ty)
+            {
+            case ObjType::BOOL   :    pelem = create_obj<ObjType::BOOL   >(); break;
+            case ObjType::INT    :    pelem = create_obj<ObjType::INT    >(); break;
+            case ObjType::FLOAT  :    pelem = create_obj<ObjType::FLOAT  >(); break;
+            case ObjType::STR    :    pelem = create_obj<ObjType::STR    >(); break;
+            case ObjType::ARRAY  :    pelem = create_obj<ObjType::ARRAY  >(); break;
+            case ObjType::TUPLE  :    pelem = create_obj<ObjType::TUPLE  >(); break;
+            case ObjType::TENSOR :    pelem = create_obj<ObjType::TENSOR >(); break;
+            case ObjType::DEF    :    pelem = create_obj<ObjType::DEF    >(); break;
+            case ObjType::FN     :    pelem = create_obj<ObjType::FN     >(); break;
+            case ObjType::INTR   :    pelem = create_obj<ObjType::INTR   >(); break;
+            case ObjType::MODULE :    pelem = create_obj<ObjType::MODULE >(); break;
+            case ObjType::PACKAGE:    pelem = create_obj<ObjType::PACKAGE>(); break;
+            default:
+                throw GenerationError("Invalid object type for contruction: " + obj_type_name(ty));
+            }
+            return pelem;
+        }
+
+        template<>
+        std::shared_ptr<ObjInvalid> create_obj<ObjType::INVALID>()
+        {
+            return std::make_shared<ObjInvalid>();
+        }
+
+        template<>
+        std::shared_ptr<ObjBool> create_obj<ObjType::BOOL>()
+        {
+            auto pobj = std::make_shared<ObjBool>();
+            pobj->init = false;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<ObjBool> create_obj<ObjType::BOOL, bool>(bool val)
+        {
+            auto pobj = std::make_shared<ObjBool>();
+            pobj->data.val = val;
+            pobj->init = true;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<ObjInt> create_obj<ObjType::INT>()
+        {
+            auto pobj = std::make_shared<ObjInt>();
+            pobj->init = false;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<ObjInt> create_obj<ObjType::INT, int64_t>(int64_t val)
+        {
+            auto pobj = std::make_shared<ObjInt>();
+            pobj->data.val = val;
+            pobj->init = true;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<ObjFloat> create_obj<ObjType::FLOAT>()
+        {
+            auto pobj = std::make_shared<ObjFloat>();
+            pobj->init = false;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<ObjFloat> create_obj<ObjType::FLOAT, double>(double val)
+        {
+            auto pobj = std::make_shared<ObjFloat>();
+            pobj->data.val = val;
+            pobj->init = true;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<ObjStr> create_obj<ObjType::STR>()
+        {
+            auto pobj = std::make_shared<ObjStr>();
+            pobj->init = false;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<ObjStr> create_obj<ObjType::STR, const std::string&>(const std::string& val)
+        {
+            auto pobj = std::make_shared<ObjStr>();
+            pobj->data.val = val;
+            pobj->init = true;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<ObjArray> create_obj<ObjType::ARRAY>()
+        {
+            auto pobj = std::make_shared<ObjArray>();
+            pobj->init = false;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<ObjArray> create_obj<ObjType::ARRAY, size_t, ObjType>(size_t sz, ObjType ty)
+        {
+            auto pobj = std::make_shared<ObjArray>();
+            pobj->data.size = sz;
+            for (int i = 0; i < sz; i++)
+                pobj->data.elems.push_back(create_obj_type(ty));
+            pobj->init = true;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<ObjTuple> create_obj<ObjType::TUPLE>()
+        {
+            auto pobj = std::make_shared<ObjTuple>();
+            pobj->init = false;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<ObjTuple> create_obj<ObjType::TUPLE, const std::vector<ObjType>&>(const std::vector<ObjType>& elems)
+        {
+            auto pobj = std::make_shared<ObjTuple>();
+            for (auto ty : elems)
+                pobj->data.elems.push_back(create_obj_type(ty));
+            pobj->init = true;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<ObjTensor> create_obj<ObjType::TENSOR>()
+        {
+
+        }
+
+        template<>
+        std::shared_ptr<ObjDef> create_obj<ObjType::DEF>()
+        {
+
+        }
+
+        template<>
+        std::shared_ptr<ObjFn> create_obj<ObjType::FN>()
+        {
+
+        }
+
+        template<>
+        std::shared_ptr<ObjIntr> create_obj<ObjType::INTR>()
         {
 
         }

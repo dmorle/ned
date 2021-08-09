@@ -28,7 +28,7 @@ namespace nn
             PACKAGE,  // File folder (presumably with *.nn files in it)
         };
 
-        constexpr std::string objTypeName(ObjType ty);
+        constexpr std::string obj_type_name(ObjType ty);
 
         class Obj
         {
@@ -106,52 +106,52 @@ namespace nn
             virtual ~ObjImp();
 
             void check_type(const std::shared_ptr<Obj>& pobj) const {
-                if (pobj->ty != TY) throw GenerationError("Expected " + objTypeName(TY) + ", recieved " + objTypeName(pobj->ty)); }
+                if (pobj->ty != TY) throw GenerationError("Expected " + obj_type_name(TY) + ", recieved " + obj_type_name(pobj->ty)); }
 
             virtual bool bval() const override {
-                throw GenerationError(objTypeName(TY) + " type does not have a truth value"); }
+                throw GenerationError(obj_type_name(TY) + " type does not have a truth value"); }
             virtual void assign(const std::shared_ptr<Obj>& val) override {
-                throw GenerationError(objTypeName(TY) + " type does not support assignment"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support assignment"); }
 
             virtual std::shared_ptr<Obj> get(const std::string& item) override {
-                throw GenerationError(objTypeName(TY) + " type does not support the get operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the get operator"); }
             virtual std::shared_ptr<Obj> call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const override {
-                throw GenerationError(objTypeName(TY) + " type does not support the call operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the call operator"); }
             virtual std::shared_ptr<Obj> cargs(const std::vector<std::shared_ptr<Obj>>& args) override {
-                throw GenerationError(objTypeName(TY) + " type does not support constant arguments"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support constant arguments"); }
             virtual std::vector<std::shared_ptr<Obj>> iter(EvalCtx& ctx) override {
-                throw GenerationError(objTypeName(TY) + " type does not support iteration"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support iteration"); }
             virtual std::shared_ptr<Obj> idx(const std::vector<std::vector<std::shared_ptr<Obj>>>& val) override {
-                throw GenerationError(objTypeName(TY) + " type does not support the index operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the index operator"); }
             virtual std::shared_ptr<Obj> neg() const override {
-                throw GenerationError(objTypeName(TY) + " type does not support the negation operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the negation operator"); }
 
             virtual std::shared_ptr<Obj> add(const std::shared_ptr<Obj>& val) const override {
-                throw GenerationError(objTypeName(TY) + " type does not support the addition operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the addition operator"); }
             virtual std::shared_ptr<Obj> sub(const std::shared_ptr<Obj>& val) const override {
-                throw GenerationError(objTypeName(TY) + " type does not support the subtraction operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the subtraction operator"); }
             virtual std::shared_ptr<Obj> mul(const std::shared_ptr<Obj>& val) const override {
-                throw GenerationError(objTypeName(TY) + " type does not support the multiplication operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the multiplication operator"); }
             virtual std::shared_ptr<Obj> div(const std::shared_ptr<Obj>& val) const override {
-                throw GenerationError(objTypeName(TY) + " type does not support the division operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the division operator"); }
 
             virtual std::shared_ptr<Obj> andop(const std::shared_ptr<Obj>& val) const override  {
-                throw GenerationError(objTypeName(TY) + " type does not support the and operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the and operator"); }
             virtual std::shared_ptr<Obj> orop(const std::shared_ptr<Obj>& val) const override  {
-                throw GenerationError(objTypeName(TY) + " type does not support the or operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the or operator"); }
 
             virtual std::shared_ptr<Obj> eq(const std::shared_ptr<Obj>& val) const override {
-                throw GenerationError(objTypeName(TY) + " type does not support the equality operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the equality operator"); }
             virtual std::shared_ptr<Obj> ne(const std::shared_ptr<Obj>& val) const override {
-                throw GenerationError(objTypeName(TY) + " type does not support the inequality operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the inequality operator"); }
             virtual std::shared_ptr<Obj> ge(const std::shared_ptr<Obj>& val) const override {
-                throw GenerationError(objTypeName(TY) + " type does not support the greater than or equal operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the greater than or equal operator"); }
             virtual std::shared_ptr<Obj> le(const std::shared_ptr<Obj>& val) const override {
-                throw GenerationError(objTypeName(TY) + " type does not support the less than or equal operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the less than or equal operator"); }
             virtual std::shared_ptr<Obj> gt(const std::shared_ptr<Obj>& val) const override {
-                throw GenerationError(objTypeName(TY) + " type does not support the greater than operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the greater than operator"); }
             virtual std::shared_ptr<Obj> lt(const std::shared_ptr<Obj>& val) const override {
-                throw GenerationError(objTypeName(TY) + " type does not support the less than operator"); }
+                throw GenerationError(obj_type_name(TY) + " type does not support the less than operator"); }
         };
 
         template<> struct ObjData<ObjType::INVALID> {};

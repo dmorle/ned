@@ -7,7 +7,7 @@ fn range(int n):
     return data
 
 
-intrinsic reshape<int *out_shape, <int *inp_shape>>(tensor<*inp_shape> inp):
+intr reshape<int *out_shape, <int *inp_shape>>(tensor<*inp_shape> inp):
     int inp_size = 1
     for int dim_size in inp_shape:
         inp_size *= dim_size
@@ -32,7 +32,7 @@ intrinsic reshape<int *out_shape, <int *inp_shape>>(tensor<*inp_shape> inp):
     return out
 
 
-intrinsic concat<int dim, <int *t1_shape>, <int *t2_shape>>(tensor<*t1_shape> t1, tensor<*t2_shape> t2):
+intr concat<int dim, <int *t1_shape>, <int *t2_shape>>(tensor<*t1_shape> t1, tensor<*t2_shape> t2):
     if t1_shape.length != t2_shape.length:
         error("Mismatching tensor ranks")
     if t1_shape.length <= dim:
@@ -47,22 +47,22 @@ intrinsic concat<int dim, <int *t1_shape>, <int *t2_shape>>(tensor<*t1_shape> t1
     return out
 
 
-intrinsic relu<int *shape>(tensor<*shape> t1):
+intr relu<int *shape>(tensor<*shape> t1):
     tensor<*shape> out
     return out
 
 
-intrinsic softmax<int *shape>(tensor<*shape> t1):
+intr softmax<int *shape>(tensor<*shape> t1):
     tensor<*shape> out
     return out
 
 
-intrinsic matmul<int N, int M, int S>(tensor<N, S> t1, tensor<S, M> t2):
+intr matmul<int N, int M, int S>(tensor<N, S> t1, tensor<S, M> t2):
     tensor<N, M> out
     return out
 
 
-intrinsic conv2d_intr<int C, int H, int W, int K, int M, int N>(tensor<C, H, W> inp, tensor<K, C, M, N> kernel):
+intr conv2d_intr<int C, int H, int W, int K, int M, int N>(tensor<C, H, W> inp, tensor<K, C, M, N> kernel):
     tensor<K, H, W> out
     return out
 
@@ -81,30 +81,30 @@ def conv2d<int K, int M, int N, int C, int H, int W>(tensor<C, H, W> inp):
 
 
 def rnn_cell<int I, int S>(tensor<I> inp, tensor<S> state):
-    var combined = concat<1>(reshape<N, -1>(inp), reshape<N, -1>(state))
-    var layer1 = relu(linear(combined))
-    var output = softmax(linear(layer1))
-    var nstate = relu(linear(layer1))
+    tensor combined = concat<1>(reshape<N, -1>(inp), reshape<N, -1>(state))
+    tensor layer1 = relu(linear(combined))
+    tensor output = softmax(linear(layer1))
+    tensor nstate = relu(linear(layer1))
     return nstate, output
 
 
 def rnn<int I, int S>(tensor<I> inp):
     static tensor<N, S> state;
     
-    var result = rnn_cell<I, S>(inp, state)
+    tuple result = rnn_cell<I, S>(inp, state)
     state = result[0]
     return result[1]
 
 
 def model<int G>(tensor<3, 312, 312> img):
-    var layer1 = relu(conv2d<8, 3, 3>(img))
-    var layer2 = relu(conv2d<16, 3, 3>(layer1))
+    tensor layer1 = relu(conv2d<8, 3, 3>(img))
+    tensor layer2 = relu(conv2d<16, 3, 3>(layer1))
 
     tensor<16, 312, 312> tmp = layer2
     for int i in range(G):
         tmp = relu(conv2d<16, 3, 3>(tmp))
     
-    var flattened = reshape<N, -1>(tmp);
-    var output = rnn<N, flattened.shape[-1], 128>(flattened)
+    tensor flattened = reshape<N, -1>(tmp);
+    tensor output = rnn<N, flattened.shape[-1], 128>(flattened)
 
     return output

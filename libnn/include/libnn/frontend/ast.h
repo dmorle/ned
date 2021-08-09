@@ -479,6 +479,7 @@ namespace nn
 
         public:
             AstDef(const TokenArray& def_sig, const TokenArray& def_block);
+            ~AstDef();
 
             void eval(EvalCtx& ctx) const;
         };
@@ -496,18 +497,24 @@ namespace nn
 
         public:
             AstIntr(const TokenArray& intr_sig, const TokenArray& intr_block);
+            ~AstIntr();
 
             void eval(EvalCtx& ctx) const;
         };
 
         class AstFn
         {
+            uint32_t line_num;
+            uint32_t col_num;
+
             AstSeq block;
             std::string name;
 
             std::vector<AstDecl> vargs;
 
         public:
+            AstFn(const TokenArray& fn_sig, const TokenArray& fn_block);
+
             void eval(EvalCtx& ctx) const;
         };
 

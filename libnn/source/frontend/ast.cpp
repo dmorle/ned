@@ -975,6 +975,16 @@ namespace nn
                 delete e;
         }
 
+        AstReturn::AstReturn(const TokenArray& tarr)
+        {
+            ret = parseExpr<1>(tarr);
+        }
+
+        AstReturn::~AstReturn()
+        {
+            delete ret;
+        }
+
         AstIf::AstIf(const TokenArray& if_sig, const TokenArray& if_seq, int indent_level) :
             seq(if_seq, indent_level + 1)
         {
@@ -1082,7 +1092,7 @@ namespace nn
                         TokenArray if_seq(tarr, colon_pos + 1, end);
                         this->blocks.push_back(new AstIf(if_sig, if_seq, indent_level));
                         // else isn't a thing yet...
-                        start = end + indent_level;
+                        start = end + 1;
                         continue;
                     }
                     else if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val == "while")
@@ -1099,7 +1109,7 @@ namespace nn
                         TokenArray while_sig(tarr, start, colon_pos);
                         TokenArray while_seq(tarr, colon_pos + 1, end);
                         this->blocks.push_back(new AstWhile(while_sig, while_seq, indent_level));
-                        start = end + indent_level;
+                        start = end + 1;
                         continue;
                     }
                     else if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val == "for")
@@ -1116,8 +1126,20 @@ namespace nn
                         TokenArray for_sig(tarr, start, colon_pos);
                         TokenArray for_seq(tarr, colon_pos + 1, end);
                         this->blocks.push_back(new AstFor(for_sig, for_seq, indent_level));
-                        start = end + indent_level;
+                        start = end + 1;
                         continue;
+                    }
+                    else if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val == "return")
+                    {
+                        int end_pos = tarr.search<TokenArray::is_same<TokenType::ENDL>>(start);
+                        if (end_pos < 0)
+                            end_pos = tarr.size();
+                        if (end_pos == 1)
+                            throw SyntaxError(tarr[start], "Invalid return syntax");
+                        
+                        TokenArray ret_tarr(tarr, start + 1, end_pos);
+                        this->blocks.push_back(new AstReturn(ret_tarr));
+                        start = end_pos + 1;
                     }
                 }
 
@@ -1127,7 +1149,7 @@ namespace nn
                 TokenArray expr_tarr(tarr, start, end);
                 this->blocks.push_back(parseExpr<0>(expr_tarr));
 
-                start = end + 1 + indent_level;  // eat the ENDL token and the 'indent_level' INDENT tokens.
+                start = end + 1;  // eat the ENDL token
             }
         }
 
@@ -1147,10 +1169,10 @@ namespace nn
             // parsing the signature
             // def _() <- minimum allowable signature
             if (def_sig.size() < 4 || def_sig[0]->ty != TokenType::IDN || static_cast<const TokenImp<TokenType::IDN>*>(def_sig[0])->val != "def")
-                throw SyntaxError(def_sig[0], "Invalid function signature");
+                throw SyntaxError(def_sig[0], "Invalid def signature");
 
             if (def_sig[1]->ty != TokenType::IDN)
-                throw SyntaxError(def_sig[1], "Invalid function signature");
+                throw SyntaxError(def_sig[1], "Invalid def signature");
             this->name = static_cast<const TokenImp<TokenType::IDN>*>(def_sig[1])->val;
 
             int start = 2;
@@ -1159,22 +1181,102 @@ namespace nn
             {
                 end = def_sig.search<TokenArray::brac_end<TokenType::ANGLE_O, TokenType::ANGLE_C>>();
                 if (end < 0)
-                    throw SyntaxError(def_sig[start], "Missing closing '>' in function signature");
+                    throw SyntaxError(def_sig[start], "Missing closing '>' in def signature");
                 TokenArray constargs_tarr({ def_sig, start, end });
                 parseDefCargs(constargs_tarr, cargs);
                 start = end + 1;
                 if (start >= def_sig.size())
-                    throw SyntaxError(def_sig[end], "Missing expected '(' in function signature");
+                    throw SyntaxError(def_sig[end], "Missing expected '(' in def signature");
             }
 
             if (def_sig[start]->ty != TokenType::ROUND_O)
-                throw SyntaxError(def_sig[start], "Missing expected '(' in function signature");
+                throw SyntaxError(def_sig[start], "Missing expected '(' in def signature");
 
             end = def_sig.search<TokenArray::is_same<TokenType::ROUND_C>>();
             if (end < 0)
-                throw SyntaxError(def_sig[start], "Missing closing ')' in function signature");
+                throw SyntaxError(def_sig[start], "Missing closing ')' in def signature");
 
             TokenArray varargs_tarr({ def_sig, start, end });
+            paseDefArgs(varargs_tarr, this->vargs);
+        }
+
+        AstDef::~AstDef()
+        {
+            for (auto e : cargs)
+                delete e;
+        }
+
+        AstIntr::AstIntr(const TokenArray& intr_sig, const TokenArray& intr_seq) :
+            block(intr_seq, 1)
+        {
+            assert(intr_sig.size() != 0);
+            line_num = intr_sig[0]->line_num;
+            col_num = intr_sig[0]->col_num;
+
+            // parsing the signature
+            // intr _() <- minimum allowable signature
+            if (intr_sig.size() < 4 || intr_sig[0]->ty != TokenType::IDN || static_cast<const TokenImp<TokenType::IDN>*>(intr_sig[0])->val != "intr")
+                throw SyntaxError(intr_sig[0], "Invalid intr signature");
+
+            if (intr_sig[1]->ty != TokenType::IDN)
+                throw SyntaxError(intr_sig[1], "Invalid intr signature");
+            this->name = static_cast<const TokenImp<TokenType::IDN>*>(intr_sig[1])->val;
+
+            int start = 2;
+            int end;
+            if (intr_sig[start]->ty == TokenType::ANGLE_O)
+            {
+                end = intr_sig.search<TokenArray::brac_end<TokenType::ANGLE_O, TokenType::ANGLE_C>>();
+                if (end < 0)
+                    throw SyntaxError(intr_sig[start], "Missing closing '>' in intr signature");
+                TokenArray constargs_tarr({ intr_sig, start, end });
+                parseDefCargs(constargs_tarr, cargs);
+                start = end + 1;
+                if (start >= intr_sig.size())
+                    throw SyntaxError(intr_sig[end], "Missing expected '(' in intr signature");
+            }
+
+            if (intr_sig[start]->ty != TokenType::ROUND_O)
+                throw SyntaxError(intr_sig[start], "Missing expected '(' in intr signature");
+
+            end = intr_sig.search<TokenArray::is_same<TokenType::ROUND_C>>();
+            if (end < 0)
+                throw SyntaxError(intr_sig[start], "Missing closing ')' in intr signature");
+
+            TokenArray varargs_tarr({ intr_sig, start, end });
+            paseDefArgs(varargs_tarr, this->vargs);
+        }
+
+        AstIntr::~AstIntr()
+        {
+            for (auto e : cargs)
+                delete e;
+        }
+
+        AstFn::AstFn(const TokenArray& fn_sig, const TokenArray& fn_seq) :
+            block(fn_seq, 1)
+        {
+            assert(fn_sig.size() != 0);
+            line_num = fn_sig[0]->line_num;
+            col_num = fn_sig[0]->col_num;
+
+            // parsing the signature
+            // intr _() <- minimum allowable signature
+            if (fn_sig.size() < 4 || fn_sig[0]->ty != TokenType::IDN || static_cast<const TokenImp<TokenType::IDN>*>(fn_sig[0])->val != "fn")
+                throw SyntaxError(fn_sig[0], "Invalid fn signature");
+
+            if (fn_sig[1]->ty != TokenType::IDN)
+                throw SyntaxError(fn_sig[1], "Invalid fn signature");
+            this->name = static_cast<const TokenImp<TokenType::IDN>*>(fn_sig[1])->val;
+
+            int start = 2;
+            if (fn_sig[start]->ty != TokenType::ROUND_O)
+                throw SyntaxError(fn_sig[start], "Missing expected '(' in fn signature");
+            int end = fn_sig.search<TokenArray::is_same<TokenType::ROUND_C>>();
+            if (end < 0)
+                throw SyntaxError(fn_sig[start], "Missing closing ')' in fn signature");
+
+            TokenArray varargs_tarr({ fn_sig, start, end });
             paseDefArgs(varargs_tarr, this->vargs);
         }
 
@@ -1235,6 +1337,42 @@ namespace nn
                         throw SyntaxError(tarr[colon_pos], "Empty code block following ':'");
 
                     this->defs.push_back({
+                        {tarr, i, colon_pos},             // signature
+                        {tarr, colon_pos + 1, block_end}  // block
+                    });
+
+                    i = block_end - 1;
+                }
+                else if (idn_name == "intr")
+                {
+                    int colon_pos = tarr.search<TokenArray::is_same<TokenType::COLON>>();
+                    if (colon_pos < 1 || tarr.size() == colon_pos)
+                        throw SyntaxError(tarr[i], "Invalid 'intr'");
+                    int block_end = tarr.search<TokenArray::block_end<0>>(colon_pos + 1);
+                    if (block_end < 0)
+                        block_end = tarr.size();  // the rest of the tokens make up the block
+                    if (colon_pos + 1 == block_end)
+                        throw SyntaxError(tarr[colon_pos], "Empty code block following ':'");
+
+                    this->intrs.push_back({
+                        {tarr, i, colon_pos},             // signature
+                        {tarr, colon_pos + 1, block_end}  // block
+                    });
+
+                    i = block_end - 1;
+                }
+                else if (idn_name == "fn")
+                {
+                    int colon_pos = tarr.search<TokenArray::is_same<TokenType::COLON>>();
+                    if (colon_pos < 1 || tarr.size() == colon_pos)
+                        throw SyntaxError(tarr[i], "Invalid 'fn'");
+                    int block_end = tarr.search<TokenArray::block_end<0>>(colon_pos + 1);
+                    if (block_end < 0)
+                        block_end = tarr.size();  // the rest of the tokens make up the block
+                    if (colon_pos + 1 == block_end)
+                        throw SyntaxError(tarr[colon_pos], "Empty code block following ':'");
+
+                    this->fns.push_back({
                         {tarr, i, colon_pos},             // signature
                         {tarr, colon_pos + 1, block_end}  // block
                     });
