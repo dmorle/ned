@@ -91,10 +91,10 @@ namespace nn
             check_init(val);
             check_type(val);
 
-            auto nobj = create_obj<ObjType::BOOL>();
-            nobj->data.val = data.val && mty(val)->data.val;
-            nobj->init = true;
-            return nobj;
+            auto pobj = create_obj<ObjType::BOOL>();
+            pobj->data.val = data.val && mty(val)->data.val;
+            pobj->init = true;
+            return pobj;
         }
 
         template<>
@@ -104,10 +104,10 @@ namespace nn
             check_init(val);
             check_type(val);
 
-            auto nobj = create_obj<ObjType::BOOL>();
-            nobj->data.val = data.val || mty(val)->data.val;
-            nobj->init = true;
-            return nobj;
+            auto pobj = create_obj<ObjType::BOOL>();
+            pobj->data.val = data.val || mty(val)->data.val;
+            pobj->init = true;
+            return pobj;
         }
 
         template<>
@@ -117,10 +117,10 @@ namespace nn
             check_init(val);
             check_type(val);
 
-            auto nobj = create_obj<ObjType::BOOL>();
-            nobj->data.val = data.val == mty(val)->data.val;
-            nobj->init = true;
-            return nobj;
+            auto pobj = create_obj<ObjType::BOOL>();
+            pobj->data.val = data.val == mty(val)->data.val;
+            pobj->init = true;
+            return pobj;
         }
 
         template<>
@@ -130,10 +130,10 @@ namespace nn
             check_init(val);
             check_type(val);
 
-            auto nobj = create_obj<ObjType::BOOL>();
-            nobj->data.val = data.val != mty(val)->data.val;
-            nobj->init = true;
-            return nobj;
+            auto pobj = create_obj<ObjType::BOOL>();
+            pobj->data.val = data.val != mty(val)->data.val;
+            pobj->init = true;
+            return pobj;
         }
 
         template<>
@@ -157,10 +157,10 @@ namespace nn
         std::shared_ptr<Obj> ObjInt::neg() const
         {
             check_init(this);
-            auto nobj = create_obj<ObjType::INT>();
-            nobj->data.val = -data.val;
-            nobj->init = true;
-            return nobj;
+            auto pobj = create_obj<ObjType::INT>();
+            pobj->data.val = -data.val;
+            pobj->init = true;
+            return pobj;
         }
 
         template<>
@@ -171,17 +171,17 @@ namespace nn
 
             if (val->ty == ObjType::INT)
             {
-                auto nobj = create_obj<ObjType::INT>();
-                nobj->data.val = data.val + static_cast<const ObjInt*>(val.get())->data.val;
-                nobj->init = true;
-                return nobj;
+                auto pobj = create_obj<ObjType::INT>();
+                pobj->data.val = data.val + static_cast<const ObjInt*>(val.get())->data.val;
+                pobj->init = true;
+                return pobj;
             }
             else if (val->ty == ObjType::FLOAT)
             {
-                auto nobj = create_obj<ObjType::FLOAT>();
-                nobj->data.val = data.val + static_cast<const ObjFloat*>(val.get())->data.val;
-                nobj->init = true;
-                return nobj;
+                auto pobj = create_obj<ObjType::FLOAT>();
+                pobj->data.val = data.val + static_cast<const ObjFloat*>(val.get())->data.val;
+                pobj->init = true;
+                return pobj;
             }
             else
                 throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
@@ -195,17 +195,17 @@ namespace nn
 
             if (val->ty == ObjType::INT)
             {
-                auto nobj = create_obj<ObjType::INT>();
-                nobj->data.val = data.val - static_cast<const ObjInt*>(val.get())->data.val;
-                nobj->init = true;
-                return nobj;
+                auto pobj = create_obj<ObjType::INT>();
+                pobj->data.val = data.val - static_cast<const ObjInt*>(val.get())->data.val;
+                pobj->init = true;
+                return pobj;
             }
             else if (val->ty == ObjType::FLOAT)
             {
-                auto nobj = create_obj<ObjType::FLOAT>();
-                nobj->data.val = data.val - static_cast<const ObjFloat*>(val.get())->data.val;
-                nobj->init = true;
-                return nobj;
+                auto pobj = create_obj<ObjType::FLOAT>();
+                pobj->data.val = data.val - static_cast<const ObjFloat*>(val.get())->data.val;
+                pobj->init = true;
+                return pobj;
             }
             else
                 throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
@@ -219,17 +219,17 @@ namespace nn
 
             if (val->ty == ObjType::INT)
             {
-                auto nobj = create_obj<ObjType::INT>();
-                nobj->data.val = data.val * static_cast<const ObjInt*>(val.get())->data.val;
-                nobj->init = true;
-                return nobj;
+                auto pobj = create_obj<ObjType::INT>();
+                pobj->data.val = data.val * static_cast<const ObjInt*>(val.get())->data.val;
+                pobj->init = true;
+                return pobj;
             }
             else if (val->ty == ObjType::FLOAT)
             {
-                auto nobj = create_obj<ObjType::FLOAT>();
-                nobj->data.val = data.val * static_cast<const ObjFloat*>(val.get())->data.val;
-                nobj->init = true;
-                return nobj;
+                auto pobj = create_obj<ObjType::FLOAT>();
+                pobj->data.val = data.val * static_cast<const ObjFloat*>(val.get())->data.val;
+                pobj->init = true;
+                return pobj;
             }
             else
                 throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
@@ -243,17 +243,17 @@ namespace nn
 
             if (val->ty == ObjType::INT)
             {
-                auto nobj = create_obj<ObjType::INT>();
-                nobj->data.val = data.val / static_cast<const ObjInt*>(val.get())->data.val;
-                nobj->init = true;
-                return nobj;
+                auto pobj = create_obj<ObjType::INT>();
+                pobj->data.val = data.val / static_cast<const ObjInt*>(val.get())->data.val;
+                pobj->init = true;
+                return pobj;
             }
             else if (val->ty == ObjType::FLOAT)
             {
-                auto nobj = create_obj<ObjType::FLOAT>();
-                nobj->data.val = data.val / static_cast<const ObjFloat*>(val.get())->data.val;
-                nobj->init = true;
-                return nobj;
+                auto pobj = create_obj<ObjType::FLOAT>();
+                pobj->data.val = data.val / static_cast<const ObjFloat*>(val.get())->data.val;
+                pobj->init = true;
+                return pobj;
             }
             else
                 throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
@@ -265,16 +265,16 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto nobj = create_obj<ObjType::BOOL>();
-            nobj->init = true;
+            auto pobj = create_obj<ObjType::BOOL>();
+            pobj->init = true;
             switch (val->ty)
             {
             case ObjType::INT:
-                nobj->data.val = data.val == static_cast<const ObjInt*>(val.get())->data.val;
-                return nobj;
+                pobj->data.val = data.val == static_cast<const ObjInt*>(val.get())->data.val;
+                return pobj;
             case ObjType::FLOAT:
-                nobj->data.val = data.val == static_cast<const ObjFloat*>(val.get())->data.val;
-                return nobj;
+                pobj->data.val = data.val == static_cast<const ObjFloat*>(val.get())->data.val;
+                return pobj;
             }
             throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
@@ -285,16 +285,16 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto nobj = create_obj<ObjType::BOOL>();
-            nobj->init = true;
+            auto pobj = create_obj<ObjType::BOOL>();
+            pobj->init = true;
             switch (val->ty)
             {
             case ObjType::INT:
-                nobj->data.val = data.val != static_cast<const ObjInt*>(val.get())->data.val;
-                return nobj;
+                pobj->data.val = data.val != static_cast<const ObjInt*>(val.get())->data.val;
+                return pobj;
             case ObjType::FLOAT:
-                nobj->data.val = data.val != static_cast<const ObjFloat*>(val.get())->data.val;
-                return nobj;
+                pobj->data.val = data.val != static_cast<const ObjFloat*>(val.get())->data.val;
+                return pobj;
             }
             throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
@@ -305,16 +305,16 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto nobj = create_obj<ObjType::BOOL>();
-            nobj->init = true;
+            auto pobj = create_obj<ObjType::BOOL>();
+            pobj->init = true;
             switch (val->ty)
             {
             case ObjType::INT:
-                nobj->data.val = data.val >= static_cast<const ObjInt*>(val.get())->data.val;
-                return nobj;
+                pobj->data.val = data.val >= static_cast<const ObjInt*>(val.get())->data.val;
+                return pobj;
             case ObjType::FLOAT:
-                nobj->data.val = data.val >= static_cast<const ObjFloat*>(val.get())->data.val;
-                return nobj;
+                pobj->data.val = data.val >= static_cast<const ObjFloat*>(val.get())->data.val;
+                return pobj;
             }
             throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
@@ -325,16 +325,16 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto nobj = create_obj<ObjType::BOOL>();
-            nobj->init = true;
+            auto pobj = create_obj<ObjType::BOOL>();
+            pobj->init = true;
             switch (val->ty)
             {
             case ObjType::INT:
-                nobj->data.val = data.val <= static_cast<const ObjInt*>(val.get())->data.val;
-                return nobj;
+                pobj->data.val = data.val <= static_cast<const ObjInt*>(val.get())->data.val;
+                return pobj;
             case ObjType::FLOAT:
-                nobj->data.val = data.val <= static_cast<const ObjFloat*>(val.get())->data.val;
-                return nobj;
+                pobj->data.val = data.val <= static_cast<const ObjFloat*>(val.get())->data.val;
+                return pobj;
             }
             throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
@@ -345,16 +345,16 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto nobj = create_obj<ObjType::BOOL>();
-            nobj->init = true;
+            auto pobj = create_obj<ObjType::BOOL>();
+            pobj->init = true;
             switch (val->ty)
             {
             case ObjType::INT:
-                nobj->data.val = data.val > static_cast<const ObjInt*>(val.get())->data.val;
-                return nobj;
+                pobj->data.val = data.val > static_cast<const ObjInt*>(val.get())->data.val;
+                return pobj;
             case ObjType::FLOAT:
-                nobj->data.val = data.val > static_cast<const ObjFloat*>(val.get())->data.val;
-                return nobj;
+                pobj->data.val = data.val > static_cast<const ObjFloat*>(val.get())->data.val;
+                return pobj;
             }
             throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
@@ -365,16 +365,16 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto nobj = create_obj<ObjType::BOOL>();
-            nobj->init = true;
+            auto pobj = create_obj<ObjType::BOOL>();
+            pobj->init = true;
             switch (val->ty)
             {
             case ObjType::INT:
-                nobj->data.val = data.val < static_cast<const ObjInt*>(val.get())->data.val;
-                return nobj;
+                pobj->data.val = data.val < static_cast<const ObjInt*>(val.get())->data.val;
+                return pobj;
             case ObjType::FLOAT:
-                nobj->data.val = data.val < static_cast<const ObjFloat*>(val.get())->data.val;
-                return nobj;
+                pobj->data.val = data.val < static_cast<const ObjFloat*>(val.get())->data.val;
+                return pobj;
             }
             throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
         }
@@ -385,6 +385,279 @@ namespace nn
         {
             init = false;
             data.val = 1.0;
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjFloat::neg() const
+        {
+            check_init(this);
+            auto pobj = create_obj<ObjType::FLOAT>();
+            pobj->data.val = -data.val;
+            pobj->init = true;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjFloat::add(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+
+            auto pobj = create_obj<ObjType::FLOAT>();
+            if (val->ty == ObjType::INT)
+                pobj->data.val = data.val + static_cast<const ObjInt*>(val.get())->data.val;
+            else if (val->ty == ObjType::FLOAT)
+                pobj->data.val = data.val + static_cast<const ObjFloat*>(val.get())->data.val;
+            else
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+
+            pobj->init = true;
+            return pobj;
+        }
+        
+        template<>
+        std::shared_ptr<Obj> ObjFloat::sub(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+
+            auto pobj = create_obj<ObjType::FLOAT>();
+            if (val->ty == ObjType::INT)
+                pobj->data.val = data.val - static_cast<const ObjInt*>(val.get())->data.val;
+            else if (val->ty == ObjType::FLOAT)
+                pobj->data.val = data.val - static_cast<const ObjFloat*>(val.get())->data.val;
+            else
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+
+            pobj->init = true;
+            return pobj;
+        }
+        
+        template<>
+        std::shared_ptr<Obj> ObjFloat::mul(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+
+            auto pobj = create_obj<ObjType::FLOAT>();
+            if (val->ty == ObjType::INT)
+                pobj->data.val = data.val * static_cast<const ObjInt*>(val.get())->data.val;
+            else if (val->ty == ObjType::FLOAT)
+                pobj->data.val = data.val * static_cast<const ObjFloat*>(val.get())->data.val;
+            else
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+
+            pobj->init = true;
+            return pobj;
+        }
+        
+        template<>
+        std::shared_ptr<Obj> ObjFloat::div(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+
+            auto pobj = create_obj<ObjType::FLOAT>();
+            if (val->ty == ObjType::INT)
+                pobj->data.val = data.val / static_cast<const ObjInt*>(val.get())->data.val;
+            else if (val->ty == ObjType::FLOAT)
+                pobj->data.val = data.val / static_cast<const ObjFloat*>(val.get())->data.val;
+            else
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+
+            pobj->init = true;
+            return pobj;
+        }
+        
+        template<>
+        std::shared_ptr<Obj> ObjFloat::eq(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+
+            auto pobj = create_obj<ObjType::BOOL>();
+            if (val->ty == ObjType::INT)
+                pobj->data.val = data.val == static_cast<const ObjInt*>(val.get())->data.val;
+            else if (val->ty == ObjType::FLOAT)
+                pobj->data.val = data.val == static_cast<const ObjFloat*>(val.get())->data.val;
+            else
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+
+            pobj->init = true;
+            return pobj;
+        }
+        
+        template<>
+        std::shared_ptr<Obj> ObjFloat::ne(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+
+            auto pobj = create_obj<ObjType::BOOL>();
+            if (val->ty == ObjType::INT)
+                pobj->data.val = data.val != static_cast<const ObjInt*>(val.get())->data.val;
+            else if (val->ty == ObjType::FLOAT)
+                pobj->data.val = data.val != static_cast<const ObjFloat*>(val.get())->data.val;
+            else
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+
+            pobj->init = true;
+            return pobj;
+        }
+        
+        template<>
+        std::shared_ptr<Obj> ObjFloat::ge(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+
+            auto pobj = create_obj<ObjType::BOOL>();
+            if (val->ty == ObjType::INT)
+                pobj->data.val = data.val >= static_cast<const ObjInt*>(val.get())->data.val;
+            else if (val->ty == ObjType::FLOAT)
+                pobj->data.val = data.val >= static_cast<const ObjFloat*>(val.get())->data.val;
+            else
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+
+            pobj->init = true;
+            return pobj;
+        }
+        
+        template<>
+        std::shared_ptr<Obj> ObjFloat::le(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+
+            auto pobj = create_obj<ObjType::BOOL>();
+            if (val->ty == ObjType::INT)
+                pobj->data.val = data.val <= static_cast<const ObjInt*>(val.get())->data.val;
+            else if (val->ty == ObjType::FLOAT)
+                pobj->data.val = data.val <= static_cast<const ObjFloat*>(val.get())->data.val;
+            else
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+
+            pobj->init = true;
+            return pobj;
+        }
+        
+        template<>
+        std::shared_ptr<Obj> ObjFloat::gt(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+
+            auto pobj = create_obj<ObjType::BOOL>();
+            if (val->ty == ObjType::INT)
+                pobj->data.val = data.val > static_cast<const ObjInt*>(val.get())->data.val;
+            else if (val->ty == ObjType::FLOAT)
+                pobj->data.val = data.val > static_cast<const ObjFloat*>(val.get())->data.val;
+            else
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+
+            pobj->init = true;
+            return pobj;
+        }
+        
+        template<>
+        std::shared_ptr<Obj> ObjFloat::lt(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+
+            auto pobj = create_obj<ObjType::BOOL>();
+            if (val->ty == ObjType::INT)
+                pobj->data.val = data.val < static_cast<const ObjInt*>(val.get())->data.val;
+            else if (val->ty == ObjType::FLOAT)
+                pobj->data.val = data.val < static_cast<const ObjFloat*>(val.get())->data.val;
+            else
+                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+
+            pobj->init = true;
+            return pobj;
+        }
+        
+        template<>
+        ObjStr::ObjImp() :
+            Obj(ObjType::STR)
+        {
+            init = false;
+            data.val = "";
+        }
+
+        template<>
+        void ObjStr::assign(const std::shared_ptr<Obj>& val)
+        {
+            check_init(val);
+            check_type(val);
+
+            data.val = mty(val)->data.val;
+            init = true;
+        }
+
+        template<>
+        std::vector<std::shared_ptr<Obj>> ObjStr::iter(EvalCtx& ctx)
+        {
+            check_init(this);
+
+            std::vector<std::shared_ptr<Obj>> iters;
+            for (auto e : data.val)
+            {
+                auto pelem = create_obj<ObjType::STR>();
+                pelem->data.val = std::to_string(e);
+                pelem->init = true;
+                iters.push_back(pelem);
+            }
+            return iters;
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjStr::idx(const std::vector<std::vector<std::shared_ptr<Obj>>>& val)
+        {
+            check_init(this);
+            for (auto& slice : val)
+                for (auto& e : slice)
+                {
+                    check_init(e);
+                    if (e->ty != ObjType::INT)
+                        throw GenerationError("Expected int, recieved " + obj_type_name(e->ty));
+                }
+
+            if (val.size() != 1)
+                throw GenerationError("Invalid number of index arguments");
+
+            auto pobj = create_obj<ObjType::STR>();
+            switch (val[0].size())
+            {
+            case 1:
+                if (
+                    static_cast<const ObjInt*>(val[0][0].get())->data.val < 0 ||
+                    static_cast<const ObjInt*>(val[0][0].get())->data.val >= data.val.size())
+                    throw GenerationError("Index out of range");
+                pobj->data.val = data.val[static_cast<const ObjInt*>(val[0][0].get())->data.val];
+                break;
+            case 2:
+                throw GenerationError("Not implemented");
+            case 3:
+                throw GenerationError("Not implemented");
+            default:
+                throw GenerationError("Invalid number of slice parameters");
+            }
+            pobj->init = true;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjStr::add(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+            check_type(val);
+
+            auto pobj = create_obj<ObjType::STR>();
+            pobj->data.val = data.val + mty(val)->data.val;
+            pobj->init = true;
+            return pobj;
         }
 
         template<>
