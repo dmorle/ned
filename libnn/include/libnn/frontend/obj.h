@@ -14,6 +14,7 @@ namespace nn
         enum class ObjType
         {
             INVALID,  // Invalid object type
+            TYPE,     // Type object
             BOOL,     // Boolean
             INT,      // Integer
             FLOAT,    // Floating point
@@ -46,7 +47,7 @@ namespace nn
             virtual std::shared_ptr<Obj> cargs(const std::vector<std::shared_ptr<Obj>>& args) = 0;
             virtual std::shared_ptr<Obj> call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const = 0;
             virtual std::vector<std::shared_ptr<Obj>> iter(EvalCtx& ctx) = 0;
-            virtual std::shared_ptr<Obj> idx(const std::vector<std::vector<std::shared_ptr<Obj>>>& val) = 0;
+            virtual std::shared_ptr<Obj> idx(const std::shared_ptr<Obj>& val) = 0;
             virtual std::shared_ptr<Obj> neg() const = 0;
 
             virtual std::shared_ptr<Obj> add(const std::shared_ptr<Obj>& val) const = 0;
@@ -70,6 +71,7 @@ namespace nn
         class ObjImp;
 
         using ObjInvalid = ObjImp<ObjType::INVALID>;
+        using ObjGenType = ObjImp<ObjType::TYPE>;
         using ObjBool = ObjImp<ObjType::BOOL>;
         using ObjInt = ObjImp<ObjType::INT>;
         using ObjFloat = ObjImp<ObjType::FLOAT>;
@@ -121,7 +123,7 @@ namespace nn
                 throw GenerationError(obj_type_name(TY) + " type does not support constant arguments"); }
             virtual std::vector<std::shared_ptr<Obj>> iter(EvalCtx& ctx) override {
                 throw GenerationError(obj_type_name(TY) + " type does not support iteration"); }
-            virtual std::shared_ptr<Obj> idx(const std::vector<std::vector<std::shared_ptr<Obj>>>& val) override {
+            virtual std::shared_ptr<Obj> idx(const std::shared_ptr<Obj>& val) override {
                 throw GenerationError(obj_type_name(TY) + " type does not support the index operator"); }
             virtual std::shared_ptr<Obj> neg() const override {
                 throw GenerationError(obj_type_name(TY) + " type does not support the negation operator"); }
@@ -155,6 +157,11 @@ namespace nn
         };
 
         template<> struct ObjData<ObjType::INVALID> {};
+        template<>
+        struct ObjData<ObjType::TYPE>
+        {
+            ObjType val;
+        };
         template<> struct ObjData<ObjType::BOOL> {
             bool val;
         };
@@ -169,6 +176,7 @@ namespace nn
         };
         template<> struct ObjData<ObjType::ARRAY> {
             std::vector<std::shared_ptr<Obj>> elems;
+            ObjType ety;
             int size;
         };
         template<> struct ObjData<ObjType::TUPLE> {
@@ -201,7 +209,10 @@ namespace nn
         template<ObjType T, typename... Args>
         std::shared_ptr<ObjImp<T>> create_obj(Args...);
 
+        std::shared_ptr<Obj> create_obj_type(ObjType ty);
         template<> std::shared_ptr<ObjInvalid> create_obj<ObjType::INVALID>();
+        template<> std::shared_ptr<ObjGenType> create_obj<ObjType::TYPE>();
+        template<> std::shared_ptr<ObjGenType> create_obj<ObjType::TYPE, ObjType>(ObjType ty);
         template<> std::shared_ptr<ObjBool> create_obj<ObjType::BOOL>();
         template<> std::shared_ptr<ObjBool> create_obj<ObjType::BOOL, bool>(bool val);
         template<> std::shared_ptr<ObjInt> create_obj<ObjType::INT>();

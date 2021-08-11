@@ -155,11 +155,12 @@ namespace nn
             public AstExpr
         {
             AstExpr* pleft;
-            std::vector<std::vector<AstExpr*>> indicies;
+            AstExpr* pidx;
+            //std::vector<std::vector<AstExpr*>> indicies;
 
         public:
             AstIdx(AstExpr* pleft, const TokenArray& tarr);
-            void parseSlice(const TokenArray& tarr);
+            //void parseSlice(const TokenArray& tarr);
 
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };

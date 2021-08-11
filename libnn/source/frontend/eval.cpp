@@ -109,6 +109,8 @@ namespace nn
 
         std::shared_ptr<Obj> AstIdx::eval(EvalCtx& ctx) const
         {
+            return pleft->eval(ctx)->idx(pidx->eval(ctx));
+            /*
             std::shared_ptr<Obj> pobj = pleft->eval(ctx);
             std::vector<std::vector<std::shared_ptr<Obj>>> obj_indicies;
             for (auto index : indicies)
@@ -118,6 +120,7 @@ namespace nn
                     obj_indicies.back().push_back(e->eval(ctx));
             }
             return pobj->idx(obj_indicies);
+            */
         }
 
         std::shared_ptr<Obj> AstDot::eval(EvalCtx& ctx) const
@@ -366,7 +369,7 @@ namespace nn
             std::shared_ptr<Obj> entry_def = it->second->cargs(cargs);
 
             // Generating the arguments for the entry point
-            const auto& vargs = static_cast<const ObjDef*>(entry_def.get())->data.def->vargs;
+            const auto& vargs = static_cast<const ObjDef*>(entry_def.get())->data.pdef->vargs;
             std::vector<std::shared_ptr<Obj>> args;
             for (const AstDecl& e : vargs)
             {

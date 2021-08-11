@@ -665,7 +665,9 @@ namespace nn
             col_num = tarr[0]->col_num;
 
             this->pleft = pleft;
+            this->pidx = parseExpr<1>(tarr);
 
+            /*
             int start = 0;
             int end;
             do
@@ -680,8 +682,10 @@ namespace nn
                 if (start == tarr.size())
                     throw SyntaxError(tarr[end], "Empty index parameter");  // [...,]
             } while (end != tarr.size());
+            */
         }
 
+        /*
         void AstIdx::parseSlice(const TokenArray& tarr)
         {
             assert(tarr.size() != 0);
@@ -709,6 +713,7 @@ namespace nn
                 }
             } while (end != tarr.size());
         }
+        */
 
         AstDot::AstDot(AstExpr* pleft, const Token* ptk)
         {
