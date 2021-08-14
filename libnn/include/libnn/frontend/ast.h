@@ -475,7 +475,7 @@ namespace nn
             AstSeq block;
             std::string name;
 
-            std::vector<AstCargsDecl*> cargs;
+            AstCargsTuple* cargs;
             std::vector<AstDecl> vargs;
 
         public:
@@ -483,6 +483,11 @@ namespace nn
             ~AstDef();
 
             void eval(EvalCtx& ctx) const;
+            Scope* apply_cargs(const std::vector<std::shared_ptr<Obj>>& cargs) const;
+            void carg_deduction(Scope& scope, const std::vector<std::shared_ptr<Obj>>& args) const;
+            
+            const std::string& get_name() const;
+            const AstSeq& get_body() const;
         };
 
         class AstIntr

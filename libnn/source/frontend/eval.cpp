@@ -91,46 +91,70 @@ namespace nn
         std::shared_ptr<Obj> AstCall::eval(EvalCtx& ctx) const
         {
             std::shared_ptr<Obj> pobj = pleft->eval(ctx);
+            EvalState current_state = ctx.state;
+            ctx.state = EvalState::CALL;
             std::vector<std::shared_ptr<Obj>> obj_args;
             for (auto e : this->args)
                 e->append_vec(ctx, obj_args);
-            std::shared_ptr<Obj> ret;
-            return pobj->call(ctx, obj_args);
+            ctx.state = current_state;
+            pobj->call(ctx, obj_args);
+            std::shared_ptr<Obj> pret(nullptr);
+            pret.swap(last_ret);
+            return pret;
         }
 
         std::shared_ptr<Obj> AstCargs::eval(EvalCtx& ctx) const
         {
             std::shared_ptr<Obj> pobj = pleft->eval(ctx);
+            EvalState current_state = ctx.state;
+            ctx.state = EvalState::CALL;
             std::vector<std::shared_ptr<Obj>> obj_args;
             for (auto e : this->args)
                 e->append_vec(ctx, obj_args);
+            ctx.state = current_state;
             return pobj->cargs(obj_args);
         }
 
         std::shared_ptr<Obj> AstIdx::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->idx(pidx->eval(ctx));
-            /*
-            std::shared_ptr<Obj> pobj = pleft->eval(ctx);
-            std::vector<std::vector<std::shared_ptr<Obj>>> obj_indicies;
-            for (auto index : indicies)
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
             {
-                obj_indicies.push_back(std::vector<std::shared_ptr<Obj>>());
-                for (auto e : index)
-                    obj_indicies.back().push_back(e->eval(ctx));
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
             }
-            return pobj->idx(obj_indicies);
-            */
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->idx(pidx->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstDot::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->get(member);
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->get(member);
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstNeg::eval(EvalCtx& ctx) const
         {
-            return pexpr->eval(ctx)->neg();
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pexpr->eval(ctx)->neg();
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstPack::eval(EvalCtx& ctx) const
@@ -140,97 +164,243 @@ namespace nn
 
         std::shared_ptr<Obj> AstAdd::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->add(pright->eval(ctx));
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->add(pright->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstSub::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->sub(pright->eval(ctx));
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->sub(pright->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstMul::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->mul(pright->eval(ctx));
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->mul(pright->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstDiv::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->div(pright->eval(ctx));
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->div(pright->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstEq::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->eq(pright->eval(ctx));
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->eq(pright->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstNe::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->ne(pright->eval(ctx));
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->ne(pright->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstGe::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->ge(pright->eval(ctx));
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->ge(pright->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstLe::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->le(pright->eval(ctx));
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->le(pright->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstGt::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->gt(pright->eval(ctx));
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->gt(pright->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstLt::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->lt(pright->eval(ctx));
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->lt(pright->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstAnd::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->andop(pright->eval(ctx));
-
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->andop(pright->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstOr::eval(EvalCtx& ctx) const
         {
-            return pleft->eval(ctx)->orop(pright->eval(ctx));
-
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
+            std::shared_ptr<Obj> pret = pleft->eval(ctx)->orop(pright->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
+            return pret;
         }
 
         std::shared_ptr<Obj> AstIAdd::eval(EvalCtx& ctx) const
         {
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
             std::shared_ptr<Obj> obj_left = pleft->eval(ctx);
             obj_left->assign(obj_left->add(pright->eval(ctx)));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
             return create_obj_invalid();
         }
 
         std::shared_ptr<Obj> AstISub::eval(EvalCtx& ctx) const
         {
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
             std::shared_ptr<Obj> obj_left = pleft->eval(ctx);
             obj_left->assign(obj_left->sub(pright->eval(ctx)));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
             return create_obj_invalid();
         }
 
         std::shared_ptr<Obj> AstIMul::eval(EvalCtx& ctx) const
         {
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
             std::shared_ptr<Obj> obj_left = pleft->eval(ctx);
             obj_left->assign(obj_left->mul(pright->eval(ctx)));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
             return create_obj_invalid();
         }
 
         std::shared_ptr<Obj> AstIDiv::eval(EvalCtx& ctx) const
         {
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
             std::shared_ptr<Obj> obj_left = pleft->eval(ctx);
             obj_left->assign(obj_left->div(pright->eval(ctx)));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
             return create_obj_invalid();
         }
 
         std::shared_ptr<Obj> AstAssign::eval(EvalCtx& ctx) const
         {
+            bool revert = false;
+            if (ctx.state == EvalState::DEFSEQ)
+            {
+                ctx.state = EvalState::DEFEXPR;
+                revert = true;
+            }
             pleft->eval(ctx)->assign(pright->eval(ctx));
+            if (revert)
+                ctx.state = EvalState::DEFSEQ;
             return create_obj_invalid();
         }
 

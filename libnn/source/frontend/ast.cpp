@@ -1188,7 +1188,7 @@ namespace nn
                 if (end < 0)
                     throw SyntaxError(def_sig[start], "Missing closing '>' in def signature");
                 TokenArray constargs_tarr({ def_sig, start, end });
-                parseDefCargs(constargs_tarr, cargs);
+                cargs = new AstCargsTuple(constargs_tarr);
                 start = end + 1;
                 if (start >= def_sig.size())
                     throw SyntaxError(def_sig[end], "Missing expected '(' in def signature");
@@ -1207,8 +1207,7 @@ namespace nn
 
         AstDef::~AstDef()
         {
-            for (auto e : cargs)
-                delete e;
+            delete cargs;
         }
 
         AstIntr::AstIntr(const TokenArray& intr_sig, const TokenArray& intr_seq) :

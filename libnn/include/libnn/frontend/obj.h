@@ -44,9 +44,9 @@ namespace nn
             virtual void assign(const std::shared_ptr<Obj>& val) = 0;
             virtual bool check_cargs(const std::vector<std::shared_ptr<Obj>>& args) const = 0;
 
+            virtual void call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const = 0;
             virtual std::shared_ptr<Obj> get(const std::string& item) = 0;
             virtual std::shared_ptr<Obj> cargs(const std::vector<std::shared_ptr<Obj>>& args) = 0;
-            virtual std::shared_ptr<Obj> call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const = 0;
             virtual std::vector<std::shared_ptr<Obj>> iter(EvalCtx& ctx) = 0;
             virtual std::shared_ptr<Obj> idx(const std::shared_ptr<Obj>& val) = 0;
             virtual std::shared_ptr<Obj> neg() const = 0;
@@ -99,7 +99,7 @@ namespace nn
             auto mty(const std::shared_ptr<Obj>& p) const noexcept { return (const decltype(this))p.get(); }
             auto mty(std::shared_ptr<Obj> &p) const noexcept { return static_cast<decltype(this)>(p.get()); }
 
-            ObjData<TY> data;
+            mutable ObjData<TY> data;
 
             virtual ~ObjImp();
 
@@ -112,10 +112,10 @@ namespace nn
                 throw GenerationError(obj_type_name(TY) + " type does not support assignment"); }
             virtual bool check_cargs(const std::vector<std::shared_ptr<Obj>>& args) const override { return true; }
 
+            virtual void call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const override {
+                throw GenerationError(obj_type_name(TY) + " type does not support the call operator"); }
             virtual std::shared_ptr<Obj> get(const std::string& item) override {
                 throw GenerationError(obj_type_name(TY) + " type does not support the get operator"); }
-            virtual std::shared_ptr<Obj> call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const override {
-                throw GenerationError(obj_type_name(TY) + " type does not support the call operator"); }
             virtual std::shared_ptr<Obj> cargs(const std::vector<std::shared_ptr<Obj>>& args) override {
                 throw GenerationError(obj_type_name(TY) + " type does not support constant arguments"); }
             virtual std::vector<std::shared_ptr<Obj>> iter(EvalCtx& ctx) override {

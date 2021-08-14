@@ -916,34 +916,55 @@ namespace nn
         }
 
         template<>
-        std::shared_ptr<Obj> ObjTensor::add(const std::shared_ptr<Obj>& val) const
-        {
-
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjTensor::sub(const std::shared_ptr<Obj>& val) const
-        {
-
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjTensor::mul(const std::shared_ptr<Obj>& val) const
-        {
-
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjTensor::div(const std::shared_ptr<Obj>& val) const
-        {
-
-        }
-
-        template<>
         ObjDef::ObjImp() :
             Obj(ObjType::DEF)
         {
+            init = false;
+            data.pdef = nullptr;
+            data.pscope = nullptr;
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjDef::cargs(const std::vector<std::shared_ptr<Obj>>& args)
+        {
+            check_init(this);
+            for (auto e : args)
+                check_init(e);
+
+            auto pobj = std::make_shared<ObjDef>();
+            pobj->data.pdef = data.pdef;
+            pobj->data.pscope = data.pdef->apply_cargs(args);
+            pobj->init = true;
+            return pobj;
+        }
+
+        template<>
+        void ObjDef::call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const
+        {
+            check_init(this);
+            for (auto e : args)
+                check_init(e);
+
+            if (!data.pscope)
+                data.pscope = new Scope();
+
+            data.pdef->carg_deduction(*data.pscope, args);
             
+            // saving the old state
+            Scope* prev_scope = ctx.pscope;
+            EvalState prev_state = ctx.state;
+            std::string prev_block = ctx.block_name;
+            // creating the new state
+            ctx.pscope = data.pscope;
+            ctx.state = EvalState::DEFSEQ;
+            ctx.block_name = data.pdef->get_name();
+            // doing the call
+            auto pret = data.pdef->get_body().eval(ctx);
+            assert(pret->ty == ObjType::INVALID);
+            // restoring the previous state
+            ctx.pscope = prev_scope;
+            ctx.state = prev_state;
+            ctx.block_name = prev_block;
         }
 
         // Object contructors, not going to use factories
@@ -1096,7 +1117,18 @@ namespace nn
 
         std::shared_ptr<ObjDef> create_obj_def()
         {
+            auto pobj = std::make_shared<ObjDef>();
+            pobj->data.pdef = nullptr;
+            pobj->data.pscope = nullptr;
+            pobj->init = false;
+        }
 
+        std::shared_ptr<ObjDef> create_obj_def(const AstDef* pdef)
+        {
+            auto pobj = std::make_shared<ObjDef>();
+            pobj->data.pdef = pdef;
+            pobj->data.pscope = nullptr;
+            pobj->init = true;
         }
 
         std::shared_ptr<ObjFn> create_obj_fn()
