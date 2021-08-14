@@ -10,21 +10,18 @@
 
 namespace nn
 {
-    class Node;
+    struct Node;
 
-    class Edge
+    struct Edge
     {
-    public:
-        bool is_static;
-        tensor_dsc dsc;
-        Node* input;
-        int inpid;
-        std::vector<std::pair<Node*, int>> outputs;
+        tensor_dsc dsc = tensor_dsc{};
+        Node* input = nullptr;
+        int inpid = -1;
+        std::vector<std::pair<Node*, int>> outputs = {};
     };
 
-    class Node
+    struct Node
     {
-	public:
         std::string name;
         std::vector<Edge*> inputs;
         std::vector<Edge*> outputs;

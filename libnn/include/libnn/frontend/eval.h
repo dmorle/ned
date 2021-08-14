@@ -41,11 +41,15 @@ namespace nn
 
         class EvalCtx
         {
-            friend class AstDef;
-            friend class AstFn;
-            friend class AstIntr;
-            friend class AstModule;
-            friend class AstModImp;
+        public:
+            EvalCtx();
+
+            // scope > defs > fns > intrs > mods > packs
+            std::shared_ptr<Obj> operator[](const std::string& idn);
+            bool contains(const std::string& name);
+
+            Graph& graph() noexcept;
+            Scope& scope() noexcept;
 
             std::map<std::string, std::shared_ptr<Obj>> defs;
             std::map<std::string, std::shared_ptr<Obj>> fns;
@@ -53,27 +57,14 @@ namespace nn
             std::map<std::string, std::shared_ptr<Obj>> mods;
             std::map<std::string, std::shared_ptr<Obj>> packs;
 
+            std::map<std::string, std::shared_ptr<Obj>> statics;
+
             std::vector<std::string> model_params;
             Graph* pgraph;
             Scope* pscope;
 
-        public:
-            EvalCtx();
-
-            std::shared_ptr<Obj> operator[](const std::string& idn);
-
-            bool contains(const std::string& name);
-            void insert(std::string name, std::shared_ptr<Obj> val);
-
-            Graph& graph() noexcept;
-            Scope& scope() noexcept;
-
-            Scope* swap_scope(Scope* npscope);
-
-            // identify an edge as a model parameter
-            void add_param(const std::string& param_name);
-
             EvalState state;
+            std::string block_name;
         };
     }
 }

@@ -91,7 +91,7 @@ namespace nn
             check_init(val);
             check_type(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             pobj->data.val = data.val && mty(val)->data.val;
             pobj->init = true;
             return pobj;
@@ -104,7 +104,7 @@ namespace nn
             check_init(val);
             check_type(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             pobj->data.val = data.val || mty(val)->data.val;
             pobj->init = true;
             return pobj;
@@ -117,7 +117,7 @@ namespace nn
             check_init(val);
             check_type(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             pobj->data.val = data.val == mty(val)->data.val;
             pobj->init = true;
             return pobj;
@@ -130,7 +130,7 @@ namespace nn
             check_init(val);
             check_type(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             pobj->data.val = data.val != mty(val)->data.val;
             pobj->init = true;
             return pobj;
@@ -156,7 +156,7 @@ namespace nn
         std::shared_ptr<Obj> ObjInt::neg() const
         {
             check_init(this);
-            auto pobj = create_obj<ObjType::INT>();
+            auto pobj = create_obj_int();
             pobj->data.val = -data.val;
             pobj->init = true;
             return pobj;
@@ -170,14 +170,14 @@ namespace nn
 
             if (val->ty == ObjType::INT)
             {
-                auto pobj = create_obj<ObjType::INT>();
+                auto pobj = create_obj_int();
                 pobj->data.val = data.val + static_cast<const ObjInt*>(val.get())->data.val;
                 pobj->init = true;
                 return pobj;
             }
             else if (val->ty == ObjType::FLOAT)
             {
-                auto pobj = create_obj<ObjType::FLOAT>();
+                auto pobj = create_obj_float();
                 pobj->data.val = data.val + static_cast<const ObjFloat*>(val.get())->data.val;
                 pobj->init = true;
                 return pobj;
@@ -194,14 +194,14 @@ namespace nn
 
             if (val->ty == ObjType::INT)
             {
-                auto pobj = create_obj<ObjType::INT>();
+                auto pobj = create_obj_int();
                 pobj->data.val = data.val - static_cast<const ObjInt*>(val.get())->data.val;
                 pobj->init = true;
                 return pobj;
             }
             else if (val->ty == ObjType::FLOAT)
             {
-                auto pobj = create_obj<ObjType::FLOAT>();
+                auto pobj = create_obj_float();
                 pobj->data.val = data.val - static_cast<const ObjFloat*>(val.get())->data.val;
                 pobj->init = true;
                 return pobj;
@@ -218,14 +218,14 @@ namespace nn
 
             if (val->ty == ObjType::INT)
             {
-                auto pobj = create_obj<ObjType::INT>();
+                auto pobj = create_obj_int();
                 pobj->data.val = data.val * static_cast<const ObjInt*>(val.get())->data.val;
                 pobj->init = true;
                 return pobj;
             }
             else if (val->ty == ObjType::FLOAT)
             {
-                auto pobj = create_obj<ObjType::FLOAT>();
+                auto pobj = create_obj_float();
                 pobj->data.val = data.val * static_cast<const ObjFloat*>(val.get())->data.val;
                 pobj->init = true;
                 return pobj;
@@ -242,14 +242,14 @@ namespace nn
 
             if (val->ty == ObjType::INT)
             {
-                auto pobj = create_obj<ObjType::INT>();
+                auto pobj = create_obj_int();
                 pobj->data.val = data.val / static_cast<const ObjInt*>(val.get())->data.val;
                 pobj->init = true;
                 return pobj;
             }
             else if (val->ty == ObjType::FLOAT)
             {
-                auto pobj = create_obj<ObjType::FLOAT>();
+                auto pobj = create_obj_float();
                 pobj->data.val = data.val / static_cast<const ObjFloat*>(val.get())->data.val;
                 pobj->init = true;
                 return pobj;
@@ -264,7 +264,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             pobj->init = true;
             switch (val->ty)
             {
@@ -284,7 +284,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             pobj->init = true;
             switch (val->ty)
             {
@@ -304,7 +304,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             pobj->init = true;
             switch (val->ty)
             {
@@ -324,7 +324,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             pobj->init = true;
             switch (val->ty)
             {
@@ -344,7 +344,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             pobj->init = true;
             switch (val->ty)
             {
@@ -364,7 +364,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             pobj->init = true;
             switch (val->ty)
             {
@@ -389,7 +389,7 @@ namespace nn
         std::shared_ptr<Obj> ObjFloat::neg() const
         {
             check_init(this);
-            auto pobj = create_obj<ObjType::FLOAT>();
+            auto pobj = create_obj_float();
             pobj->data.val = -data.val;
             pobj->init = true;
             return pobj;
@@ -401,7 +401,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::FLOAT>();
+            auto pobj = create_obj_float();
             if (val->ty == ObjType::INT)
                 pobj->data.val = data.val + static_cast<const ObjInt*>(val.get())->data.val;
             else if (val->ty == ObjType::FLOAT)
@@ -419,7 +419,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::FLOAT>();
+            auto pobj = create_obj_float();
             if (val->ty == ObjType::INT)
                 pobj->data.val = data.val - static_cast<const ObjInt*>(val.get())->data.val;
             else if (val->ty == ObjType::FLOAT)
@@ -437,7 +437,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::FLOAT>();
+            auto pobj = create_obj_float();
             if (val->ty == ObjType::INT)
                 pobj->data.val = data.val * static_cast<const ObjInt*>(val.get())->data.val;
             else if (val->ty == ObjType::FLOAT)
@@ -455,7 +455,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::FLOAT>();
+            auto pobj = create_obj_float();
             if (val->ty == ObjType::INT)
                 pobj->data.val = data.val / static_cast<const ObjInt*>(val.get())->data.val;
             else if (val->ty == ObjType::FLOAT)
@@ -473,7 +473,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             if (val->ty == ObjType::INT)
                 pobj->data.val = data.val == static_cast<const ObjInt*>(val.get())->data.val;
             else if (val->ty == ObjType::FLOAT)
@@ -491,7 +491,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             if (val->ty == ObjType::INT)
                 pobj->data.val = data.val != static_cast<const ObjInt*>(val.get())->data.val;
             else if (val->ty == ObjType::FLOAT)
@@ -509,7 +509,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             if (val->ty == ObjType::INT)
                 pobj->data.val = data.val >= static_cast<const ObjInt*>(val.get())->data.val;
             else if (val->ty == ObjType::FLOAT)
@@ -527,7 +527,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             if (val->ty == ObjType::INT)
                 pobj->data.val = data.val <= static_cast<const ObjInt*>(val.get())->data.val;
             else if (val->ty == ObjType::FLOAT)
@@ -545,7 +545,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             if (val->ty == ObjType::INT)
                 pobj->data.val = data.val > static_cast<const ObjInt*>(val.get())->data.val;
             else if (val->ty == ObjType::FLOAT)
@@ -563,7 +563,7 @@ namespace nn
             check_init(this);
             check_init(val);
 
-            auto pobj = create_obj<ObjType::BOOL>();
+            auto pobj = create_obj_bool();
             if (val->ty == ObjType::INT)
                 pobj->data.val = data.val < static_cast<const ObjInt*>(val.get())->data.val;
             else if (val->ty == ObjType::FLOAT)
@@ -598,7 +598,7 @@ namespace nn
             check_init(this);
 
             if (item == "length")
-                return create_obj<ObjType::INT>(data.val.size());
+                return create_obj_int(data.val.size());
 
             throw GenerationError("str type has no member: " + item);
         }
@@ -611,7 +611,7 @@ namespace nn
             std::vector<std::shared_ptr<Obj>> iters;
             for (auto e : data.val)
             {
-                auto pelem = create_obj<ObjType::STR>();
+                auto pelem = create_obj_str();
                 pelem->data.val = std::to_string(e);
                 pelem->init = true;
                 iters.push_back(pelem);
@@ -631,7 +631,7 @@ namespace nn
                 static_cast<const ObjInt*>(val.get())->data.val >= data.val.size())
                 throw GenerationError("Index out of range");
 
-            auto pobj = create_obj<ObjType::STR>();
+            auto pobj = create_obj_str();
             pobj->data.val = data.val[static_cast<const ObjInt*>(val.get())->data.val];
             pobj->init = true;
             return pobj;
@@ -644,7 +644,7 @@ namespace nn
             check_init(val);
             check_type(val);
 
-            auto pobj = create_obj<ObjType::STR>();
+            auto pobj = create_obj_str();
             pobj->data.val = data.val + mty(val)->data.val;
             pobj->init = true;
             return pobj;
@@ -697,9 +697,9 @@ namespace nn
             check_init(this);
 
             if (item == "length")
-                return create_obj<ObjType::INT>(data.size);
+                return create_obj_int(data.size);
             if (item == "dtype")
-                return create_obj<ObjType::TYPE>(data.ety);
+                return create_obj_gentype(data.ety);
 
             throw GenerationError("array type has no member: " + item);
         }
@@ -728,7 +728,7 @@ namespace nn
             if (data.ety != mty(val)->data.ety)
                 throw GenerationError("Array element type mismatch for concatenation");
 
-            auto pobj = create_obj<ObjType::ARRAY>(data.size + mty(val)->data.size, data.ety);
+            auto pobj = create_obj_array(data.size + mty(val)->data.size, data.ety);
             for (int i = 0; i < data.size; i++)
                 pobj->data.elems[i]->assign(data.elems[i]);
             for (int i = 0; i < data.size; i++)
@@ -745,12 +745,12 @@ namespace nn
             check_type(val);
 
             if (data.size != mty(val)->data.size)
-                return create_obj<ObjType::BOOL>(false);
+                return create_obj_bool(false);
 
             for (int i = 0; i < data.size; i++)
                 if (data.elems[i]->ne(mty(val)->data.elems[i]))
-                    return create_obj<ObjType::BOOL>(false);
-            return create_obj<ObjType::BOOL>(true);
+                    return create_obj_bool(false);
+            return create_obj_bool(true);
         }
 
         template<>
@@ -761,12 +761,12 @@ namespace nn
             check_type(val);
 
             if (data.size != mty(val)->data.size)
-                return create_obj<ObjType::BOOL>(true);
+                return create_obj_bool(true);
             
             for (int i = 0; i < data.size; i++)
                 if (data.elems[i]->ne(mty(val)->data.elems[i]))
-                    return create_obj<ObjType::BOOL>(true);
-            return create_obj<ObjType::BOOL>(false);
+                    return create_obj_bool(true);
+            return create_obj_bool(false);
         }
 
         template<>
@@ -803,7 +803,7 @@ namespace nn
             check_init(this);
 
             if (item == "length")
-                return create_obj<ObjType::INT>(data.elems.size());
+                return create_obj_int(data.elems.size());
 
             throw GenerationError("tuple type has no member: " + item);
         }
@@ -830,7 +830,7 @@ namespace nn
             check_init(val);
             check_type(val);
 
-            auto pobj = create_obj<ObjType::TUPLE>();
+            auto pobj = create_obj_tuple();
             for (auto e : data.elems)
                 pobj->data.elems.push_back(e);
             for (auto e : mty(val)->data.elems)
@@ -847,12 +847,12 @@ namespace nn
             check_type(val);
 
             if (data.elems.size() != mty(val)->data.elems.size())
-                return create_obj<ObjType::BOOL>(false);
+                return create_obj_bool(false);
 
             for (int i = 0; i < data.elems.size(); i++)
                 if (data.elems[i]->ne(mty(val)->data.elems[i]))
-                    return create_obj<ObjType::BOOL>(false);
-            return create_obj<ObjType::BOOL>(true);
+                    return create_obj_bool(false);
+            return create_obj_bool(true);
         }
 
         template<>
@@ -863,12 +863,12 @@ namespace nn
             check_type(val);
 
             if (data.elems.size() != mty(val)->data.elems.size())
-                return create_obj<ObjType::BOOL>(true);
+                return create_obj_bool(true);
 
             for (int i = 0; i < data.elems.size(); i++)
                 if (data.elems[i]->ne(mty(val)->data.elems[i]))
-                    return create_obj<ObjType::BOOL>(true);
-            return create_obj<ObjType::BOOL>(false);
+                    return create_obj_bool(true);
+            return create_obj_bool(false);
         }
 
         template<>
@@ -908,8 +908,6 @@ namespace nn
                 for (auto e : mty(val)->data.dims)
                     data.dims.push_back(e);
                 data.carg_init = true;
-
-                // TODO: apply the cargs to the graph edge
             }
 
             // doing the actual assignment
@@ -918,24 +916,27 @@ namespace nn
         }
 
         template<>
-        std::shared_ptr<Obj> ObjTensor::cargs(const std::vector<std::shared_ptr<Obj>>& cargs)
+        std::shared_ptr<Obj> ObjTensor::add(const std::shared_ptr<Obj>& val) const
         {
-            if (data.carg_init)
-                throw GenerationError("Cannot apply constant args to a pre-defined tensor");
 
-            // reading the tensor dimensions
-            for (auto& e : cargs)
-            {
-                if (e->ty != ObjType::INT)
-                    throw GenerationError("Unexpected carg type in tensor declaration");
-                data.dims.push_back(static_cast<ObjInt*>(e.get())->data.val);
-            }
-            if (data.dims.size() == 0)
-                throw GenerationError("A tensor must have at least one carg");
+        }
 
-            data.carg_init = true;
+        template<>
+        std::shared_ptr<Obj> ObjTensor::sub(const std::shared_ptr<Obj>& val) const
+        {
 
-            // TODO: apply the cargs to the graph edge
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjTensor::mul(const std::shared_ptr<Obj>& val) const
+        {
+
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjTensor::div(const std::shared_ptr<Obj>& val) const
+        {
+
         }
 
         template<>
@@ -952,40 +953,53 @@ namespace nn
             std::shared_ptr<Obj> pelem;
             switch (ty)
             {
-            case ObjType::BOOL   :    pelem = create_obj<ObjType::BOOL   >(); break;
-            case ObjType::INT    :    pelem = create_obj<ObjType::INT    >(); break;
-            case ObjType::FLOAT  :    pelem = create_obj<ObjType::FLOAT  >(); break;
-            case ObjType::STR    :    pelem = create_obj<ObjType::STR    >(); break;
-            case ObjType::ARRAY  :    pelem = create_obj<ObjType::ARRAY  >(); break;
-            case ObjType::TUPLE  :    pelem = create_obj<ObjType::TUPLE  >(); break;
-            case ObjType::TENSOR :    pelem = create_obj<ObjType::TENSOR >(); break;
-            case ObjType::DEF    :    pelem = create_obj<ObjType::DEF    >(); break;
-            case ObjType::FN     :    pelem = create_obj<ObjType::FN     >(); break;
-            case ObjType::INTR   :    pelem = create_obj<ObjType::INTR   >(); break;
-            case ObjType::MODULE :    pelem = create_obj<ObjType::MODULE >(); break;
-            case ObjType::PACKAGE:    pelem = create_obj<ObjType::PACKAGE>(); break;
+            case ObjType::TYPE   :    pelem = create_obj_gentype (); break;
+            case ObjType::BOOL   :    pelem = create_obj_bool    (); break;
+            case ObjType::INT    :    pelem = create_obj_int     (); break;
+            case ObjType::FLOAT  :    pelem = create_obj_float   (); break;
+            case ObjType::STR    :    pelem = create_obj_str     (); break;
+            case ObjType::ARRAY  :    pelem = create_obj_array   (); break;
+            case ObjType::TUPLE  :    pelem = create_obj_tuple   (); break;
+            case ObjType::TENSOR :    pelem = create_obj_tensor  (); break;
+            case ObjType::DEF    :    pelem = create_obj_def     (); break;
+            case ObjType::FN     :    pelem = create_obj_fn      (); break;
+            case ObjType::INTR   :    pelem = create_obj_intr    (); break;
+            case ObjType::MODULE :    pelem = create_obj_module  (); break;
+            case ObjType::PACKAGE:    pelem = create_obj_package (); break;
             default:
                 throw GenerationError("Invalid object type for contruction: " + obj_type_name(ty));
             }
             return pelem;
         }
-
-        template<>
-        std::shared_ptr<ObjInvalid> create_obj<ObjType::INVALID>()
+        
+        std::shared_ptr<ObjInvalid> create_obj_invalid()
         {
             return std::make_shared<ObjInvalid>();
         }
 
-        template<>
-        std::shared_ptr<ObjBool> create_obj<ObjType::BOOL>()
+        std::shared_ptr<ObjGenType> create_obj_gentype()
+        {
+            auto pobj = std::make_shared<ObjGenType>();
+            pobj->init = false;
+            return pobj;
+        }
+
+        std::shared_ptr<ObjGenType> create_obj_gentype(ObjType ty)
+        {
+            auto pobj = std::make_shared<ObjGenType>();
+            pobj->data.val = ty;
+            pobj->init = true;
+            return pobj;
+        }
+
+        std::shared_ptr<ObjBool> create_obj_bool()
         {
             auto pobj = std::make_shared<ObjBool>();
             pobj->init = false;
             return pobj;
         }
 
-        template<>
-        std::shared_ptr<ObjBool> create_obj<ObjType::BOOL, bool>(bool val)
+        std::shared_ptr<ObjBool> create_obj_bool(bool val)
         {
             auto pobj = std::make_shared<ObjBool>();
             pobj->data.val = val;
@@ -993,16 +1007,14 @@ namespace nn
             return pobj;
         }
 
-        template<>
-        std::shared_ptr<ObjInt> create_obj<ObjType::INT>()
+        std::shared_ptr<ObjInt> create_obj_int()
         {
             auto pobj = std::make_shared<ObjInt>();
             pobj->init = false;
             return pobj;
         }
 
-        template<>
-        std::shared_ptr<ObjInt> create_obj<ObjType::INT, int64_t>(int64_t val)
+        std::shared_ptr<ObjInt> create_obj_int(int64_t val)
         {
             auto pobj = std::make_shared<ObjInt>();
             pobj->data.val = val;
@@ -1010,16 +1022,14 @@ namespace nn
             return pobj;
         }
 
-        template<>
-        std::shared_ptr<ObjFloat> create_obj<ObjType::FLOAT>()
+        std::shared_ptr<ObjFloat> create_obj_float()
         {
             auto pobj = std::make_shared<ObjFloat>();
             pobj->init = false;
             return pobj;
         }
 
-        template<>
-        std::shared_ptr<ObjFloat> create_obj<ObjType::FLOAT, double>(double val)
+        std::shared_ptr<ObjFloat> create_obj_float(double val)
         {
             auto pobj = std::make_shared<ObjFloat>();
             pobj->data.val = val;
@@ -1027,16 +1037,14 @@ namespace nn
             return pobj;
         }
 
-        template<>
-        std::shared_ptr<ObjStr> create_obj<ObjType::STR>()
+        std::shared_ptr<ObjStr> create_obj_str()
         {
             auto pobj = std::make_shared<ObjStr>();
             pobj->init = false;
             return pobj;
         }
 
-        template<>
-        std::shared_ptr<ObjStr> create_obj<ObjType::STR, const std::string&>(const std::string& val)
+        std::shared_ptr<ObjStr> create_obj_str(const std::string& val)
         {
             auto pobj = std::make_shared<ObjStr>();
             pobj->data.val = val;
@@ -1044,16 +1052,14 @@ namespace nn
             return pobj;
         }
 
-        template<>
-        std::shared_ptr<ObjArray> create_obj<ObjType::ARRAY>()
+        std::shared_ptr<ObjArray> create_obj_array()
         {
             auto pobj = std::make_shared<ObjArray>();
             pobj->init = false;
             return pobj;
         }
 
-        template<>
-        std::shared_ptr<ObjArray> create_obj<ObjType::ARRAY, size_t, ObjType>(size_t sz, ObjType ty)
+        std::shared_ptr<ObjArray> create_obj_array(size_t sz, ObjType ty)
         {
             auto pobj = std::make_shared<ObjArray>();
             pobj->data.size = sz;
@@ -1063,44 +1069,42 @@ namespace nn
             return pobj;
         }
 
-        template<>
-        std::shared_ptr<ObjTuple> create_obj<ObjType::TUPLE>()
+        std::shared_ptr<ObjTuple> create_obj_tuple()
         {
             auto pobj = std::make_shared<ObjTuple>();
             pobj->init = false;
             return pobj;
         }
 
-        template<>
-        std::shared_ptr<ObjTuple> create_obj<ObjType::TUPLE, const std::vector<ObjType>&>(const std::vector<ObjType>& elems)
+        std::shared_ptr<ObjTuple> create_obj_tuple(const std::vector<std::shared_ptr<Obj>>& elems)
         {
             auto pobj = std::make_shared<ObjTuple>();
-            for (auto ty : elems)
-                pobj->data.elems.push_back(create_obj_type(ty));
+            for (auto e : elems)
+                pobj->data.elems.push_back(e);
             pobj->init = true;
             return pobj;
         }
 
-        template<>
-        std::shared_ptr<ObjTensor> create_obj<ObjType::TENSOR>()
+        std::shared_ptr<ObjTensor> create_obj_tensor()
+        {
+            auto pobj = std::make_shared<ObjTensor>();
+            pobj->data.pEdge = nullptr;
+            pobj->data.dims = {};
+            pobj->data.carg_init = false;
+            pobj->init = false;
+        }
+
+        std::shared_ptr<ObjDef> create_obj_def()
         {
 
         }
 
-        template<>
-        std::shared_ptr<ObjDef> create_obj<ObjType::DEF>()
+        std::shared_ptr<ObjFn> create_obj_fn()
         {
 
         }
 
-        template<>
-        std::shared_ptr<ObjFn> create_obj<ObjType::FN>()
-        {
-
-        }
-
-        template<>
-        std::shared_ptr<ObjIntr> create_obj<ObjType::INTR>()
+        std::shared_ptr<ObjIntr> create_obj_intr()
         {
 
         }

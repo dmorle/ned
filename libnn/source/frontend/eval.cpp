@@ -55,22 +55,22 @@ namespace nn
 
         std::shared_ptr<Obj> AstBool::eval(EvalCtx& ctx) const
         {
-            return create_obj<ObjType::BOOL>(val);
+            return create_obj_bool(val);
         }
 
         std::shared_ptr<Obj> AstInt::eval(EvalCtx& ctx) const
         {
-            return create_obj<ObjType::INT>(val);
+            return create_obj_int(val);
         }
 
         std::shared_ptr<Obj> AstFloat::eval(EvalCtx& ctx) const
         {
-            return create_obj<ObjType::FLOAT>(val);
+            return create_obj_float(val);
         }
 
         std::shared_ptr<Obj> AstStr::eval(EvalCtx& ctx) const
         {
-            return create_obj<ObjType::STR>(val);
+            return create_obj_str(val);
         }
 
         std::shared_ptr<Obj> AstIdn::eval(EvalCtx& ctx) const
@@ -85,7 +85,7 @@ namespace nn
             std::vector<std::shared_ptr<Obj>> obj_elems;
             for (auto e : this->elems)
                 e->append_vec(ctx, obj_elems);
-            return create_obj<ObjType::TUPLE>(obj_elems);
+            return create_obj_tuple(obj_elems);
         }
 
         std::shared_ptr<Obj> AstCall::eval(EvalCtx& ctx) const
@@ -204,70 +204,123 @@ namespace nn
         {
             std::shared_ptr<Obj> obj_left = pleft->eval(ctx);
             obj_left->assign(obj_left->add(pright->eval(ctx)));
-            return create_obj<ObjType::INVALID>();
+            return create_obj_invalid();
         }
 
         std::shared_ptr<Obj> AstISub::eval(EvalCtx& ctx) const
         {
             std::shared_ptr<Obj> obj_left = pleft->eval(ctx);
             obj_left->assign(obj_left->sub(pright->eval(ctx)));
-            return create_obj<ObjType::INVALID>();
+            return create_obj_invalid();
         }
 
         std::shared_ptr<Obj> AstIMul::eval(EvalCtx& ctx) const
         {
             std::shared_ptr<Obj> obj_left = pleft->eval(ctx);
             obj_left->assign(obj_left->mul(pright->eval(ctx)));
-            return create_obj<ObjType::INVALID>();
+            return create_obj_invalid();
         }
 
         std::shared_ptr<Obj> AstIDiv::eval(EvalCtx& ctx) const
         {
             std::shared_ptr<Obj> obj_left = pleft->eval(ctx);
             obj_left->assign(obj_left->div(pright->eval(ctx)));
-            return create_obj<ObjType::INVALID>();
+            return create_obj_invalid();
         }
 
         std::shared_ptr<Obj> AstAssign::eval(EvalCtx& ctx) const
         {
             pleft->eval(ctx)->assign(pright->eval(ctx));
+            return create_obj_invalid();
         }
 
         std::shared_ptr<Obj> AstDecl::eval(EvalCtx& ctx) const
         {
-            std::shared_ptr<Obj> pobj;
-            if (type_name == "bool")
-                pobj = create_obj<ObjType::BOOL>();
-            else if (type_name == "int")
-                pobj = create_obj<ObjType::INT>();
-            else if (type_name == "float")
-                pobj = create_obj<ObjType::FLOAT>();
-            else if (type_name == "str")
-                pobj = create_obj<ObjType::STR>();
-            else if (type_name == "array")
-                pobj = create_obj<ObjType::ARRAY>();
-            else if (type_name == "tuple")
-                pobj = create_obj<ObjType::TUPLE>();
-            else if (type_name == "tensor")
+            auto get_type = [](const std::string& name)
             {
-                pobj = create_obj<ObjType::TENSOR>();
-                if (ctx.state == EvalState::DEFSEQ)
+                if (name == "bool")
+                    return ObjType::BOOL;
+                else if (name == "int")
+                    return ObjType::INT;
+                else if (name == "float")
+                    return ObjType::FLOAT;
+                else if (name == "str")
+                    return ObjType::STR;
+                else if (name == "array")
+                    return ObjType::ARRAY;
+                else if (name == "tuple")
+                    return ObjType::TUPLE;
+                else if (name == "tensor")
+                    return ObjType::TENSOR;
+                else
+                    throw GenerationError("Invalid type name: " + name);
+            };
+
+            std::shared_ptr<Obj> pobj;
+
+            if (is_static)
+            {
+                // generating a globally unique identifier
+                std::string name = ctx.block_name + "-" + var_name;
+                if (ctx.state != EvalState::DEFSEQ && ctx.state != EvalState::DEFEXPR)
+                    throw GenerationError("Invalid context for static declaration");
+                
+                // doing the decl
+                if (ctx.statics.contains(name))
                 {
-                    // TODO: add the tensor as an input node to the graph
+                    pobj = ctx.statics[name];
+                    if (pobj->ty != get_type(type_name))
+                        throw GenerationError("Invalid redeclaration of static variable");
+                    std::vector<std::shared_ptr<Obj>> obj_cargs;
+                    for (auto e : cargs)
+                        obj_cargs.push_back(e->eval(ctx));
+                    if (!pobj->check_cargs(obj_cargs))
+                        throw GenerationError("");
+                    ctx.scope()[var_name] = pobj;
+                    return pobj;
+                }
+                else
+                {
+                    pobj = create_obj_type(get_type(type_name));
+                    std::vector<std::shared_ptr<Obj>> obj_cargs;
+                    for (auto e : cargs)
+                        obj_cargs.push_back(e->eval(ctx));
+                    if (obj_cargs.size() != 0)
+                        pobj = pobj->cargs(obj_cargs);
+                    ctx.statics[name] = pobj;
                 }
             }
             else
-                throw GenerationError("Invalid type name: " + type_name);
-
-            if (cargs.size() != 0)
             {
+                pobj = create_obj_type(get_type(type_name));
                 std::vector<std::shared_ptr<Obj>> obj_cargs;
                 for (auto e : cargs)
-                    e->append_vec(ctx, obj_cargs);
-                pobj = pobj->cargs(obj_cargs);
+                    obj_cargs.push_back(e->eval(ctx));
+                if (obj_cargs.size() != 0)
+                    pobj = pobj->cargs(obj_cargs);
             }
 
-            ctx.insert(var_name, pobj);
+            // custom tensor declaration stuff for network inputs
+            if (type_name == "tensor" && ctx.state == EvalState::DEFSEQ)
+            {
+                ObjTensor* pten = static_cast<ObjTensor*>(pobj.get());
+                assert(pten->ty == ObjType::TENSOR);
+                if (!pten->data.carg_init)
+                    throw GenerationError("Standalone tensor declarations must have constant arguments");
+
+                // creating a new edge
+                pten->data.pEdge = new Edge();
+                pten->data.pEdge->dsc.rk = pten->data.dims.size();
+                for (auto e : pten->data.dims)
+                    pten->data.pEdge->dsc.dims.push_back(e);
+
+                // adding the tensor as an input edge
+                if (!varcounts.contains(var_name))
+                    varcounts[var_name] = 0;
+                int id = varcounts[var_name]++;
+                ctx.graph().inputs[var_name + '-' + std::to_string(id)] = pten->data.pEdge;
+            }
+
             return pobj;
         }
 
@@ -277,7 +330,7 @@ namespace nn
                 throw GenerationError("Invalid return statement");
 
             last_ret = ret->eval(ctx);
-            return create_obj<ObjType::INVALID>();
+            return create_obj_invalid();
         }
 
 
@@ -286,10 +339,10 @@ namespace nn
             for (auto e : blocks)
             {
                 if (last_ret)
-                    return create_obj<ObjType::INVALID>();
+                    return create_obj_invalid();
                 e->eval(ctx);
             }
-            return create_obj<ObjType::INVALID>();
+            return create_obj_invalid();
         }
 
         std::shared_ptr<Obj> AstIf::eval(EvalCtx& ctx) const
@@ -300,44 +353,44 @@ namespace nn
         std::shared_ptr<Obj> AstWhile::eval(EvalCtx& ctx) const
         {
             if (last_ret)
-                return create_obj<ObjType::INVALID>();
+                return create_obj_invalid();
             while (pcond->eval(ctx)->bval())
             {
                 seq.eval(ctx);
                 if (last_ret)
-                    return create_obj<ObjType::INVALID>();
+                    return create_obj_invalid();
             }
-            return create_obj<ObjType::INVALID>();
+            return create_obj_invalid();
         }
 
         std::shared_ptr<Obj> AstFor::eval(EvalCtx& ctx) const
         {
             if (last_ret)
-                return create_obj<ObjType::INVALID>();
+                return create_obj_invalid();
             std::shared_ptr<Obj> idx = pexpr->eval(ctx);
             for (auto e : it.eval(ctx)->iter(ctx))
             {
                 idx->assign(e);
                 seq.eval(ctx);
                 if (last_ret)
-                    return create_obj<ObjType::INVALID>();
+                    return create_obj_invalid();
             }
-            return create_obj<ObjType::INVALID>();
+            return create_obj_invalid();
         }
 
         void AstDef::eval(EvalCtx& ctx) const
         {
-            ctx.defs.insert({ name, create_obj<ObjType::DEF>(this) });
+            ctx.defs.insert({ name, create_obj_def(this) });
         }
 
         void AstIntr::eval(EvalCtx& ctx) const
         {
-            ctx.defs.insert({ name, create_obj<ObjType::INTR>(this) });
+            ctx.defs.insert({ name, create_obj_intr(this) });
         }
 
         void AstFn::eval(EvalCtx& ctx) const
         {
-            ctx.defs.insert({ name, create_obj<ObjType::FN>(this) });
+            ctx.defs.insert({ name, create_obj_fn(this) });
         }
 
         void AstModImp::eval(EvalCtx& ctx) const

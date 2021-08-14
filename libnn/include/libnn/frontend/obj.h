@@ -42,6 +42,7 @@ namespace nn
 
             virtual bool bval() const = 0;
             virtual void assign(const std::shared_ptr<Obj>& val) = 0;
+            virtual bool check_cargs(const std::vector<std::shared_ptr<Obj>>& args) const = 0;
 
             virtual std::shared_ptr<Obj> get(const std::string& item) = 0;
             virtual std::shared_ptr<Obj> cargs(const std::vector<std::shared_ptr<Obj>>& args) = 0;
@@ -92,17 +93,12 @@ namespace nn
         class ObjImp :
             public Obj
         {
-            friend void check_init(const std::shared_ptr<Obj>& pobj);
-
-            template<ObjType T, typename... Args>
-            friend std::shared_ptr<ObjImp<T>> create_obj(Args...);
+        public:
+            ObjImp();
 
             auto mty(const std::shared_ptr<Obj>& p) const noexcept { return (const decltype(this))p.get(); }
             auto mty(std::shared_ptr<Obj> &p) const noexcept { return static_cast<decltype(this)>(p.get()); }
 
-            ObjImp();
-
-        public:
             ObjData<TY> data;
 
             virtual ~ObjImp();
@@ -114,6 +110,7 @@ namespace nn
                 throw GenerationError(obj_type_name(TY) + " type does not have a truth value"); }
             virtual void assign(const std::shared_ptr<Obj>& val) override {
                 throw GenerationError(obj_type_name(TY) + " type does not support assignment"); }
+            virtual bool check_cargs(const std::vector<std::shared_ptr<Obj>>& args) const override { return true; }
 
             virtual std::shared_ptr<Obj> get(const std::string& item) override {
                 throw GenerationError(obj_type_name(TY) + " type does not support the get operator"); }
@@ -206,29 +203,31 @@ namespace nn
             std::unordered_map<std::string, ObjPackage> packs;
         };
 
-        template<ObjType T, typename... Args>
-        std::shared_ptr<ObjImp<T>> create_obj(Args...);
-
         std::shared_ptr<Obj> create_obj_type(ObjType ty);
-        template<> std::shared_ptr<ObjInvalid> create_obj<ObjType::INVALID>();
-        template<> std::shared_ptr<ObjGenType> create_obj<ObjType::TYPE>();
-        template<> std::shared_ptr<ObjGenType> create_obj<ObjType::TYPE, ObjType>(ObjType ty);
-        template<> std::shared_ptr<ObjBool> create_obj<ObjType::BOOL>();
-        template<> std::shared_ptr<ObjBool> create_obj<ObjType::BOOL, bool>(bool val);
-        template<> std::shared_ptr<ObjInt> create_obj<ObjType::INT>();
-        template<> std::shared_ptr<ObjInt> create_obj<ObjType::INT, int64_t>(int64_t val);
-        template<> std::shared_ptr<ObjFloat> create_obj<ObjType::FLOAT>();
-        template<> std::shared_ptr<ObjFloat> create_obj<ObjType::FLOAT, double>(double val);
-        template<> std::shared_ptr<ObjStr> create_obj<ObjType::STR>();
-        template<> std::shared_ptr<ObjStr> create_obj<ObjType::STR, const std::string&>(const std::string& val);
-        template<> std::shared_ptr<ObjArray> create_obj<ObjType::ARRAY>();
-        template<> std::shared_ptr<ObjArray> create_obj<ObjType::ARRAY, size_t, ObjType>(size_t sz, ObjType ty);
-        template<> std::shared_ptr<ObjTuple> create_obj<ObjType::TUPLE>();
-        template<> std::shared_ptr<ObjTuple> create_obj<ObjType::TUPLE, const std::vector<ObjType>&>(const std::vector<ObjType>& elems);
-        template<> std::shared_ptr<ObjTensor> create_obj<ObjType::TENSOR>();
-        template<> std::shared_ptr<ObjDef> create_obj<ObjType::DEF, const AstDef*>(const AstDef* pdef);
-        template<> std::shared_ptr<ObjFn> create_obj<ObjType::FN, const AstFn*>(const AstFn* pfn);
-        template<> std::shared_ptr<ObjIntr> create_obj<ObjType::INTR, const AstIntr*>(const AstIntr* pintr);
+        std::shared_ptr< ObjInvalid > create_obj_invalid ();
+        std::shared_ptr< ObjGenType > create_obj_gentype ();
+        std::shared_ptr< ObjGenType > create_obj_gentype (ObjType ty);
+        std::shared_ptr< ObjBool    > create_obj_bool    ();
+        std::shared_ptr< ObjBool    > create_obj_bool    (bool val);
+        std::shared_ptr< ObjInt     > create_obj_int     ();
+        std::shared_ptr< ObjInt     > create_obj_int     (int64_t val);
+        std::shared_ptr< ObjFloat   > create_obj_float   ();
+        std::shared_ptr< ObjFloat   > create_obj_float   (double val);
+        std::shared_ptr< ObjStr     > create_obj_str     ();
+        std::shared_ptr< ObjStr     > create_obj_str     (const std::string& val);
+        std::shared_ptr< ObjArray   > create_obj_array   ();
+        std::shared_ptr< ObjArray   > create_obj_array   (size_t sz, ObjType ty);
+        std::shared_ptr< ObjTuple   > create_obj_tuple   ();
+        std::shared_ptr< ObjTuple   > create_obj_tuple   (const std::vector<std::shared_ptr<Obj>>& elems);
+        std::shared_ptr< ObjTensor  > create_obj_tensor  ();
+        std::shared_ptr< ObjDef     > create_obj_def     ();
+        std::shared_ptr< ObjDef     > create_obj_def     (const AstDef* pdef);
+        std::shared_ptr< ObjFn      > create_obj_fn      ();
+        std::shared_ptr< ObjFn      > create_obj_fn      (const AstFn* pfn);
+        std::shared_ptr< ObjIntr    > create_obj_intr    ();
+        std::shared_ptr< ObjIntr    > create_obj_intr    (const AstIntr* pintr);
+        std::shared_ptr< ObjModule  > create_obj_module  ();
+        std::shared_ptr< ObjPackage > create_obj_package ();
     }
 }
 
