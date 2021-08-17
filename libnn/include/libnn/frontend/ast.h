@@ -31,16 +31,6 @@ namespace nn
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const = 0;
         };
 
-        class AstCargsDecl
-        {
-        public:
-            virtual ~AstCargsDecl() = 0;
-
-            // does not evaluate anything or add new elements to the scope
-            // potentially 
-            virtual void match_args(Scope& scope, std::vector<std::shared_ptr<Obj>>& cargs) const = 0;
-        };
-
         class AstExpr :
             public AstBlock
         {
@@ -111,6 +101,7 @@ namespace nn
             std::string idn;
             
         public:
+            AstIdn();
             AstIdn(const Token* ptk);
 
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
@@ -197,7 +188,7 @@ namespace nn
             AstPack(const TokenArray& tarr);
 
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-            virtual void append_vec(EvalCtx&, std::vector<std::shared_ptr<Obj>>&);
+            virtual void append_vec(EvalCtx&, std::vector<std::shared_ptr<Obj>>&) const;
         };
 
         class AstAdd :
@@ -361,15 +352,15 @@ namespace nn
 
         // simple variable delarations found in sequences
         class AstDecl :
-            public AstExpr,
-            public AstCargsDecl
+            public AstExpr
         {
             friend class AstModule;
 
             bool is_static;
             std::string var_name;
-            std::string type_name;
+            AstIdn type_idn;
             std::vector<AstExpr*> cargs;
+            bool has_cargs;
 
         public:
             AstDecl();
@@ -381,9 +372,7 @@ namespace nn
             //  if state is DEFSEQ and type is tensor: 
             //      add the tensor as a graph input edge
             //
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;  // returns null
-            virtual void append_vec(EvalCtx&, std::vector<std::shared_ptr<Obj>>&) const;
-            virtual void match_args(Scope& scope, std::vector<std::shared_ptr<Obj>>& cargs) const;
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const override;  // returns null
         };
 
         class AstReturn :
@@ -452,16 +441,61 @@ namespace nn
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
-        class AstCargsTuple :
-            public AstCargsDecl
+        class AstCargSig
         {
-            std::vector<AstCargsDecl*> elems;
+        public:
+            virtual ~AstCargSig() = 0;
+
+            virtual std::vector<std::shared_ptr<Obj>>::iterator match_args(
+                EvalCtx& ctx,
+                std::vector<std::shared_ptr<Obj>>::iterator start,
+                std::vector<std::shared_ptr<Obj>>::iterator end) const = 0;
+        };
+
+        class AstCargDecl :
+            public AstCargSig
+        {
+            uint32_t line_num;
+            uint32_t col_num;
+
+            bool is_packed;
+            std::string var_name;
+            AstIdn type_idn;
+            std::vector<AstExpr*> cargs;
+            bool has_cargs;
 
         public:
-            AstCargsTuple(const TokenArray& tarr);
-            virtual ~AstCargsTuple();
+            AstCargDecl(const TokenArray& tarr);
+            virtual ~AstCargDecl();
 
-            virtual void match_args(Scope& scope, std::vector<std::shared_ptr<Obj>>& cargs) const;
+            virtual std::vector<std::shared_ptr<Obj>>::iterator match_args(
+                EvalCtx& ctx,
+                std::vector<std::shared_ptr<Obj>>::iterator start,
+                std::vector<std::shared_ptr<Obj>>::iterator end) const override;
+        };
+
+        class AstCargTuple :
+            public AstCargSig
+        {
+            std::vector<AstCargSig*> elems;
+
+        public:
+            AstCargTuple(const TokenArray& tarr);
+            virtual ~AstCargTuple();
+
+            virtual std::vector<std::shared_ptr<Obj>>::iterator match_args(
+                EvalCtx& ctx,
+                std::vector<std::shared_ptr<Obj>>::iterator start,
+                std::vector<std::shared_ptr<Obj>>::iterator end) const override;
+        };
+
+        class AstArgDecl
+        {
+            // TODO: figure out carg deduction based on args
+            uint32_t line_num;
+            uint32_t col_num;
+
+            bool has_cargs;
         };
 
         // root node
@@ -475,7 +509,7 @@ namespace nn
             AstSeq block;
             std::string name;
 
-            AstCargsTuple* cargs;
+            AstCargTuple* cargs;
             std::vector<AstDecl> vargs;
 
         public:
@@ -483,8 +517,8 @@ namespace nn
             ~AstDef();
 
             void eval(EvalCtx& ctx) const;
-            Scope* apply_cargs(const std::vector<std::shared_ptr<Obj>>& cargs) const;
-            void carg_deduction(Scope& scope, const std::vector<std::shared_ptr<Obj>>& args) const;
+            void apply_cargs(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const;
+            void carg_deduction(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& args) const;
             
             const std::string& get_name() const;
             const AstSeq& get_body() const;
@@ -498,7 +532,7 @@ namespace nn
             AstSeq block;
             std::string name;
 
-            std::vector<AstCargsDecl*> cargs;
+            AstCargTuple* cargs;
             std::vector<AstDecl> vargs;
 
         public:

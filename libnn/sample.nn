@@ -108,3 +108,6 @@ def model<int G>(tensor<3, 312, 312> img):
     tensor output = rnn<N, flattened.shape[-1], 128>(flattened)
 
     return output
+
+
+def idk<int n, int m, array<tuple<int, array<str, n>, float>, n> s, >

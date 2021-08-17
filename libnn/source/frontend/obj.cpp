@@ -19,12 +19,28 @@ namespace nn
                 throw GenerationError("Uninitialized variable");
         }
 
+        void check_type(ObjType expected, const std::shared_ptr<Obj>& pobj)
+        {
+            if (pobj->ty != expected)
+                throw GenerationError("Expected " + obj_type_name(expected) + ", recieved " + obj_type_name(pobj->ty));
+        }
+
+        void check_type(ObjType expected, const Obj* pobj)
+        {
+            if (pobj->ty != expected)
+                throw GenerationError("Expected " + obj_type_name(expected) + ", recieved " + obj_type_name(pobj->ty));
+        }
+
         constexpr std::string obj_type_name(ObjType ty)
         {
             switch (ty)
             {
+            case ObjType::TYPE:
+                return "object-ty";
             case ObjType::INVALID:
                 return "invalid";
+            case ObjType::VAR:
+                return "var";
             case ObjType::BOOL:
                 return "bool";
             case ObjType::INT:
@@ -46,12 +62,9 @@ namespace nn
             case ObjType::PACKAGE:
                 return "package";
             }
-        }
 
-        Obj::Obj(ObjType ty) :
-            ty(ty),
-            init(false)
-        {}
+            throw GenerationError("Unknown type");
+        }
 
         template<> ObjBool::~ObjImp() {}
         template<> ObjInt::~ObjImp() {}
@@ -60,6 +73,139 @@ namespace nn
         template<> ObjArray::~ObjImp() {}
         template<> ObjTuple::~ObjImp() {}
         template<> ObjTensor::~ObjImp() {}
+
+        Obj::Obj(ObjType ty) :
+            ty(ty),
+            init(false)
+        {}
+
+        template<>
+        ObjDType::ObjImp() :
+            Obj(ObjType::TYPE)
+        {
+            data.ety = ObjType::INVALID;
+            data.has_cargs = false;
+            data.cargs = {};
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjDType::copy() const
+        {
+            check_init(this);
+
+            if (data.has_cargs)
+                return create_obj_dtype(data.ety, data.cargs);
+            return create_obj_dtype(data.ety);
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjDType::inst() const
+        {
+            check_init(this);
+
+            switch (ty)
+            {
+            case ObjType::TYPE:
+                assert(!data.has_cargs);
+                return create_obj_dtype();
+            case ObjType::BOOL:
+                assert(!data.has_cargs);
+                return create_obj_bool();
+            case ObjType::INT:
+                assert(!data.has_cargs);
+                return create_obj_int();
+            case ObjType::FLOAT:
+                assert(!data.has_cargs);
+                return create_obj_float();
+            case ObjType::STR:
+                assert(!data.has_cargs);
+                return create_obj_str();
+            case ObjType::ARRAY:
+                if (data.has_cargs)
+                {
+                    if (data.cargs.size() != 2)
+                        throw GenerationError("Invalid number of carg parameters to array type");
+                    check_type(ObjType::TYPE, data.cargs[0]);
+                    check_type(ObjType::INT, data.cargs[1]);
+                    return create_obj_array(std::static_pointer_cast<ObjDType>(data.cargs[0]), static_cast<const ObjInt*>(data.cargs[1].get())->data.val);
+                }
+                else
+                    return create_obj_array();
+            case ObjType::TUPLE:
+                if (data.has_cargs)
+                {
+                    std::vector<std::shared_ptr<ObjDType>> dtypes;
+                    for (auto e : data.cargs)
+                    {
+                        check_type(ObjType::TYPE, e);
+                        dtypes.push_back(std::static_pointer_cast<ObjDType>(e));
+                    }
+                    return create_obj_tuple(dtypes);
+                }
+                else
+                    return create_obj_tuple();
+            case ObjType::TENSOR:
+                throw GenerationError("TODO: tensor instantiation");
+            }
+            throw GenerationError("Invalid type for instantiation");
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjDType::cargs(const std::vector<std::shared_ptr<Obj>>& args)
+        {
+            check_init(this);
+            if (data.has_cargs)
+                throw GenerationError("Const args have already been set");
+            return create_obj_dtype(data.ety, args);
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjDType::eq(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+            check_mtype(val);
+
+            // shortcut
+            if (this == val.get())
+                return create_obj_bool(true);
+
+            if (data.ety != mty(val)->data.ety)
+                return create_obj_bool(false);
+            if (data.has_cargs)
+            {
+                if (data.cargs.size() != mty(val)->data.cargs.size())
+                    return create_obj_bool(false);
+                for (int i = 0; i < data.cargs.size(); i++)
+                    if (data.cargs[i]->ne(mty(val)->data.cargs[i])->bval())
+                        return create_obj_bool(false);
+            }
+            return create_obj_bool(true);
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjDType::ne(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+            check_mtype(val);
+
+            // shortcut
+            if (this == val.get())
+                return create_obj_bool(false);
+
+            if (data.ety != mty(val)->data.ety)
+                return create_obj_bool(true);
+            if (data.has_cargs)
+            {
+                if (data.cargs.size() != mty(val)->data.cargs.size())
+                    return create_obj_bool(true);
+                for (int i = 0; i < data.cargs.size(); i++)
+                    if (data.cargs[i]->ne(mty(val)->data.cargs[i])->bval())
+                        return create_obj_bool(true);
+            }
+            return create_obj_bool(false);
+        }
 
         template<>
         ObjBool::ObjImp() :
@@ -78,10 +224,17 @@ namespace nn
         template<>
         void ObjBool::assign(const std::shared_ptr<Obj>& val)
         {
-            check_type(val);
+            check_mtype(val);
             check_init(val);
             data.val = mty(val)->data.val;
             init = true;
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjBool::copy() const
+        {
+            check_init(this);
+            return create_obj_bool(data.val);
         }
 
         template<>
@@ -89,7 +242,7 @@ namespace nn
         {
             check_init(this);
             check_init(val);
-            check_type(val);
+            check_mtype(val);
 
             auto pobj = create_obj_bool();
             pobj->data.val = data.val && mty(val)->data.val;
@@ -102,7 +255,7 @@ namespace nn
         {
             check_init(this);
             check_init(val);
-            check_type(val);
+            check_mtype(val);
 
             auto pobj = create_obj_bool();
             pobj->data.val = data.val || mty(val)->data.val;
@@ -115,7 +268,7 @@ namespace nn
         {
             check_init(this);
             check_init(val);
-            check_type(val);
+            check_mtype(val);
 
             auto pobj = create_obj_bool();
             pobj->data.val = data.val == mty(val)->data.val;
@@ -128,7 +281,7 @@ namespace nn
         {
             check_init(this);
             check_init(val);
-            check_type(val);
+            check_mtype(val);
 
             auto pobj = create_obj_bool();
             pobj->data.val = data.val != mty(val)->data.val;
@@ -146,10 +299,17 @@ namespace nn
         template<>
         void ObjInt::assign(const std::shared_ptr<Obj>& val)
         {
-            check_type(val);
+            check_mtype(val);
             check_init(val);
             data.val = mty(val)->data.val;
             init = true;
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjInt::copy() const
+        {
+            check_init(this);
+            return create_obj_int(data.val);
         }
 
         template<>
@@ -386,6 +546,13 @@ namespace nn
         }
 
         template<>
+        std::shared_ptr<Obj> ObjFloat::copy() const
+        {
+            check_init(this);
+            return create_obj_float(data.val);
+        }
+
+        template<>
         std::shared_ptr<Obj> ObjFloat::neg() const
         {
             check_init(this);
@@ -586,10 +753,17 @@ namespace nn
         void ObjStr::assign(const std::shared_ptr<Obj>& val)
         {
             check_init(val);
-            check_type(val);
+            check_mtype(val);
 
             data.val = mty(val)->data.val;
             init = true;
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjStr::copy() const
+        {
+            check_init(this);
+            return create_obj_str(data.val);
         }
 
         template<>
@@ -642,7 +816,7 @@ namespace nn
         {
             check_init(this);
             check_init(val);
-            check_type(val);
+            check_mtype(val);
 
             auto pobj = create_obj_str();
             pobj->data.val = data.val + mty(val)->data.val;
@@ -654,8 +828,7 @@ namespace nn
         ObjArray::ObjImp() :
             Obj(ObjType::ARRAY)
         {
-            data.size = -1;
-            data.ety = ObjType::INVALID;
+            data.dtype = nullptr;
             data.elems = {};
         }
 
@@ -663,25 +836,24 @@ namespace nn
         void ObjArray::assign(const std::shared_ptr<Obj>& val)
         {
             check_init(val);
-            check_type(val);
+            check_mtype(val);
+
             if (init)
             {
-                assert(data.size != -1);
-                if (data.size != mty(val)->data.size)
+                assert(data.elems.size() != -1);
+                if (data.elems.size() != mty(val)->data.elems.size())
                     throw GenerationError("Width mismatch in array assignment");
-                if (data.ety != mty(val)->data.ety)
+                if (data.dtype->ne(mty(val)->data.dtype)->bval())
                     throw GenerationError("Type mismatch in array assignment");
-                for (int i = 0; i < data.size; i++)
+                for (int i = 0; i < data.elems.size(); i++)
                 {
                     check_init(mty(val)->data.elems[i]);
-                    data.elems[i] = mty(val)->data.elems[i];
+                    data.elems[i]->assign(mty(val)->data.elems[i]);
                 }
             }
             else
             {
-                assert(data.elems.size() == 0);
-                data.size = mty(val)->data.size;
-                data.ety = mty(val)->data.ety;
+                data.dtype = mty(val)->data.dtype;
                 for (auto& e : mty(val)->data.elems)
                 {
                     check_init(e);
@@ -692,14 +864,31 @@ namespace nn
         }
 
         template<>
+        std::shared_ptr<Obj> ObjArray::copy() const
+        {
+            check_init(this);
+            std::vector<std::shared_ptr<Obj>> dups;
+            for (auto e : data.elems)
+                dups.push_back(e->copy());
+            return create_obj_array(data.dtype, dups);
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjArray::type() const
+        {
+            auto pobj = create_obj_dtype(ty);
+            if (!init)
+                return pobj;
+            return pobj->cargs(std::static_pointer_cast<ObjDType>(data.dtype)->data.cargs);
+        }
+
+        template<>
         std::shared_ptr<Obj> ObjArray::get(const std::string& item)
         {
             check_init(this);
 
             if (item == "length")
-                return create_obj_int(data.size);
-            if (item == "dtype")
-                return create_obj_gentype(data.ety);
+                return create_obj_int(data.elems.size());
 
             throw GenerationError("array type has no member: " + item);
         }
@@ -709,11 +898,10 @@ namespace nn
         {
             check_init(this);
             check_init(val);
-            if (val->ty != ObjType::INT)
-                throw GenerationError("Expected int, recieved " + obj_type_name(val->ty));
+            check_type(ObjType::INT, val);
 
             int64_t i = static_cast<const ObjInt*>(val.get())->data.val;
-            if (i < 0 || data.size <= i)
+            if (i < 0 || data.elems.size() <= i)
                 throw GenerationError("Index out of range");
 
             return data.elems[i];
@@ -724,17 +912,17 @@ namespace nn
         {
             check_init(this);
             check_init(val);
-            check_type(val);
-            if (data.ety != mty(val)->data.ety)
+            check_mtype(val);
+            if (data.dtype->ne(mty(val)->data.dtype)->bval())
                 throw GenerationError("Array element type mismatch for concatenation");
 
-            auto pobj = create_obj_array(data.size + mty(val)->data.size, data.ety);
-            for (int i = 0; i < data.size; i++)
-                pobj->data.elems[i]->assign(data.elems[i]);
-            for (int i = 0; i < data.size; i++)
-                pobj->data.elems[i + data.size]->assign(mty(val)->data.elems[i]);
-
-            return pobj;
+            // concatenating the elements
+            std::vector<std::shared_ptr<Obj>> nelems;
+            for (auto e : data.elems)
+                nelems.push_back(e->copy());
+            for (auto e : mty(val)->data.elems)
+                nelems.push_back(e->copy());
+            return create_obj_array(data.dtype, nelems);
         }
 
         template<>
@@ -742,13 +930,13 @@ namespace nn
         {
             check_init(this);
             check_init(val);
-            check_type(val);
+            check_mtype(val);
 
-            if (data.size != mty(val)->data.size)
+            if (data.elems.size() != mty(val)->data.elems.size())
                 return create_obj_bool(false);
 
-            for (int i = 0; i < data.size; i++)
-                if (data.elems[i]->ne(mty(val)->data.elems[i]))
+            for (int i = 0; i < data.elems.size(); i++)
+                if (data.elems[i]->ne(mty(val)->data.elems[i])->bval())
                     return create_obj_bool(false);
             return create_obj_bool(true);
         }
@@ -758,13 +946,13 @@ namespace nn
         {
             check_init(this);
             check_init(val);
-            check_type(val);
+            check_mtype(val);
 
-            if (data.size != mty(val)->data.size)
+            if (data.elems.size() != mty(val)->data.elems.size())
                 return create_obj_bool(true);
-            
-            for (int i = 0; i < data.size; i++)
-                if (data.elems[i]->ne(mty(val)->data.elems[i]))
+
+            for (int i = 0; i < data.elems.size(); i++)
+                if (data.elems[i]->ne(mty(val)->data.elems[i])->bval())
                     return create_obj_bool(true);
             return create_obj_bool(false);
         }
@@ -773,6 +961,7 @@ namespace nn
         ObjTuple::ObjImp() :
             Obj(ObjType::TUPLE)
         {
+            data.dtypes = {};
             data.elems = {};
         }
 
@@ -780,7 +969,7 @@ namespace nn
         void ObjTuple::assign(const std::shared_ptr<Obj>& val)
         {
             check_init(val);
-            check_type(val);
+            check_mtype(val);
             if (init)
             {
                 if (data.elems.size() != mty(val)->data.elems.size())
@@ -791,7 +980,10 @@ namespace nn
             else
             {
                 assert(data.elems.size() == 0);
+                assert(data.dtypes.size() == 0);
                 for (auto e : mty(val)->data.elems)
+                    data.elems.push_back(e->copy());
+                for (auto e : mty(val)->data.dtypes)
                     data.elems.push_back(e);
                 init = true;
             }
@@ -828,7 +1020,7 @@ namespace nn
         {
             check_init(this);
             check_init(val);
-            check_type(val);
+            check_mtype(val);
 
             auto pobj = create_obj_tuple();
             for (auto e : data.elems)
@@ -844,7 +1036,7 @@ namespace nn
         {
             check_init(this);
             check_init(val);
-            check_type(val);
+            check_mtype(val);
 
             if (data.elems.size() != mty(val)->data.elems.size())
                 return create_obj_bool(false);
@@ -860,7 +1052,7 @@ namespace nn
         {
             check_init(this);
             check_init(val);
-            check_type(val);
+            check_mtype(val);
 
             if (data.elems.size() != mty(val)->data.elems.size())
                 return create_obj_bool(true);
@@ -878,12 +1070,13 @@ namespace nn
             init = false;
             data.dims = {};
             data.pEdge = nullptr;
+            data.carg_init = false;
         }
 
         template<>
         void ObjTensor::assign(const std::shared_ptr<Obj>& val)
         {
-            check_type(val);
+            check_mtype(val);
             check_init(val);
 
             if (data.carg_init)
@@ -919,23 +1112,18 @@ namespace nn
         ObjDef::ObjImp() :
             Obj(ObjType::DEF)
         {
-            init = false;
             data.pdef = nullptr;
-            data.pscope = nullptr;
+            data.cargs = {};
+            data.has_cargs = false;
         }
 
         template<>
         std::shared_ptr<Obj> ObjDef::cargs(const std::vector<std::shared_ptr<Obj>>& args)
         {
             check_init(this);
-            for (auto e : args)
-                check_init(e);
-
-            auto pobj = std::make_shared<ObjDef>();
-            pobj->data.pdef = data.pdef;
-            pobj->data.pscope = data.pdef->apply_cargs(args);
-            pobj->init = true;
-            return pobj;
+            if (data.has_cargs)
+                throw GenerationError("Const args have already been set");
+            return create_obj_def(data.pdef, args);
         }
 
         template<>
@@ -945,26 +1133,34 @@ namespace nn
             for (auto e : args)
                 check_init(e);
 
-            if (!data.pscope)
-                data.pscope = new Scope();
+            std::vector<std::shared_ptr<Obj>> cpy_args;
+            for (auto e : args)
+                cpy_args.push_back(e->copy());
 
-            data.pdef->carg_deduction(*data.pscope, args);
-            
+            // creating a new scope for the def call
+            Scope* pscope = new Scope();
+
             // saving the old state
             Scope* prev_scope = ctx.pscope;
             EvalState prev_state = ctx.state;
             std::string prev_block = ctx.block_name;
+
             // creating the new state
-            ctx.pscope = data.pscope;
+            ctx.pscope = pscope;
             ctx.state = EvalState::DEFSEQ;
             ctx.block_name = data.pdef->get_name();
+
             // doing the call
-            auto pret = data.pdef->get_body().eval(ctx);
+            data.pdef->apply_cargs(ctx, data.cargs);  // If its empty, its empty
+            data.pdef->carg_deduction(ctx, cpy_args);
+            auto pret = data.pdef->get_body().eval(ctx);  // not actually the return value, thats in last_ret
             assert(pret->ty == ObjType::INVALID);
-            // restoring the previous state
+
+            // restoring the previous state and cleanup
             ctx.pscope = prev_scope;
             ctx.state = prev_state;
             ctx.block_name = prev_block;
+            delete pscope;
         }
 
         // Object contructors, not going to use factories
@@ -974,7 +1170,8 @@ namespace nn
             std::shared_ptr<Obj> pelem;
             switch (ty)
             {
-            case ObjType::TYPE   :    pelem = create_obj_gentype (); break;
+            case ObjType::TYPE   :    pelem = create_obj_dtype   (); break;
+            case ObjType::VAR    :    pelem = create_obj_var     (); break;
             case ObjType::BOOL   :    pelem = create_obj_bool    (); break;
             case ObjType::INT    :    pelem = create_obj_int     (); break;
             case ObjType::FLOAT  :    pelem = create_obj_float   (); break;
@@ -992,25 +1189,44 @@ namespace nn
             }
             return pelem;
         }
-        
+
+        std::shared_ptr<ObjDType> create_obj_dtype()
+        {
+            auto pobj = std::make_shared<ObjDType>();
+            pobj->init = false;
+            return pobj;
+        }
+
+        std::shared_ptr<ObjDType> create_obj_dtype(ObjType ty)
+        {
+            auto pobj = std::make_shared<ObjDType>();
+            pobj->data.ety = ty;
+            pobj->data.cargs = {};
+            pobj->data.has_cargs = false;
+            pobj->init = true;
+            return pobj;
+        }
+
+        std::shared_ptr<ObjDType> create_obj_dtype(ObjType ty, const std::vector<std::shared_ptr<Obj>>& cargs)
+        {
+            auto pobj = std::make_shared<ObjDType>();
+            pobj->data.ety = ty;
+            for (auto e : cargs)
+                check_init(e);
+            pobj->data.cargs = cargs;
+            pobj->data.has_cargs = true;
+            pobj->init = true;
+            return pobj;
+        }
+
         std::shared_ptr<ObjInvalid> create_obj_invalid()
         {
             return std::make_shared<ObjInvalid>();
         }
 
-        std::shared_ptr<ObjGenType> create_obj_gentype()
+        std::shared_ptr<ObjVar> create_obj_var()
         {
-            auto pobj = std::make_shared<ObjGenType>();
-            pobj->init = false;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjGenType> create_obj_gentype(ObjType ty)
-        {
-            auto pobj = std::make_shared<ObjGenType>();
-            pobj->data.val = ty;
-            pobj->init = true;
-            return pobj;
+            return std::make_shared<ObjVar>();
         }
 
         std::shared_ptr<ObjBool> create_obj_bool()
@@ -1075,34 +1291,54 @@ namespace nn
 
         std::shared_ptr<ObjArray> create_obj_array()
         {
+            return std::make_shared<ObjArray>();
+        }
+
+        std::shared_ptr<ObjArray> create_obj_array(const std::shared_ptr<Obj> dtype, int sz)
+        {
             auto pobj = std::make_shared<ObjArray>();
-            pobj->init = false;
+            pobj->data.dtype = dtype;
+            for (int i = 0; i < sz; i++)
+                pobj->data.elems.push_back(dtype->inst());
+            pobj->init = true;
             return pobj;
         }
 
-        std::shared_ptr<ObjArray> create_obj_array(size_t sz, ObjType ty)
+        std::shared_ptr<ObjArray> create_obj_array(const std::shared_ptr<Obj> dtype, const std::vector<std::shared_ptr<Obj>>& elems)
         {
             auto pobj = std::make_shared<ObjArray>();
-            pobj->data.size = sz;
-            for (int i = 0; i < sz; i++)
-                pobj->data.elems.push_back(create_obj_type(ty));
+            pobj->data.dtype = dtype;
+            for (auto e : elems)
+            {
+                pobj->data.elems.push_back(dtype->inst());
+                pobj->data.elems.back()->assign(e);
+            }
             pobj->init = true;
             return pobj;
         }
 
         std::shared_ptr<ObjTuple> create_obj_tuple()
         {
+            return std::make_shared<ObjTuple>();
+        }
+
+        std::shared_ptr<ObjTuple> create_obj_tuple(const std::vector<std::shared_ptr<ObjDType>>& dtypes)
+        {
             auto pobj = std::make_shared<ObjTuple>();
-            pobj->init = false;
+            for (auto e : dtypes)
+            {
+                pobj->data.dtypes.push_back(e);
+                pobj->data.elems.push_back(e->inst());
+            }
             return pobj;
         }
 
         std::shared_ptr<ObjTuple> create_obj_tuple(const std::vector<std::shared_ptr<Obj>>& elems)
         {
             auto pobj = std::make_shared<ObjTuple>();
+            pobj->data.elems = elems;
             for (auto e : elems)
-                pobj->data.elems.push_back(e);
-            pobj->init = true;
+                pobj->data.dtypes.push_back(e->type());
             return pobj;
         }
 
@@ -1112,33 +1348,80 @@ namespace nn
             pobj->data.pEdge = nullptr;
             pobj->data.dims = {};
             pobj->data.carg_init = false;
-            pobj->init = false;
+            return pobj;
+        }
+
+        std::shared_ptr<ObjTensor> create_obj_tensor(const std::vector<std::shared_ptr<Obj>>& dims)
+        {
+            auto pobj = std::make_shared<ObjTensor>();
+            pobj->data.pEdge = nullptr;
+            for (auto e : dims)
+            {
+                check_init(e);
+                check_type(ObjType::INT, e);
+                pobj->data.dims.push_back(static_cast<const ObjInt*>(e.get())->data.val);
+            }
+            pobj->data.carg_init = true;
+            pobj->init = true;
+            return pobj;
         }
 
         std::shared_ptr<ObjDef> create_obj_def()
         {
-            auto pobj = std::make_shared<ObjDef>();
-            pobj->data.pdef = nullptr;
-            pobj->data.pscope = nullptr;
-            pobj->init = false;
+            return std::make_shared<ObjDef>();
         }
 
         std::shared_ptr<ObjDef> create_obj_def(const AstDef* pdef)
         {
             auto pobj = std::make_shared<ObjDef>();
             pobj->data.pdef = pdef;
-            pobj->data.pscope = nullptr;
             pobj->init = true;
+            return pobj;
+        }
+
+        std::shared_ptr<ObjDef> create_obj_def(const AstDef* pdef, const std::vector<std::shared_ptr<Obj>>& cargs)
+        {
+            auto pobj = std::make_shared<ObjDef>();
+            pobj->data.pdef = pdef;
+            for (auto e : cargs)
+                check_init(e);
+            pobj->data.cargs = cargs;
+            pobj->data.has_cargs = true;
+            pobj->init = true;
+            return pobj;
         }
 
         std::shared_ptr<ObjFn> create_obj_fn()
         {
+            return std::make_shared<ObjFn>();
+        }
 
+        std::shared_ptr<ObjFn> create_obj_fn(const AstFn* pfn)
+        {
+            auto pobj = std::make_shared<ObjFn>();
+            pobj->data.pfn = pfn;
+            pobj->init = true;
+            return pobj;
         }
 
         std::shared_ptr<ObjIntr> create_obj_intr()
         {
+            throw GenerationError("Not implemented");
+        }
 
+        std::shared_ptr<ObjIntr> create_obj_intr(const AstIntr* pintr)
+        {
+            throw GenerationError("Not implemented");
+        }
+
+        std::shared_ptr<ObjModule> create_obj_module()
+        {
+            throw GenerationError("Not implemented");
+        }
+
+        std::shared_ptr<ObjPackage> create_obj_package()
+        {
+            throw GenerationError("Not Implemented");
         }
     }
 }

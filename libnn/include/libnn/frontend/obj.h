@@ -13,8 +13,9 @@ namespace nn
     {
         enum class ObjType
         {
-            INVALID,  // Invalid object type
             TYPE,     // Type object
+            INVALID,  // Invalid object type
+            VAR,      // Generic object which destroys itself as soon as it gets the chance
             BOOL,     // Boolean
             INT,      // Integer
             FLOAT,    // Floating point
@@ -43,6 +44,9 @@ namespace nn
             virtual bool bval() const = 0;
             virtual void assign(const std::shared_ptr<Obj>& val) = 0;
             virtual bool check_cargs(const std::vector<std::shared_ptr<Obj>>& args) const = 0;
+            virtual std::shared_ptr<Obj> copy() const = 0;
+            virtual std::shared_ptr<Obj> type() const = 0;
+            virtual std::shared_ptr<Obj> inst() const = 0;
 
             virtual void call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const = 0;
             virtual std::shared_ptr<Obj> get(const std::string& item) = 0;
@@ -71,20 +75,21 @@ namespace nn
         template<ObjType TY>
         class ObjImp;
 
-        using ObjInvalid = ObjImp<ObjType::INVALID>;
-        using ObjGenType = ObjImp<ObjType::TYPE>;
-        using ObjBool = ObjImp<ObjType::BOOL>;
-        using ObjInt = ObjImp<ObjType::INT>;
-        using ObjFloat = ObjImp<ObjType::FLOAT>;
-        using ObjStr = ObjImp<ObjType::STR>;
-        using ObjArray = ObjImp<ObjType::ARRAY>;
-        using ObjTuple = ObjImp<ObjType::TUPLE>;
-        using ObjTensor = ObjImp<ObjType::TENSOR>;
-        using ObjDef = ObjImp<ObjType::DEF>;
-        using ObjFn = ObjImp<ObjType::FN>;
-        using ObjIntr = ObjImp<ObjType::INTR>;
-        using ObjModule = ObjImp<ObjType::MODULE>;
-        using ObjPackage = ObjImp<ObjType::PACKAGE>;
+        using ObjDType   = ObjImp< ObjType::TYPE    >;
+        using ObjInvalid = ObjImp< ObjType::INVALID >;
+        using ObjVar     = ObjImp< ObjType::VAR     >;
+        using ObjBool    = ObjImp< ObjType::BOOL    >;
+        using ObjInt     = ObjImp< ObjType::INT     >;
+        using ObjFloat   = ObjImp< ObjType::FLOAT   >;
+        using ObjStr     = ObjImp< ObjType::STR     >;
+        using ObjArray   = ObjImp< ObjType::ARRAY   >;
+        using ObjTuple   = ObjImp< ObjType::TUPLE   >;
+        using ObjTensor  = ObjImp< ObjType::TENSOR  >;
+        using ObjDef     = ObjImp< ObjType::DEF     >;
+        using ObjFn      = ObjImp< ObjType::FN      >;
+        using ObjIntr    = ObjImp< ObjType::INTR    >;
+        using ObjModule  = ObjImp< ObjType::MODULE  >;
+        using ObjPackage = ObjImp< ObjType::PACKAGE >;
 
         template<ObjType TY>
         struct ObjData;
@@ -103,7 +108,7 @@ namespace nn
 
             virtual ~ObjImp();
 
-            void check_type(const std::shared_ptr<Obj>& pobj) const {
+            void check_mtype(const std::shared_ptr<Obj>& pobj) const {
                 if (pobj->ty != TY) throw GenerationError("Expected " + obj_type_name(TY) + ", recieved " + obj_type_name(pobj->ty)); }
 
             virtual bool bval() const override {
@@ -111,6 +116,11 @@ namespace nn
             virtual void assign(const std::shared_ptr<Obj>& val) override {
                 throw GenerationError(obj_type_name(TY) + " type does not support assignment"); }
             virtual bool check_cargs(const std::vector<std::shared_ptr<Obj>>& args) const override { return true; }
+            virtual std::shared_ptr<Obj> copy() const override {
+                throw GenerationError(obj_type_name(TY) + " type does not support copying"); }
+            virtual std::shared_ptr<Obj> type() const override { return create_obj_dtype(TY); }
+            virtual std::shared_ptr<Obj> inst() const override {
+                throw GenerationError(obj_type_name(TY) + " type can not be instantiated"); }
 
             virtual void call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const override {
                 throw GenerationError(obj_type_name(TY) + " type does not support the call operator"); }
@@ -153,12 +163,15 @@ namespace nn
                 throw GenerationError(obj_type_name(TY) + " type does not support the less than operator"); }
         };
 
-        template<> struct ObjData<ObjType::INVALID> {};
         template<>
         struct ObjData<ObjType::TYPE>
         {
-            ObjType val;
+            ObjType ety;
+            std::vector<std::shared_ptr<Obj>> cargs;
+            bool has_cargs;
         };
+        template<> struct ObjData<ObjType::INVALID> {};
+        template<> struct ObjData<ObjType::VAR> {};
         template<> struct ObjData<ObjType::BOOL> {
             bool val;
         };
@@ -173,11 +186,11 @@ namespace nn
         };
         template<> struct ObjData<ObjType::ARRAY> {
             std::vector<std::shared_ptr<Obj>> elems;
-            ObjType ety;
-            int size;
+            std::shared_ptr<Obj> dtype;
         };
         template<> struct ObjData<ObjType::TUPLE> {
             std::vector<std::shared_ptr<Obj>> elems;
+            std::vector<std::shared_ptr<Obj>> dtypes;
         };
         template<> struct ObjData<ObjType::TENSOR> {
             Edge* pEdge;
@@ -186,7 +199,8 @@ namespace nn
         };
         template<> struct ObjData<ObjType::DEF> {
             const AstDef* pdef;
-            Scope* pscope;  // non-null for .cargs()
+            std::vector<std::shared_ptr<Obj>> cargs;
+            bool has_cargs;
         };
         template<> struct ObjData<ObjType::FN> {
             const AstFn* pfn;
@@ -204,9 +218,11 @@ namespace nn
         };
 
         std::shared_ptr<Obj> create_obj_type(ObjType ty);
+        std::shared_ptr< ObjDType   > create_obj_dtype   ();
+        std::shared_ptr< ObjDType   > create_obj_dtype   (ObjType ty);
+        std::shared_ptr< ObjDType   > create_obj_dtype   (ObjType ty, const std::vector<std::shared_ptr<Obj>>& cargs);
         std::shared_ptr< ObjInvalid > create_obj_invalid ();
-        std::shared_ptr< ObjGenType > create_obj_gentype ();
-        std::shared_ptr< ObjGenType > create_obj_gentype (ObjType ty);
+        std::shared_ptr< ObjVar     > create_obj_var     ();
         std::shared_ptr< ObjBool    > create_obj_bool    ();
         std::shared_ptr< ObjBool    > create_obj_bool    (bool val);
         std::shared_ptr< ObjInt     > create_obj_int     ();
@@ -216,10 +232,13 @@ namespace nn
         std::shared_ptr< ObjStr     > create_obj_str     ();
         std::shared_ptr< ObjStr     > create_obj_str     (const std::string& val);
         std::shared_ptr< ObjArray   > create_obj_array   ();
-        std::shared_ptr< ObjArray   > create_obj_array   (size_t sz, ObjType ty);
+        std::shared_ptr< ObjArray   > create_obj_array   (const std::shared_ptr<Obj> dtype, int sz);
+        std::shared_ptr< ObjArray   > create_obj_array   (const std::shared_ptr<Obj> dtype, const std::vector<std::shared_ptr<Obj>>& elems);
         std::shared_ptr< ObjTuple   > create_obj_tuple   ();
+        std::shared_ptr< ObjTuple   > create_obj_tuple   (const std::vector<std::shared_ptr<ObjDType>>& dtypes);
         std::shared_ptr< ObjTuple   > create_obj_tuple   (const std::vector<std::shared_ptr<Obj>>& elems);
         std::shared_ptr< ObjTensor  > create_obj_tensor  ();
+        std::shared_ptr< ObjTensor  > create_obj_tensor  (const std::vector<std::shared_ptr<Obj>>& dims);
         std::shared_ptr< ObjDef     > create_obj_def     ();
         std::shared_ptr< ObjDef     > create_obj_def     (const AstDef* pdef);
         std::shared_ptr< ObjFn      > create_obj_fn      ();

@@ -8,6 +8,50 @@ namespace nn
 {
     namespace impl
     {
+        ObjType dec_typename_exc(const std::string& name)
+        {
+            if (name == "var")
+                return ObjType::VAR;
+            else if (name == "bool")
+                return ObjType::BOOL;
+            else if (name == "int")
+                return ObjType::INT;
+            else if (name == "float")
+                return ObjType::FLOAT;
+            else if (name == "str")
+                return ObjType::STR;
+            else if (name == "array")
+                return ObjType::ARRAY;
+            else if (name == "tuple")
+                return ObjType::TUPLE;
+            else if (name == "tensor")
+                return ObjType::TENSOR;
+            else
+                throw GenerationError("Invalid type name: " + name);
+        };
+
+        ObjType dec_typename_inv(const std::string& name) noexcept
+        {
+            if (name == "var")
+                return ObjType::VAR;
+            else if (name == "bool")
+                return ObjType::BOOL;
+            else if (name == "int")
+                return ObjType::INT;
+            else if (name == "float")
+                return ObjType::FLOAT;
+            else if (name == "str")
+                return ObjType::STR;
+            else if (name == "array")
+                return ObjType::ARRAY;
+            else if (name == "tuple")
+                return ObjType::TUPLE;
+            else if (name == "tensor")
+                return ObjType::TENSOR;
+            else
+                return ObjType::INVALID;
+        };
+
         // Definitions for eval.h
 
         void AstExpr::append_vec(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const
@@ -15,7 +59,7 @@ namespace nn
             cargs.push_back(eval(ctx));
         }
 
-        void AstPack::append_vec(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs)
+        void AstPack::append_vec(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const
         {
             std::vector<std::shared_ptr<Obj>> eval_result = std::move(eval(ctx)->iter(ctx));
             cargs.insert(
@@ -75,6 +119,12 @@ namespace nn
 
         std::shared_ptr<Obj> AstIdn::eval(EvalCtx& ctx) const
         {
+            // checking for types
+            ObjType ty = dec_typename_inv(idn);
+            if (ty != ObjType::INVALID)
+                return create_obj_dtype(ty);
+
+            // regular identifier stuff
             if (ctx.contains(idn))
                 return ctx[idn];
             throw GenerationError("Unable to find a variable with name " + idn);
@@ -159,7 +209,7 @@ namespace nn
 
         std::shared_ptr<Obj> AstPack::eval(EvalCtx& ctx) const
         {
-            throw GenerationError("Invalid use of packed object");
+            return pexpr->eval(ctx);
         }
 
         std::shared_ptr<Obj> AstAdd::eval(EvalCtx& ctx) const
@@ -406,27 +456,15 @@ namespace nn
 
         std::shared_ptr<Obj> AstDecl::eval(EvalCtx& ctx) const
         {
-            auto get_type = [](const std::string& name)
+            std::shared_ptr<Obj> dtype = type_idn.eval(ctx);
+            if (has_cargs)
             {
-                if (name == "bool")
-                    return ObjType::BOOL;
-                else if (name == "int")
-                    return ObjType::INT;
-                else if (name == "float")
-                    return ObjType::FLOAT;
-                else if (name == "str")
-                    return ObjType::STR;
-                else if (name == "array")
-                    return ObjType::ARRAY;
-                else if (name == "tuple")
-                    return ObjType::TUPLE;
-                else if (name == "tensor")
-                    return ObjType::TENSOR;
-                else
-                    throw GenerationError("Invalid type name: " + name);
-            };
-
-            std::shared_ptr<Obj> pobj;
+                std::vector<std::shared_ptr<Obj>> obj_cargs;
+                for (auto e : cargs)
+                    obj_cargs.push_back(e->eval(ctx));
+                dtype = dtype->cargs(obj_cargs);
+            }
+            std::shared_ptr<Obj> pobj = dtype->inst();
 
             if (is_static)
             {
@@ -438,43 +476,18 @@ namespace nn
                 // doing the decl
                 if (ctx.statics.contains(name))
                 {
-                    pobj = ctx.statics[name];
-                    if (pobj->ty != get_type(type_name))
-                        throw GenerationError("Invalid redeclaration of static variable");
-                    std::vector<std::shared_ptr<Obj>> obj_cargs;
-                    for (auto e : cargs)
-                        obj_cargs.push_back(e->eval(ctx));
-                    if (!pobj->check_cargs(obj_cargs))
-                        throw GenerationError("");
+                    pobj->assign(ctx.statics[name]);
                     ctx.scope()[var_name] = pobj;
                     return pobj;
                 }
                 else
-                {
-                    pobj = create_obj_type(get_type(type_name));
-                    std::vector<std::shared_ptr<Obj>> obj_cargs;
-                    for (auto e : cargs)
-                        obj_cargs.push_back(e->eval(ctx));
-                    if (obj_cargs.size() != 0)
-                        pobj = pobj->cargs(obj_cargs);
                     ctx.statics[name] = pobj;
-                }
-            }
-            else
-            {
-                pobj = create_obj_type(get_type(type_name));
-                std::vector<std::shared_ptr<Obj>> obj_cargs;
-                for (auto e : cargs)
-                    obj_cargs.push_back(e->eval(ctx));
-                if (obj_cargs.size() != 0)
-                    pobj = pobj->cargs(obj_cargs);
             }
 
             // custom tensor declaration stuff for network inputs
-            if (type_name == "tensor" && ctx.state == EvalState::DEFSEQ)
+            if (pobj->ty == ObjType::TENSOR && ctx.state == EvalState::DEFSEQ)
             {
                 ObjTensor* pten = static_cast<ObjTensor*>(pobj.get());
-                assert(pten->ty == ObjType::TENSOR);
                 if (!pten->data.carg_init)
                     throw GenerationError("Standalone tensor declarations must have constant arguments");
 
@@ -503,7 +516,6 @@ namespace nn
             return create_obj_invalid();
         }
 
-
         std::shared_ptr<Obj> AstSeq::eval(EvalCtx& ctx) const
         {
             for (auto e : blocks)
@@ -518,6 +530,7 @@ namespace nn
         std::shared_ptr<Obj> AstIf::eval(EvalCtx& ctx) const
         {
             // TODO: add in elif/else block
+            throw GenerationError("Not implemented");
         }
 
         std::shared_ptr<Obj> AstWhile::eval(EvalCtx& ctx) const
@@ -548,9 +561,93 @@ namespace nn
             return create_obj_invalid();
         }
 
+        std::vector<std::shared_ptr<Obj>>::iterator AstCargDecl::match_args(
+            EvalCtx& ctx,
+            std::vector<std::shared_ptr<Obj>>::iterator start,
+            std::vector<std::shared_ptr<Obj>>::iterator end) const
+        {
+            if (ctx.scope().contains(var_name))
+                throw GenerationError("Constant args name collision");
+
+            // getting the dtype (same as normal decl)
+            std::shared_ptr<Obj> dtype = type_idn.eval(ctx);
+            if (has_cargs)
+            {
+                std::vector<std::shared_ptr<Obj>> obj_cargs;
+                for (auto e : cargs)
+                    obj_cargs.push_back(e->eval(ctx));
+                dtype = dtype->cargs(obj_cargs);
+            }
+
+            // No values given, wait for argument type deduction
+            if (start == end)
+            {
+                if (is_packed)
+                    ctx.scope()[var_name] = create_obj_array(dtype, 0);
+                else
+                    ctx.scope()[var_name] = dtype->inst();
+                return start;
+            }
+
+            if (is_packed)
+            {
+                // greedly match the arguments
+                std::vector<std::shared_ptr<Obj>> matches;
+                while (start != end && dtype->eq(*start)->bval())
+                {
+                    auto pobj = dtype->inst();
+                    pobj->assign(*start);
+                    matches.push_back(pobj);
+                    start++;
+                }
+                ctx.scope()[var_name] = create_obj_array(dtype, matches);
+                return start;
+            }
+
+            // match exactly one element
+            ctx.scope()[var_name] = dtype->inst();
+            ctx.scope()[var_name]->assign(*start);
+            return ++start;
+        }
+
+        std::vector<std::shared_ptr<Obj>>::iterator AstCargTuple::match_args(
+            EvalCtx& ctx,
+            std::vector<std::shared_ptr<Obj>>::iterator start,
+            std::vector<std::shared_ptr<Obj>>::iterator end) const
+        {
+            std::vector<AstCargSig*>::const_iterator it;
+            if (start == end)
+            {
+                for (it = elems.begin(); it != elems.end(); it++)
+                    assert((*it)->match_args(ctx, start, end) == start);
+                return start;
+            }
+            if ((*start)->ty != ObjType::TUPLE)
+                throw GenerationError("Invalid carg type to match tuple");
+
+            auto tbeg = static_cast<ObjTuple*>((*start).get())->data.elems.begin();
+            auto tend = static_cast<ObjTuple*>((*start).get())->data.elems.end();
+            for (it = elems.begin(); it != elems.end(); it++)
+                tbeg = (*it)->match_args(ctx, tbeg, tend);
+            if (it != elems.end())
+                throw GenerationError("Too many carg initializer values");
+            return ++start;
+        }
+
         void AstDef::eval(EvalCtx& ctx) const
         {
             ctx.defs.insert({ name, create_obj_def(this) });
+        }
+
+        void AstDef::apply_cargs(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const
+        {
+            std::vector<std::shared_ptr<Obj>> cargs_tuple = { create_obj_tuple(cargs) };
+            this->cargs->match_args(ctx, cargs_tuple.begin(), cargs_tuple.end());
+        }
+
+        void AstDef::carg_deduction(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& args) const
+        {
+
         }
 
         void AstIntr::eval(EvalCtx& ctx) const
@@ -566,6 +663,7 @@ namespace nn
         void AstModImp::eval(EvalCtx& ctx) const
         {
             // TODO: figure out module/package importing
+            throw GenerationError("Not implemented");
         }
 
         EvalCtx* AstModule::eval(const std::string& entry_point, std::vector<std::shared_ptr<Obj>>& cargs)
@@ -595,12 +693,7 @@ namespace nn
             const auto& vargs = static_cast<const ObjDef*>(entry_def.get())->data.pdef->vargs;
             std::vector<std::shared_ptr<Obj>> args;
             for (const AstDecl& e : vargs)
-            {
-                if (e.type_name != "tensor")
-                    throw GenerationError("'def' must have only tensor types for varargs");
-                // building the arguments one by one
-                args.push_back(e.eval(*pctx));
-            }
+                args.push_back(e.eval(*pctx));  // building the arguments one by one
 
             // running model generation
             entry_def->call(*pctx, args);
