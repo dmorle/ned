@@ -825,6 +825,20 @@ namespace nn
         }
 
         template<>
+        std::shared_ptr<Obj> ObjStr::eq(const std::shared_ptr<Obj>& val) const
+        {
+            // TODO: string comparison
+            throw GenerationError("Not implemented");
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjStr::ne(const std::shared_ptr<Obj>& val) const
+        {
+            // TODO: string comparison
+            throw GenerationError("Not implemented");
+        }
+
+        template<>
         ObjArray::ObjImp() :
             Obj(ObjType::ARRAY)
         {
@@ -891,6 +905,13 @@ namespace nn
                 return create_obj_int(data.elems.size());
 
             throw GenerationError("array type has no member: " + item);
+        }
+
+        template<>
+        std::vector<std::shared_ptr<Obj>> ObjArray::iter(EvalCtx& ctx)
+        {
+            // TODO: array iteration
+            throw GenerationError("Not implemented");
         }
 
         template<>
@@ -1001,6 +1022,13 @@ namespace nn
         }
 
         template<>
+        std::vector<std::shared_ptr<Obj>> ObjTuple::iter(EvalCtx& ctx)
+        {
+            // TODO: iterate through elements (required for carg deduction)
+            throw GenerationError("Not implemented");
+        }
+
+        template<>
         std::shared_ptr<Obj> ObjTuple::idx(const std::shared_ptr<Obj>& val)
         {
             check_init(this);
@@ -1106,6 +1134,25 @@ namespace nn
             // doing the actual assignment
             data.pEdge = mty(val)->data.pEdge;
             init = true;
+        }
+
+        template<>
+        std::vector<std::shared_ptr<Obj>> ObjTensor::iter(EvalCtx& ctx)
+        {
+            // TODO: iterate through the tensor dimensions (required for carg deduction)
+            throw GenerationError("Not implemented");
+        }
+
+        std::shared_ptr<Obj> ObjTensor::eq(const std::shared_ptr<Obj>& val) const
+        {
+            // TODO: check if the tensor rank and dimensions are equal (required for carg deduction)
+            throw GenerationError("Not implemented");
+        }
+
+        std::shared_ptr<Obj> ObjTensor::ne(const std::shared_ptr<Obj>& val) const
+        {
+            // TODO: check if the tensor rank or dimensions are not equal (required for carg deduction)
+            throw GenerationError("Not implemented");
         }
 
         template<>

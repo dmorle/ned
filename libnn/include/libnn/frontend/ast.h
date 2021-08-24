@@ -3,7 +3,7 @@
 
 #include <string>
 #include <vector>
-#include <stack>
+#include <tuple>
 #include <unordered_map>
 
 #include <libnn/core/graph.h>
@@ -387,6 +387,18 @@ namespace nn
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
+        class AstRaise :
+            public AstBlock
+        {
+            AstExpr* val;
+
+        public:
+            AstRaise(const TokenArray& tarr);
+            virtual ~AstRaise();
+
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
+        };
+
         class AstSeq
         {
             uint32_t line_num;
@@ -489,13 +501,53 @@ namespace nn
                 std::vector<std::shared_ptr<Obj>>::iterator end) const override;
         };
 
-        class AstArgDecl
+        class AstArgSig
         {
-            // TODO: figure out carg deduction based on args
-            uint32_t line_num;
-            uint32_t col_num;
+        public:
+            virtual ~AstArgSig();
 
+            using Iter = std::vector<std::shared_ptr<Obj>>::iterator;
+            virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const = 0;
+        };
+
+        // Immediate arg carg parameter (any expression)
+        class AstArgImm :
+            public AstArgSig
+        {
+            AstExpr* pimm;
+
+        public:
+            AstArgImm(const TokenArray& tarr);
+            virtual ~AstArgImm();
+
+            virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const override;
+        };
+
+        class AstArgVar :
+            public AstArgSig
+        {
+            bool is_packed;
+            std::string var_name;
+
+        public:
+            AstArgVar(const TokenArray& tarr);
+
+            virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const override;
+        };
+
+        class AstArgDecl :
+            public AstArgSig
+        {
+            std::string type_name;
+            std::vector<AstArgSig*> cargs;
             bool has_cargs;
+            
+        public:
+            AstArgDecl(const TokenArray& tarr);
+            virtual ~AstArgDecl();
+
+            virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const override;
+            std::shared_ptr<Obj> auto_gen(EvalCtx& ctx, const std::string& name) const;
         };
 
         // root node
@@ -510,7 +562,7 @@ namespace nn
             std::string name;
 
             AstCargTuple* cargs;
-            std::vector<AstDecl> vargs;
+            std::vector<std::pair<AstArgDecl, std::string>> vargs;
 
         public:
             AstDef(const TokenArray& def_sig, const TokenArray& def_block);
@@ -533,13 +585,18 @@ namespace nn
             std::string name;
 
             AstCargTuple* cargs;
-            std::vector<AstDecl> vargs;
+            std::vector<std::pair<AstArgDecl, std::string>> vargs;
 
         public:
             AstIntr(const TokenArray& intr_sig, const TokenArray& intr_block);
             ~AstIntr();
 
             void eval(EvalCtx& ctx) const;
+            void apply_cargs(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const;
+            void carg_deduction(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& args) const;
+
+            const std::string& get_name() const;
+            const AstSeq& get_body() const;
         };
 
         class AstFn
@@ -550,7 +607,8 @@ namespace nn
             AstSeq block;
             std::string name;
 
-            std::vector<AstDecl> vargs;
+            // fn args behave the same as def/intr cargs
+            AstCargTuple* args;
 
         public:
             AstFn(const TokenArray& fn_sig, const TokenArray& fn_block);

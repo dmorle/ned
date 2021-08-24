@@ -2,6 +2,7 @@
 #define NN_GENERATOR_H
 
 #include <string>
+#include <sstream>
 #include <unordered_map>
 
 #include <libnn/core/graph.h>
@@ -30,6 +31,8 @@ namespace nn
             PACKAGE,  // File folder (presumably with *.nn files in it)
         };
 
+        ObjType dec_typename_exc(const std::string&);
+        ObjType dec_typename_inv(const std::string&) noexcept;
         constexpr std::string obj_type_name(ObjType ty);
 
         class Obj
@@ -42,6 +45,7 @@ namespace nn
             virtual ~Obj() = 0;
 
             virtual bool bval() const = 0;
+            virtual std::string str() const = 0;
             virtual void assign(const std::shared_ptr<Obj>& val) = 0;
             virtual bool check_cargs(const std::vector<std::shared_ptr<Obj>>& args) const = 0;
             virtual std::shared_ptr<Obj> copy() const = 0;
@@ -113,6 +117,9 @@ namespace nn
 
             virtual bool bval() const override {
                 throw GenerationError(obj_type_name(TY) + " type does not have a truth value"); }
+            virtual std::string str() const override {
+                std::ostringstream addr; addr << (void*)this;
+                return obj_type_name(TY) + " object at " + addr.str(); }
             virtual void assign(const std::shared_ptr<Obj>& val) override {
                 throw GenerationError(obj_type_name(TY) + " type does not support assignment"); }
             virtual bool check_cargs(const std::vector<std::shared_ptr<Obj>>& args) const override { return true; }
@@ -241,6 +248,7 @@ namespace nn
         std::shared_ptr< ObjTensor  > create_obj_tensor  (const std::vector<std::shared_ptr<Obj>>& dims);
         std::shared_ptr< ObjDef     > create_obj_def     ();
         std::shared_ptr< ObjDef     > create_obj_def     (const AstDef* pdef);
+        std::shared_ptr< ObjDef     > create_obj_def     (const AstDef* pdef, const std::vector<std::shared_ptr<Obj>>& cargs);
         std::shared_ptr< ObjFn      > create_obj_fn      ();
         std::shared_ptr< ObjFn      > create_obj_fn      (const AstFn* pfn);
         std::shared_ptr< ObjIntr    > create_obj_intr    ();

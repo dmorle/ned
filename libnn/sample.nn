@@ -1,10 +1,44 @@
 fn range(int n):
-    array<int, n> data
+    array<int, n> result
     int i = 0
     while i < n:
-        data[i] = i
+        result[i] = i
         i += 1
-    return data
+    return result
+
+
+fn zip(array head, array* tail):
+    for array arr in tail:
+        if head.length != arr.length:
+            raise "Array length mismatch for zip"
+    array<type, tail.length + 1> dtype_data
+    dtype_data[0] = head.dtype
+    for int i in range(tail.length):
+        dtype_data[i + 1] = tail[i].dtype
+    
+    array<dtype_data, head.length> result;
+    for int i in range(head.length):
+        result[i][0] = head[i]
+        for int j in range(tail.length):
+            result[i][j + 1] = tail[j][i]
+    return result
+
+
+fn enumerate(array data):
+    array<tuple<int, data.dtype>, data.length> result
+    for int i in range(data.length):
+        result[i][0] = i
+        result[i][1] = data[i]
+    return result
+
+
+fn format(string fmt, string *params):
+    raise "Not implemented"
+
+
+intr const<float val>():
+    tensor<1> out
+    return out
 
 
 intr reshape<int *out_shape, <int *inp_shape>>(tensor<*inp_shape> inp):
@@ -17,7 +51,7 @@ intr reshape<int *out_shape, <int *inp_shape>>(tensor<*inp_shape> inp):
     for int i in range(out_shape.length):
         if out_shape[i] == -1:
             if unknown_idx != -1:
-                error("Multiple -1 values in output shape")
+                raise "Multiple -1 values in output shape"
             unknown_idx = i
         else:
             out_size *= out_shape[i]
@@ -27,20 +61,20 @@ intr reshape<int *out_shape, <int *inp_shape>>(tensor<*inp_shape> inp):
         out_size *= out_shape[unknown_idx]
 
     if out_size != inp_size:
-        error(format("Unable to transform tensor with size {} to size {}", inp_size, out_size))
+        raise format("Unable to transform tensor with size {} to size {}", inp_size, out_size)
     tensor<*out_shape> out
     return out
 
 
 intr concat<int dim, <int *t1_shape>, <int *t2_shape>>(tensor<*t1_shape> t1, tensor<*t2_shape> t2):
     if t1_shape.length != t2_shape.length:
-        error("Mismatching tensor ranks")
+        raise "Mismatching tensor ranks"
     if t1_shape.length <= dim:
-        error("Invalid concatenation dimension")
+        raise "Invalid concatenation dimension"
     
     for int i in range(t1_shape.length):
         if i != dim and t1_shape[i] != t2_shape[i]:
-            error("Mismatching tensor shapes")
+            raise "Mismatching tensor shapes"
 
     t1_shape[dim] += t2_shape[dim]
     tensor<*t1_shape> out
@@ -110,4 +144,4 @@ def model<int G>(tensor<3, 312, 312> img):
     return output
 
 
-def idk<int n, int m, array<tuple<int, array<str, n>, float>, n> s, >
+def idk<int n, int m, array<tuple<int, array<str, n>, float>, n> *s>(array<int, n>)

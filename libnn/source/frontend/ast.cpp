@@ -224,6 +224,8 @@ namespace nn
         template<int prec>
         AstExpr* parseExpr<prec>(const TokenArray& tarr)
         {
+            static_assert(prec < 6);
+
             size_t tsz = tarr.size();
             assert(tsz);
 
@@ -409,7 +411,6 @@ namespace nn
         template<>
         AstExpr* parseExpr<5>(const TokenArray& tarr)
         {
-            // TODO: leaf node expression parsing ; negative operator, indexing, and literal expressions
             assert(tarr.size() > 0);
 
             if (tarr.size() == 1)
@@ -461,24 +462,27 @@ namespace nn
             }
         }
 
-        // helper for function signatures ie. def my_func<...>(...)
-        void paseDefArgs(const TokenArray& tarr, std::vector<AstDecl>& args)
+        // helper for function signatures ie. def my_func<...>(...) | intr my_intr<...>(...)
+        void paseArgs(const TokenArray& tarr, std::vector<std::pair<AstArgDecl, std::string>>& args)
         {
             int start = 0;
-            int end;
-            do
+            int end = tarr.search<TokenArray::args_elem<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start);
+            while (end != -1)
             {
+                if (tarr[end]->ty != TokenType::IDN)
+                    throw SyntaxError(tarr[end], "Expected identifier");
+                if (end - start < 2)
+                    throw SyntaxError(tarr[end], "Invalid arg element in signature");
+                args.push_back({ {{ tarr, start, end - 1 }}, static_cast<const TokenImp<TokenType::IDN>*>(tarr[end])->val });
+                start = end + 1;
+                if (start == tarr.size())
+                    throw SyntaxError(tarr[0], "Trailing ',' in args");
                 end = tarr.search<TokenArray::args_elem<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start);
-                if (end == -1)
-                    end = tarr.size();
-                TokenArray decl(tarr, start, end);
-                args.push_back({ decl });
-                start = end;
-            } while (end != tarr.size());
+            }
         }
 
         // helper for function signatures ie. def my_func<...>(...)
-        void parseDefCargs(const TokenArray& tarr, std::vector<AstCargSig*>& cargs)
+        void parseSigCargs(const TokenArray& tarr, std::vector<AstCargSig*>& cargs)
         {
             if (tarr.size() == 0)
                 return;
@@ -609,11 +613,11 @@ namespace nn
                 if (end == -1)
                     end = tarr.size();
                 if (end == start)
-                    throw SyntaxError(tarr[start], "Empty vararg parameter");
+                    throw SyntaxError(tarr[start], "Empty tuple parameter");
                 elems.push_back(parseExpr<1>({ tarr, start, end }));
                 start = end + 1;
                 if (start == tarr.size())
-                    throw SyntaxError(tarr[end], "Empty vararg parameter");
+                    throw SyntaxError(tarr[end], "Empty tuple parameter");
             } while (end != tarr.size());
         }
 
@@ -946,12 +950,38 @@ namespace nn
 
         AstReturn::AstReturn(const TokenArray& tarr)
         {
-            ret = parseExpr<1>(tarr);
+            assert(tarr.size() > 0);
+            assert(tarr[0]->ty == TokenType::IDN);
+            assert(static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "return");
+            line_num = tarr[0]->line_num;
+            col_num = tarr[0]->col_num;
+
+            int start = 1;
+            int end = tarr.search<TokenArray::is_same_brac<TokenType::COMMA>>(start);
+            if (end == -1)
+                ret = parseExpr<1>({ tarr, 1 });
+            else
+                ret = new AstTuple({ tarr, 1 });
         }
 
         AstReturn::~AstReturn()
         {
             delete ret;
+        }
+
+        AstRaise::AstRaise(const TokenArray& tarr)
+        {
+            assert(tarr.size() > 0);
+            assert(tarr[0]->ty == TokenType::IDN);
+            assert(static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "raise");
+            line_num = tarr[0]->line_num;
+            col_num = tarr[0]->col_num;
+            val = parseExpr<1>({ tarr, 1 });
+        }
+
+        AstRaise::~AstRaise()
+        {
+            delete val;
         }
 
         AstIf::AstIf(const TokenArray& if_sig, const TokenArray& if_seq, int indent_level) :
@@ -1063,12 +1093,104 @@ namespace nn
 
         AstCargTuple::AstCargTuple(const TokenArray& tarr)
         {
-            parseDefCargs(tarr, this->elems);
+            parseSigCargs(tarr, this->elems);
         }
 
         AstCargTuple::~AstCargTuple()
         {
             for (auto e : elems)
+                delete e;
+        }
+
+        AstArgImm::AstArgImm(const TokenArray& tarr)
+        {
+            pimm = parseExpr<1>(tarr);
+        }
+
+        AstArgImm::~AstArgImm()
+        {
+            delete pimm;
+        }
+
+        AstArgVar::AstArgVar(const TokenArray& tarr)
+        {
+            assert(tarr.size() > 0);
+            if (tarr.size() == 1)
+            {
+                if (tarr[0]->ty != TokenType::IDN)
+                    throw SyntaxError(tarr[0], "Expected identifier");
+                is_packed = false;
+                var_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val;
+            }
+            else if (tarr.size() == 2)
+            {
+                if (tarr[0]->ty != TokenType::STAR)
+                    throw SyntaxError(tarr[0], "Expected *");
+                if (tarr[1]->ty != TokenType::IDN)
+                    throw SyntaxError(tarr[1], "Expected identifier");
+                is_packed = true;
+                var_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[1])->val;
+            }
+            else
+                throw SyntaxError(tarr[0], "Invalid var arg in signature");
+            
+            if (dec_typename_inv(var_name) != ObjType::INVALID)
+                throw SyntaxError(tarr[0], "Invalid variable name " + var_name);
+        }
+
+        AstArgDecl::AstArgDecl(const TokenArray& tarr)
+        {
+            assert(tarr.size() > 0);
+            if (tarr[0]->ty != TokenType::IDN)
+                throw SyntaxError(tarr[0], "Expected an identifier");
+            if (dec_typename_inv(static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val) == ObjType::INVALID)
+                throw SyntaxError(tarr[0], "Expected a type name");
+            type_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val;
+            if (tarr.size() == 1)
+            {
+                has_cargs = false;
+                return;
+            }
+
+            has_cargs = true;
+            if (tarr[1]->ty != TokenType::ANGLE_O)
+                throw SyntaxError(tarr[1], "Expected '<'");
+            if (tarr[tarr.size() - 1]->ty != TokenType::ANGLE_C)
+                throw SyntaxError(tarr[tarr.size() - 1], "Expected '>'");
+            TokenArray tk_cargs(tarr, 1, -1);
+            int start = 0;
+            int end;
+            do
+            {
+                // Getting the token array for the carg
+                end = tk_cargs.search<TokenArray::is_same_brac<TokenType::COMMA>>(start);
+                if (end == -1)
+                    end = tk_cargs.size();
+                TokenArray carg_slice(tk_cargs, start, end);
+                if (carg_slice.size() == 0)
+                    throw SyntaxError(tarr[start], "Empty carg");
+
+                // Parsing the carg
+                if (carg_slice[0]->ty == TokenType::IDN)
+                {
+                    if (dec_typename_inv(static_cast<const TokenImp<TokenType::IDN>*>(carg_slice[0])->val) != ObjType::INVALID)
+                        cargs.push_back(new AstArgDecl(carg_slice));
+                    else
+                        cargs.push_back(new AstArgVar(carg_slice));
+                }
+                else if (carg_slice.size() == 2 && carg_slice[0]->ty == TokenType::STAR && carg_slice[1]->ty == TokenType::IDN)
+                    cargs.push_back(new AstArgVar(carg_slice));
+                else
+                    cargs.push_back(new AstArgImm(carg_slice));
+
+                // setup for next loop
+                start = end + 1;
+            } while (start < tk_cargs.size());
+        }
+
+        AstArgDecl::~AstArgDecl()
+        {
+            for (auto e : cargs)
                 delete e;
         }
 
@@ -1146,8 +1268,20 @@ namespace nn
                         if (end_pos == 1)
                             throw SyntaxError(tarr[start], "Invalid return syntax");
                         
-                        TokenArray ret_tarr(tarr, start + 1, end_pos);
+                        TokenArray ret_tarr(tarr, start, end_pos);
                         this->blocks.push_back(new AstReturn(ret_tarr));
+                        start = end_pos + 1;
+                    }
+                    else if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val == "raise")
+                    {
+                        int end_pos = tarr.search<TokenArray::is_same<TokenType::ENDL>>(start);
+                        if (end_pos < 0)
+                            end_pos = tarr.size();
+                        if (end_pos == 1)
+                            throw SyntaxError(tarr[start], "Invalid raise syntax");
+
+                        TokenArray raise_tarr(tarr, start, end_pos);
+                        this->blocks.push_back(new AstRaise(raise_tarr));
                         start = end_pos + 1;
                     }
                 }
@@ -1205,8 +1339,7 @@ namespace nn
             if (end < 0)
                 throw SyntaxError(def_sig[start], "Missing closing ')' in def signature");
 
-            TokenArray varargs_tarr({ def_sig, start, end });
-            paseDefArgs(varargs_tarr, this->vargs);
+            paseArgs({ def_sig, start + 1, end }, this->vargs);  // eating the opening (
         }
 
         AstDef::~AstDef()
@@ -1261,8 +1394,7 @@ namespace nn
             if (end < 0)
                 throw SyntaxError(intr_sig[start], "Missing closing ')' in intr signature");
 
-            TokenArray varargs_tarr({ intr_sig, start, end });
-            paseDefArgs(varargs_tarr, this->vargs);
+            paseArgs({ intr_sig, start + 1, end }, this->vargs);  // eating the opening (
         }
 
         AstIntr::~AstIntr()
@@ -1278,7 +1410,7 @@ namespace nn
             col_num = fn_sig[0]->col_num;
 
             // parsing the signature
-            // intr _() <- minimum allowable signature
+            // fn _() <- minimum allowable signature
             if (fn_sig.size() < 4 || fn_sig[0]->ty != TokenType::IDN || static_cast<const TokenImp<TokenType::IDN>*>(fn_sig[0])->val != "fn")
                 throw SyntaxError(fn_sig[0], "Invalid fn signature");
 
@@ -1293,8 +1425,7 @@ namespace nn
             if (end < 0)
                 throw SyntaxError(fn_sig[start], "Missing closing ')' in fn signature");
 
-            TokenArray varargs_tarr({ fn_sig, start, end });
-            paseDefArgs(varargs_tarr, this->vargs);
+            args = new AstCargTuple({ fn_sig, start, end });
         }
 
         AstModImp::AstModImp(const TokenArray& tarr)

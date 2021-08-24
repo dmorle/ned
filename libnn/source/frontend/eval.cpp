@@ -516,6 +516,13 @@ namespace nn
             return create_obj_invalid();
         }
 
+        std::shared_ptr<Obj> AstRaise::eval(EvalCtx& ctx) const
+        {
+            if (last_ret)
+                return create_obj_invalid();
+            throw GenerationError(val->eval(ctx)->str());
+        }
+
         std::shared_ptr<Obj> AstSeq::eval(EvalCtx& ctx) const
         {
             for (auto e : blocks)
@@ -634,6 +641,87 @@ namespace nn
             return ++start;
         }
 
+        AstArgSig::Iter AstArgImm::carg_deduction(EvalCtx& ctx, const AstArgSig::Iter& start, const AstArgSig::Iter& end) const
+        {
+            if (start == end)
+                throw GenerationError("Missing data for carg deduction");
+            if (pimm->eval(ctx)->ne(*start)->bval())
+                throw GenerationError("Argument data mismatch");
+            return std::next(start);
+        }
+
+        AstArgSig::Iter AstArgVar::carg_deduction(EvalCtx& ctx, const AstArgSig::Iter& start, const AstArgSig::Iter& end) const
+        {
+            if (!ctx.scope().contains(var_name))
+                throw GenerationError("Unable to find carg parameter " + var_name);
+            std::shared_ptr<Obj> carg_obj = ctx.scope()[var_name];
+
+            if (is_packed)
+            {
+                assert(carg_obj->ty == ObjType::ARRAY);
+                
+                auto it = start;
+                auto arr_obj = std::static_pointer_cast<ObjArray>(carg_obj);
+                if (arr_obj->data.elems.size() != 0)
+                {
+                    // It is initialized; don't deduce, just check
+                    for (auto e : arr_obj->data.elems)
+                    {
+                        if (it == end)
+                            throw GenerationError("Not enough cargs in call to match the carg parameters");
+                        if (e->ne(*it)->bval())
+                            throw GenerationError("Value mismatch between call cargs and parameter cargs");
+                    }
+                    return it;
+                }
+                while (it != end)
+                {
+                    try
+                    {
+                        std::shared_ptr<Obj> inst = arr_obj->data.dtype->inst();
+                        inst->assign(*start);
+                        arr_obj->data.elems.push_back(inst);
+                    }
+                    catch (const GenerationError& e)
+                    {
+                        // Not an error, it just means the end of the packed parameters
+                        return it;
+                    }
+                }
+            }
+            else
+            {
+                if (start == end)
+                    throw GenerationError("Missing data for carg deduction");
+                if (carg_obj->init)
+                {
+                    if (carg_obj->ne(*start)->bval())
+                        throw GenerationError("Argument value mismatch in carg var deduction");
+                }
+                else
+                    carg_obj->assign(*start);
+                return std::next(start);
+            }
+        }
+
+        AstArgSig::Iter AstArgDecl::carg_deduction(EvalCtx& ctx, const AstArgSig::Iter& start, const AstArgSig::Iter& end) const
+        {
+            if (start == end)
+                throw GenerationError("Missing data for carg deduction");
+            if (dec_typename_exc(type_name) != (*start)->ty)
+                throw GenerationError("type mismatch, expected " + type_name + ", recieved " + obj_type_name((*start)->ty));
+            if (!has_cargs)
+                return std::next(start);
+            std::vector<std::shared_ptr<Obj>> elems = (*start)->iter(ctx);
+            auto e_start = elems.begin();
+            auto e_end = elems.end();
+            for (auto e : cargs)
+                e_start = e->carg_deduction(ctx, e_start, e_end);
+            if (e_start != e_end)
+                throw GenerationError("Too many elements in the passed argument relative to its arg decl");
+            return std::next(start);
+        }
+
         void AstDef::eval(EvalCtx& ctx) const
         {
             ctx.defs.insert({ name, create_obj_def(this) });
@@ -642,12 +730,22 @@ namespace nn
         void AstDef::apply_cargs(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const
         {
             std::vector<std::shared_ptr<Obj>> cargs_tuple = { create_obj_tuple(cargs) };
-            this->cargs->match_args(ctx, cargs_tuple.begin(), cargs_tuple.end());
+            assert(this->cargs->match_args(ctx, cargs_tuple.begin(), cargs_tuple.end()) == cargs_tuple.end());
         }
 
         void AstDef::carg_deduction(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& args) const
         {
-
+            if (args.size() != vargs.size())
+                throw GenerationError("Argument count mismatch, expected " + std::to_string(vargs.size()) + ", recieved " + std::to_string(args.size()));
+            for (int i = 0; i < args.size(); i++)
+            {
+                std::shared_ptr<Obj> arg_cpy = args[i]->copy();
+                std::vector<std::shared_ptr<Obj>> arg_vec = { arg_cpy };
+                assert(std::get<0>(vargs[i]).carg_deduction(ctx, arg_vec.begin(), arg_vec.end()) == arg_vec.end());
+                if (ctx.scope().contains(std::get<1>(vargs[i])))
+                    throw GenerationError("Name collision in def call");
+                ctx.scope()[std::get<1>(vargs[i])] = arg_cpy;
+            }
         }
 
         void AstIntr::eval(EvalCtx& ctx) const
@@ -692,11 +790,14 @@ namespace nn
             // Generating the arguments for the entry point
             const auto& vargs = static_cast<const ObjDef*>(entry_def.get())->data.pdef->vargs;
             std::vector<std::shared_ptr<Obj>> args;
-            for (const AstDecl& e : vargs)
-                args.push_back(e.eval(*pctx));  // building the arguments one by one
+            for (auto& [decl, name] : vargs)
+                args.push_back(decl.auto_gen(*pctx, name));  // automatically generating the arguments one by one
 
             // running model generation
             entry_def->call(*pctx, args);
+
+            // TODO: add last_ret to the model outputs
+            throw GenerationError("Not implemented");
 
             return pctx;
         }
