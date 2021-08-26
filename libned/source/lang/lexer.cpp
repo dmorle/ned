@@ -203,7 +203,7 @@ namespace nn
             return off_len;
         }
 
-        int lex_buf(char* buf, size_t bufsz, TokenArray& tarr)
+        void lex_buf(char* buf, size_t bufsz, TokenArray& tarr)
         {
             size_t line_num = 1;
             size_t line_start = 0;
@@ -225,6 +225,7 @@ namespace nn
                         i += 4;
                         continue;
                     }
+                    break;
                 case '\t':
                     if (use_indents)
                         tarr.push_back(TokenImp<TokenType::INDENT>(line_num, i - line_start));
@@ -476,11 +477,9 @@ namespace nn
 
                 i++;
             }
-
-            return 0;
         }
 
-        int lex_file(FILE* pf, TokenArray& tarr)
+        void lex_file(FILE* pf, TokenArray& tarr)
         {
             // temp, bad implmentation
             fseek(pf, 0, SEEK_END);
@@ -493,9 +492,8 @@ namespace nn
                 delete[] pbuf;
                 throw std::runtime_error("fread failed");
             }
-            int ret = lex_buf(pbuf, fsz, tarr);
+            lex_buf(pbuf, fsz, tarr);
             delete[] pbuf;
-            return ret;
         }
     }
 }

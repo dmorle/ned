@@ -65,15 +65,7 @@ namespace nn
 
             throw GenerationError("Unknown type");
         }
-
-        template<> ObjBool::~ObjImp() {}
-        template<> ObjInt::~ObjImp() {}
-        template<> ObjFloat::~ObjImp() {}
-        template<> ObjStr::~ObjImp() {}
-        template<> ObjArray::~ObjImp() {}
-        template<> ObjTuple::~ObjImp() {}
-        template<> ObjTensor::~ObjImp() {}
-
+        
         Obj::Obj(ObjType ty) :
             ty(ty),
             init(false)
@@ -87,6 +79,9 @@ namespace nn
             data.has_cargs = false;
             data.cargs = {};
         }
+
+        template<>
+        ObjDType::~ObjImp() {}
 
         template<>
         std::shared_ptr<Obj> ObjDType::copy() const
@@ -215,6 +210,9 @@ namespace nn
         }
 
         template<>
+        ObjBool::~ObjImp() {}
+
+        template<>
         bool ObjBool::bval() const
         {
             check_init(this);
@@ -295,6 +293,9 @@ namespace nn
         {
             data.val = 0;
         }
+
+        template<>
+        ObjInt::~ObjImp() {}
 
         template<>
         void ObjInt::assign(const std::shared_ptr<Obj>& val)
@@ -546,6 +547,9 @@ namespace nn
         }
 
         template<>
+        ObjFloat::~ObjImp() {}
+        
+        template<>
         std::shared_ptr<Obj> ObjFloat::copy() const
         {
             check_init(this);
@@ -750,6 +754,9 @@ namespace nn
         }
 
         template<>
+        ObjStr::~ObjImp() {}
+        
+        template<>
         void ObjStr::assign(const std::shared_ptr<Obj>& val)
         {
             check_init(val);
@@ -846,6 +853,9 @@ namespace nn
             data.elems = {};
         }
 
+        template<>
+        ObjArray::~ObjImp() {}
+        
         template<>
         void ObjArray::assign(const std::shared_ptr<Obj>& val)
         {
@@ -987,6 +997,9 @@ namespace nn
         }
 
         template<>
+        ObjTuple::~ObjImp() {}
+        
+        template<>
         void ObjTuple::assign(const std::shared_ptr<Obj>& val)
         {
             check_init(val);
@@ -1102,6 +1115,9 @@ namespace nn
         }
 
         template<>
+        ObjTensor::~ObjImp() {}
+
+        template<>
         void ObjTensor::assign(const std::shared_ptr<Obj>& val)
         {
             check_mtype(val);
@@ -1163,6 +1179,9 @@ namespace nn
             data.cargs = {};
             data.has_cargs = false;
         }
+
+        template<>
+        ObjDef::~ObjImp() {}
 
         template<>
         std::shared_ptr<Obj> ObjDef::cargs(const std::vector<std::shared_ptr<Obj>>& args)

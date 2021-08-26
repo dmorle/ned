@@ -26,7 +26,7 @@ namespace nn
             uint32_t line_num;
             uint32_t col_num;
 
-            virtual ~AstBlock() = 0;
+            virtual ~AstBlock() {}
 
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const = 0;
         };
@@ -35,7 +35,7 @@ namespace nn
             public AstBlock
         {
         public:
-            virtual ~AstExpr() = 0;
+            virtual ~AstExpr() {}
             
             virtual void append_vec(EvalCtx&, std::vector<std::shared_ptr<Obj>>&) const;
         };
@@ -342,7 +342,6 @@ namespace nn
 
         public:
             AstAssign(const TokenArray& left, const TokenArray& right);
-            virtual ~AstAssign();
 
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
@@ -373,6 +372,18 @@ namespace nn
             //      add the tensor as a graph input edge
             //
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const override;  // returns null
+        };
+
+        class AstPrint :
+            public AstBlock
+        {
+            AstExpr* val;
+
+        public:
+            AstPrint(const TokenArray& tarr);
+            virtual ~AstPrint();
+
+            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
         class AstReturn :
@@ -456,7 +467,7 @@ namespace nn
         class AstCargSig
         {
         public:
-            virtual ~AstCargSig() = 0;
+            virtual ~AstCargSig() {}
 
             virtual std::vector<std::shared_ptr<Obj>>::iterator match_args(
                 EvalCtx& ctx,
@@ -504,7 +515,7 @@ namespace nn
         class AstArgSig
         {
         public:
-            virtual ~AstArgSig();
+            virtual ~AstArgSig() {}
 
             using Iter = std::vector<std::shared_ptr<Obj>>::iterator;
             virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const = 0;

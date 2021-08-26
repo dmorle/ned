@@ -34,7 +34,7 @@ lang_src = [os.path.join(root, file)
             if file.split(".")[-1] == "cpp"]
 
 core_ext = Extension(
-    name="pyned.core",
+    name="core",
     sources=core_src,
     include_dirs=inc_dirs,
     library_dirs=lib_dirs,
@@ -43,7 +43,7 @@ core_ext = Extension(
 )
 
 lang_ext = Extension(
-    name="pyned.lang",
+    name="lang",
     sources=lang_src,
     include_dirs=inc_dirs,
     library_dirs=lib_dirs,
@@ -56,6 +56,7 @@ setup(
     version="0.0.1",
     description="Python interface for the NEtwork Description language",
     author="Dario Morle",
+    ext_package="pyned.cpp",
     ext_modules=[core_ext, lang_ext],
     packages=["pyned"],
     package_dir={"pyned": "./pyned"}

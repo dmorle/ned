@@ -463,7 +463,7 @@ namespace nn
         }
 
         // helper for function signatures ie. def my_func<...>(...) | intr my_intr<...>(...)
-        void paseArgs(const TokenArray& tarr, std::vector<std::pair<AstArgDecl, std::string>>& args)
+        void parseArgs(const TokenArray& tarr, std::vector<std::pair<AstArgDecl, std::string>>& args)
         {
             int start = 0;
             int end = tarr.search<TokenArray::args_elem<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start);
@@ -551,9 +551,9 @@ namespace nn
         {
             assert(ptk->ty == TokenType::IDN);
 
-            line_num = ptk->line_num;
-            col_num = ptk->col_num;
-            val = val;
+            this->line_num = ptk->line_num;
+            this->col_num = ptk->col_num;
+            this->val = val;
         }
 
         AstInt::AstInt(const Token* ptk)
@@ -619,6 +619,12 @@ namespace nn
                 if (start == tarr.size())
                     throw SyntaxError(tarr[end], "Empty tuple parameter");
             } while (end != tarr.size());
+        }
+
+        AstTuple::~AstTuple()
+        {
+            for (auto e : elems)
+                delete e;
         }
 
         AstCall::AstCall(AstExpr* pleft, const TokenArray& tarr)
@@ -946,6 +952,21 @@ namespace nn
         {
             for (auto e : cargs)
                 delete e;
+        }
+
+        AstPrint::AstPrint(const TokenArray& tarr)
+        {
+            assert(tarr.size() > 0);
+            assert(tarr[0]->ty == TokenType::IDN);
+            assert(static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "print");
+            line_num = tarr[0]->line_num;
+            col_num = tarr[0]->col_num;
+            val = parseExpr<1>({ tarr, 1 });
+        }
+
+        AstPrint::~AstPrint()
+        {
+            delete val;
         }
 
         AstReturn::AstReturn(const TokenArray& tarr)
@@ -1339,7 +1360,7 @@ namespace nn
             if (end < 0)
                 throw SyntaxError(def_sig[start], "Missing closing ')' in def signature");
 
-            paseArgs({ def_sig, start + 1, end }, this->vargs);  // eating the opening (
+            parseArgs({ def_sig, start + 1, end }, this->vargs);  // eating the opening (
         }
 
         AstDef::~AstDef()
@@ -1394,7 +1415,7 @@ namespace nn
             if (end < 0)
                 throw SyntaxError(intr_sig[start], "Missing closing ')' in intr signature");
 
-            paseArgs({ intr_sig, start + 1, end }, this->vargs);  // eating the opening (
+            parseArgs({ intr_sig, start + 1, end }, this->vargs);  // eating the opening (
         }
 
         AstIntr::~AstIntr()

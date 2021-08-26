@@ -557,8 +557,8 @@ namespace nn
             size_t* offsets = nullptr;
         };
 
-        TokenArray lex_buf(char* buf, size_t bufsz);
-        TokenArray lex_file(FILE* pf);
+        void lex_buf(char* buf, size_t bufsz, TokenArray& tarr);
+        void lex_file(FILE* pf, TokenArray& tarr);
     }
 }
 

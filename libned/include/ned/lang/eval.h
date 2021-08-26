@@ -43,10 +43,11 @@ namespace nn
         {
         public:
             EvalCtx();
+            ~EvalCtx();
 
-            // scope > defs > fns > intrs > mods > packs
-            std::shared_ptr<Obj> operator[](const std::string& idn);
-            bool contains(const std::string& name);
+            // scope > defs > fns > intrs > mods > packs; else: raises generation error
+            std::shared_ptr<Obj> get(const std::string& name);
+            bool contains(const std::string& name) const noexcept;
 
             Graph& graph() noexcept;
             Scope& scope() noexcept;

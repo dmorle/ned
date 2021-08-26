@@ -92,6 +92,55 @@ namespace nn
             state = EvalState::CALL;
         }
 
+        EvalCtx::~EvalCtx()
+        {
+            delete pgraph;
+            delete pscope;
+
+            for (auto e : defs)
+                delete std::static_pointer_cast<ObjDef>(std::get<1>(e))->data.pdef;
+            for (auto e : fns)
+                delete std::static_pointer_cast<ObjFn>(std::get<1>(e))->data.pfn;
+            for (auto e : intrs)
+                delete std::static_pointer_cast<ObjIntr>(std::get<1>(e))->data.pintr;
+        }
+
+        std::shared_ptr<Obj> EvalCtx::get(const std::string& name)
+        {
+            if (pscope->contains(name))
+                return pscope->at(name);
+            if (defs.contains(name))
+                return defs.at(name);
+            if (fns.contains(name))
+                return fns.at(name);
+            if (intrs.contains(name))
+                return intrs.at(name);
+            throw GenerationError("Unable to resolve identifier '" + name + "'");
+        }
+
+        bool EvalCtx::contains(const std::string& name) const noexcept
+        {
+            if (pscope->contains(name))
+                return true;
+            if (defs.contains(name))
+                return true;
+            if (fns.contains(name))
+                return true;
+            if (intrs.contains(name))
+                return true;
+            return false;
+        }
+
+        Scope& EvalCtx::scope() noexcept
+        {
+            return *pscope;
+        }
+
+        Graph& EvalCtx::graph() noexcept
+        {
+            return *pgraph;
+        }
+
         // AST node evaluation
 
         static std::unordered_map<std::string, int> varcounts = {};
@@ -125,9 +174,7 @@ namespace nn
                 return create_obj_dtype(ty);
 
             // regular identifier stuff
-            if (ctx.contains(idn))
-                return ctx[idn];
-            throw GenerationError("Unable to find a variable with name " + idn);
+            return ctx.get(idn);
         }
 
         std::shared_ptr<Obj> AstTuple::eval(EvalCtx& ctx) const
@@ -505,6 +552,14 @@ namespace nn
             }
 
             return pobj;
+        }
+
+        std::shared_ptr<Obj> AstPrint::eval(EvalCtx& ctx) const
+        {
+            if (last_ret)
+                return create_obj_invalid();
+            printf(val->eval(ctx)->str().c_str());
+            return create_obj_invalid();
         }
 
         std::shared_ptr<Obj> AstReturn::eval(EvalCtx& ctx) const
