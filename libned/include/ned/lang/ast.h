@@ -419,6 +419,8 @@ namespace nn
 
         public:
             AstSeq(const TokenArray& tarr, int indent_level);
+            AstSeq(const AstSeq&) = delete;
+            AstSeq(AstSeq&&) noexcept;
             ~AstSeq();
 
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
@@ -519,6 +521,7 @@ namespace nn
 
             using Iter = std::vector<std::shared_ptr<Obj>>::iterator;
             virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const = 0;
+            virtual void eval(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const = 0;
         };
 
         // Immediate arg carg parameter (any expression)
@@ -532,6 +535,7 @@ namespace nn
             virtual ~AstArgImm();
 
             virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const override;
+            virtual void eval(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const;
         };
 
         class AstArgVar :
@@ -544,6 +548,7 @@ namespace nn
             AstArgVar(const TokenArray& tarr);
 
             virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const override;
+            virtual void eval(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const;
         };
 
         class AstArgDecl :
@@ -558,7 +563,9 @@ namespace nn
             virtual ~AstArgDecl();
 
             virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const override;
-            std::shared_ptr<Obj> auto_gen(EvalCtx& ctx, const std::string& name) const;
+            virtual void eval(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const;
+            // Used for generating the top level def arguments
+            virtual std::shared_ptr<Obj> auto_gen(EvalCtx& ctx, const std::string& name) const;
         };
 
         // root node
@@ -577,6 +584,8 @@ namespace nn
 
         public:
             AstDef(const TokenArray& def_sig, const TokenArray& def_block);
+            AstDef(const AstDef&) = delete;
+            AstDef(AstDef&&) noexcept;
             ~AstDef();
 
             void eval(EvalCtx& ctx) const;
@@ -600,6 +609,8 @@ namespace nn
 
         public:
             AstIntr(const TokenArray& intr_sig, const TokenArray& intr_block);
+            AstIntr(const AstIntr&) = delete;
+            AstIntr(AstIntr&&) noexcept;
             ~AstIntr();
 
             void eval(EvalCtx& ctx) const;
@@ -623,6 +634,9 @@ namespace nn
 
         public:
             AstFn(const TokenArray& fn_sig, const TokenArray& fn_block);
+            AstFn(const AstFn&) = delete;
+            AstFn(AstFn&&) noexcept;
+            ~AstFn();
 
             void eval(EvalCtx& ctx) const;
         };
@@ -652,7 +666,7 @@ namespace nn
         public:
             AstModule(const TokenArray& tarr);
 
-            EvalCtx* eval(const std::string& entry_point, std::vector<std::shared_ptr<Obj>>& cargs);
+            EvalCtx* eval(const std::string& entry_point, const std::vector<std::shared_ptr<Obj>>& cargs);
         };
     }
 }

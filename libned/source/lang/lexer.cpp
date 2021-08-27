@@ -3,6 +3,10 @@
 #include <stdexcept>
 #include <cassert>
 
+#ifdef _DEBUG
+#include <iostream>
+#endif
+
 // macros for manual code generation
 #define SMALL_PUSH_BACK(TY)                                                    \
 template<>                                                                     \
@@ -23,7 +27,7 @@ void TokenArray::push_back(const TokenImp<TokenType::TY>& tk){                 \
         if (!tmp) throw std::bad_alloc();                                      \
         offsets = (size_t*)tmp;                                                \
     }                                                                          \
-    offsets[off_len] = rawlen;                                                 \
+    offsets[off_len - 1] = rawlen;                                             \
     std::memcpy(pbuf + rawlen, &tk, nsz);                                      \
     rawlen += nsz;                                                             \
 }
@@ -47,7 +51,7 @@ void TokenArray::push_back(const TokenImp<TokenType::TY>& tk){                 \
         if (!tmp) throw std::bad_alloc();                                      \
         offsets = (size_t*)tmp;                                                \
     }                                                                          \
-    offsets[off_len] = rawlen;                                                 \
+    offsets[off_len - 1] = rawlen;                                             \
     std::memcpy(pbuf + rawlen, &tk, nsz);                                      \
     rawlen += nsz;                                                             \
 }
@@ -59,18 +63,85 @@ inline bool is_numeric(char c)
 
 inline bool is_idnstart(char c)
 {
-    return ('a' <= c && c <= 'z') || ('A' <= c <= 'Z') || c == '_';
+    return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_';
 }
 
 inline bool is_idnchar(char c)
 {
-    return is_numeric(c) || is_idnchar(c);
+    return is_numeric(c) || is_idnstart(c);
 }
 
 namespace nn
 {
     namespace impl
     {
+        std::string to_string(const Token* ptk)
+        {
+            switch (ptk->ty)
+            {
+            case TokenType::INVALID:
+                return "invalid";
+            case TokenType::INDENT:
+                return "tab";
+            case TokenType::ENDL:
+                return "newline";
+            case TokenType::ANGLE_O:
+                return "<";
+            case TokenType::ANGLE_C:
+                return ">";
+            case TokenType::ROUND_O:
+                return "(";
+            case TokenType::ROUND_C:
+                return ")";
+            case TokenType::SQUARE_O:
+                return "[";
+            case TokenType::SQUARE_C:
+                return "]";
+            case TokenType::DOT:
+                return ".";
+            case TokenType::COLON:
+                return ":";
+            case TokenType::COMMA:
+                return ",";
+            case TokenType::ADD:
+                return "+";
+            case TokenType::SUB:
+                return "-";
+            case TokenType::STAR:
+                return "*";
+            case TokenType::DIV:
+                return "/";
+            case TokenType::IADD:
+                return "+=";
+            case TokenType::ISUB:
+                return "-=";
+            case TokenType::IMUL:
+                return "*=";
+            case TokenType::IDIV:
+                return "/=";
+            case TokenType::ASSIGN:
+                return "=";
+            case TokenType::CMP_EQ:
+                return "==";
+            case TokenType::CMP_NE:
+                return "!=";
+            case TokenType::CMP_GE:
+                return ">=";
+            case TokenType::CMP_LE:
+                return "<=";
+            case TokenType::INT:
+                return "int";
+            case TokenType::FLOAT:
+                return "float";
+            case TokenType::STRLIT:
+                return "string";
+            case TokenType::IDN:
+                return "identifier";
+            default:
+                return "unknown";
+            }
+        }
+
         TokenArray::TokenArray(size_t mem_sz, size_t off_cap)
         {
             this->is_slice = false;
@@ -91,7 +162,7 @@ namespace nn
         TokenArray::TokenArray(const TokenArray& base, int start)
         {
             size_t base_offset = base.offsets[start];
-            size_t base_buflen = ((Token*)(pbuf + base.offsets[base.size() - 1]))->sz + base.offsets[base.size() - 1];
+            size_t base_buflen = ((Token*)(base.pbuf + base.offsets[base.size() - 1]))->sz + base.offsets[base.size() - 1];
 
             this->is_slice = true;
 
@@ -202,6 +273,14 @@ namespace nn
         {
             return off_len;
         }
+
+#ifdef _DEBUG
+        void TokenArray::print() const
+        {
+            for (int i = 0; i < size(); i++)
+                std::cout << to_string((*this)[i]) << std::endl;
+        }
+#endif
 
         void lex_buf(char* buf, size_t bufsz, TokenArray& tarr)
         {
@@ -356,6 +435,7 @@ namespace nn
                         throw std::overflow_error("buffer overflow for string literal during lexing");
                     assert(buf[i] == '"');
                     tk.val[sidx] = '\0';
+                    tarr.push_back(tk);
                     break;
                 }
                 default:
@@ -467,10 +547,11 @@ namespace nn
                     TokenImp<TokenType::IDN> tk(line_num, col_num);
                     int iidx = 0;
                     for (; i < bufsz && iidx < 64 && is_idnchar(buf[i]); i++, iidx++)
-                        tk.val[i] = buf[i];
+                        tk.val[iidx] = buf[i];
                     if (iidx == 64)
                         throw std::overflow_error("buffer overflow for identifier during lexing");
                     tk.val[iidx] = '\0';
+                    tarr.push_back(tk);
                     continue;
                 }
                 }
@@ -485,13 +566,14 @@ namespace nn
             fseek(pf, 0, SEEK_END);
             size_t fsz = ftell(pf);
             rewind(pf);
-            char* pbuf = new char[fsz];
+            char* pbuf = new char[fsz + 1];
             size_t result = fread(pbuf, 1, fsz, pf);
             if (result != fsz)
             {
                 delete[] pbuf;
                 throw std::runtime_error("fread failed");
             }
+            pbuf[fsz] = '\0';
             lex_buf(pbuf, fsz, tarr);
             delete[] pbuf;
         }

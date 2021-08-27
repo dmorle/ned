@@ -21,3 +21,14 @@ add_library(
 
 set_property(TARGET libned PROPERTY LINKER_LANGUAGE CXX)
 set_property(TARGET libned PROPERTY CXX_STANDARD 20)
+
+add_executable(
+    libned_tests
+    "tests/main.cpp"
+)
+
+target_compile_definitions(libned_tests PUBLIC TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/")
+target_link_libraries(libned_tests libned)
+
+set_property(TARGET libned_tests PROPERTY LINKER_LANGUAGE CXX)
+set_property(TARGET libned_tests PROPERTY CXX_STANDARD 20)

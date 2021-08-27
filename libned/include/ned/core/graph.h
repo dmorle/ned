@@ -31,7 +31,7 @@ namespace nn
 	{
     public:
         std::map<std::string, Edge*> inputs;
-        std::map<std::string, Edge*> outputs;
+        std::vector<Edge*> outputs;
 	};
 }
 

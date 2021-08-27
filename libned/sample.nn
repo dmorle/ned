@@ -101,17 +101,17 @@ intr conv2d_intr<int C, int H, int W, int K, int M, int N>(tensor<C, H, W> inp, 
     return out
 
 
-def linear<int N, int M>(tensor<N> inp):
-    tensor<M, N> w
-    tensor<M> b
+def xavier<int* shape>():
+    tensor<*shape> param
+    return param
 
-    return matmul(w, reshape<N, 1>(inp)) + b
+
+def linear<int N, int M>(tensor<N> inp):
+    return matmul(xavier<M, N>(), reshape<N, 1>(inp)) + xavier<N>()
 
 
 def conv2d<int K, int M, int N, int C, int H, int W>(tensor<C, H, W> inp):
-    tensor<K, C, M, N> kernel
-    
-    return conv2d_intr(inp, kernel)
+    return conv2d_intr(inp, xavier<K, C, M, N>())
 
 
 def rnn_cell<int I, int S>(tensor<I> inp, tensor<S> state):
@@ -123,7 +123,7 @@ def rnn_cell<int I, int S>(tensor<I> inp, tensor<S> state):
 
 
 def rnn<int I, int S>(tensor<I> inp):
-    static tensor<N, S> state;
+    static tensor<S> state
     
     tuple result = rnn_cell<I, S>(inp, state)
     state = result[0]
@@ -142,6 +142,3 @@ def model<int G>(tensor<3, 312, 312> img):
     tensor output = rnn<N, flattened.shape[-1], 128>(flattened)
 
     return output
-
-
-def idk<int n, int m, array<tuple<int, array<str, n>, float>, n> *s>(array<int, n>)

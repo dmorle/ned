@@ -13,7 +13,7 @@ namespace nn
                 return false;
 
             size_t pos = 1;
-            if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "static")
+            if (std::string("static") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val)
             {
                 if (tarr.size() < 3 || tarr[1]->ty != TokenType::IDN)
                     return false;
@@ -58,9 +58,9 @@ namespace nn
             case TokenType::ASSIGN:
                 return 0;
             case TokenType::IDN:
-                if (static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val == "and")
+                if (std::string("and") == static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val)
                     return 1;
-                if (static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val == "or")
+                if (std::string("or") == static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val)
                     return 1;
                 return -1;
             }
@@ -104,9 +104,9 @@ namespace nn
             TokenArray left(tarr, 0, split_point);
             TokenArray right(tarr, split_point + 1);
 
-            if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[split_point])->val == "and")
+            if (std::string("and") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[split_point])->val)
                 return new AstAnd(left, right);
-            if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[split_point])->val == "or")
+            if (std::string("or") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[split_point])->val)
                 return new AstOr(left, right);
 
             assert(false);
@@ -211,6 +211,7 @@ namespace nn
                     throw SyntaxError(tarr[0], "Expected identifier after '.'");
                 return parseLeafMods(new AstDot(pleft, tarr[1]), { tarr, 2 });
             }
+            throw SyntaxError(tarr[0], "Unexpected token in leaf expression");
         }
 
         template<int prec>
@@ -425,9 +426,9 @@ namespace nn
                 case TokenType::STRLIT:
                     return new AstStr(tarr[0]);
                 case TokenType::IDN:
-                    if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "true")
+                    if (std::string("true") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val)
                         return new AstBool(tarr[0], true);
-                    if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "false")
+                    if (std::string("false") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val)
                         return new AstBool(tarr[0], false);
                     return new AstIdn(tarr[0]);
                 default:
@@ -451,9 +452,9 @@ namespace nn
                     return parseLeafMods(parseExpr<0>({ tarr, 1, end }), { tarr, end + 1 });
                 }
                 case TokenType::IDN:
-                    if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "true")
+                    if (std::string("true") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val)
                         throw SyntaxError(tarr[0], "Unexpected token");
-                    if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "false")
+                    if (std::string("false") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val)
                         throw SyntaxError(tarr[0], "Unexpected token");
                     return parseLeafMods(new AstIdn(tarr[0]), { tarr, 1 });
                 default:
@@ -922,7 +923,7 @@ namespace nn
 
             size_t start = 0;
             is_static = false;
-            if (tarr[0]->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "static")
+            if (tarr[0]->ty == TokenType::IDN && std::string("static") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val)
             {
                 is_static = true;
                 start++;
@@ -939,11 +940,11 @@ namespace nn
                 
             if (tarr.size() != start + 2)
             {
-                if (tarr[start + 2]->ty != TokenType::ANGLE_O)
+                if (tarr[start + 1]->ty != TokenType::ANGLE_O)
                     throw SyntaxError(tarr[start + 2], "Expected '<' in type for variable declaration");
                 if (tarr[tarr.size() - 2]->ty != TokenType::ANGLE_C)
                     throw SyntaxError(tarr[tarr.size() - 2], "Expected '>' in type for variable declaration");
-                TokenArray cargs(tarr, start + 3, tarr.size() - 2);
+                TokenArray cargs(tarr, start + 2, tarr.size() - 2);
                 parseConstargs(cargs, this->cargs);
             }
         }
@@ -958,7 +959,7 @@ namespace nn
         {
             assert(tarr.size() > 0);
             assert(tarr[0]->ty == TokenType::IDN);
-            assert(static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "print");
+            assert(std::string("print") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val);
             line_num = tarr[0]->line_num;
             col_num = tarr[0]->col_num;
             val = parseExpr<1>({ tarr, 1 });
@@ -973,7 +974,7 @@ namespace nn
         {
             assert(tarr.size() > 0);
             assert(tarr[0]->ty == TokenType::IDN);
-            assert(static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "return");
+            assert(std::string("return") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val);
             line_num = tarr[0]->line_num;
             col_num = tarr[0]->col_num;
 
@@ -994,7 +995,7 @@ namespace nn
         {
             assert(tarr.size() > 0);
             assert(tarr[0]->ty == TokenType::IDN);
-            assert(static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val == "raise");
+            assert(std::string("raise") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[0])->val);
             line_num = tarr[0]->line_num;
             col_num = tarr[0]->col_num;
             val = parseExpr<1>({ tarr, 1 });
@@ -1010,7 +1011,7 @@ namespace nn
         {
             assert(if_sig.size() != 0);
             assert(if_sig[0]->ty == TokenType::IDN);
-            assert(static_cast<const TokenImp<TokenType::IDN>*>(if_sig[0])->val == "if");
+            assert(std::string("if") == static_cast<const TokenImp<TokenType::IDN>*>(if_sig[0])->val);
             line_num = if_sig[0]->line_num;
             col_num = if_sig[0]->col_num;
 
@@ -1031,7 +1032,7 @@ namespace nn
         {
             assert(while_sig.size() != 0);
             assert(while_sig[0]->ty == TokenType::IDN);
-            assert(static_cast<const TokenImp<TokenType::IDN>*>(while_sig[0])->val == "while");
+            assert(std::string("while") == static_cast<const TokenImp<TokenType::IDN>*>(while_sig[0])->val);
             line_num = while_sig[0]->line_num;
             col_num = while_sig[0]->col_num;
 
@@ -1052,7 +1053,7 @@ namespace nn
         {
             assert(for_sig.size() != 0);
             assert(for_sig[0]->ty == TokenType::IDN);
-            assert(static_cast<const TokenImp<TokenType::IDN>*>(for_sig[0])->val == "for");
+            assert(std::string("for") == static_cast<const TokenImp<TokenType::IDN>*>(for_sig[0])->val);
             line_num = for_sig[0]->line_num;
             col_num = for_sig[0]->col_num;
 
@@ -1221,15 +1222,29 @@ namespace nn
             line_num = tarr[0]->line_num;
             col_num = tarr[0]->col_num;
 
-            // Assuming the first 'indent_level' tokens are TokenType::INDENT for every line
-            int start = indent_level;
+            int curr_indent = indent_level;  // allowing for def _(): return
+            int start = 0;
             int end;
             while (start < tarr.size())
             {
+                // finding the first non whitespace token
+                while (start < tarr.size() && (tarr[start]->ty == TokenType::ENDL || tarr[start]->ty == TokenType::INDENT))
+                {
+                    if (tarr[start]->ty == TokenType::ENDL)
+                        curr_indent = 0;
+                    else
+                        curr_indent++;
+                    start++;
+                }
+                if (start == tarr.size() || curr_indent != indent_level)
+                    throw SyntaxError(tarr[0], "Invalid statement sequence");
+                // resetting curr_indent for the next cycle
+                curr_indent = 0;
+
                 if (tarr[start]->ty == TokenType::IDN)
                 {
                     // checking for keywords
-                    if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val == "if")
+                    if (std::string("if") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val)
                     {
                         int colon_pos = tarr.search<TokenArray::is_same<TokenType::COLON>>(start);
                         if (colon_pos < 0 || tarr.size() - 1 == colon_pos)
@@ -1247,7 +1262,7 @@ namespace nn
                         start = end + 1;
                         continue;
                     }
-                    else if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val == "while")
+                    else if (std::string("while") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val)
                     {
                         int colon_pos = tarr.search<TokenArray::is_same<TokenType::COLON>>(start);
                         if (colon_pos < 0 || tarr.size() - 1 == colon_pos)
@@ -1264,7 +1279,7 @@ namespace nn
                         start = end + 1;
                         continue;
                     }
-                    else if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val == "for")
+                    else if (std::string("for") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val)
                     {
                         int colon_pos = tarr.search<TokenArray::is_same<TokenType::COLON>>(start);
                         if (colon_pos < 0 || tarr.size() - 1 == colon_pos)
@@ -1281,7 +1296,7 @@ namespace nn
                         start = end + 1;
                         continue;
                     }
-                    else if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val == "return")
+                    else if (std::string("return") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val)
                     {
                         int end_pos = tarr.search<TokenArray::is_same<TokenType::ENDL>>(start);
                         if (end_pos < 0)
@@ -1292,8 +1307,9 @@ namespace nn
                         TokenArray ret_tarr(tarr, start, end_pos);
                         this->blocks.push_back(new AstReturn(ret_tarr));
                         start = end_pos + 1;
+                        continue;
                     }
-                    else if (static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val == "raise")
+                    else if (std::string("raise") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val)
                     {
                         int end_pos = tarr.search<TokenArray::is_same<TokenType::ENDL>>(start);
                         if (end_pos < 0)
@@ -1304,6 +1320,20 @@ namespace nn
                         TokenArray raise_tarr(tarr, start, end_pos);
                         this->blocks.push_back(new AstRaise(raise_tarr));
                         start = end_pos + 1;
+                        continue;
+                    }
+                    else if (std::string("print") == static_cast<const TokenImp<TokenType::IDN>*>(tarr[start])->val)
+                    {
+                        int end_pos = tarr.search<TokenArray::is_same<TokenType::ENDL>>(start);
+                        if (end_pos < 0)
+                            end_pos = tarr.size();
+                        if (end_pos == 1)
+                            throw SyntaxError(tarr[start], "Invalid print syntax");
+
+                        TokenArray print_tarr(tarr, start, end_pos);
+                        this->blocks.push_back(new AstPrint(print_tarr));
+                        start = end_pos + 1;
+                        continue;
                     }
                 }
 
@@ -1311,10 +1341,20 @@ namespace nn
                 if (end < 0)
                     end = tarr.size();
                 TokenArray expr_tarr(tarr, start, end);
-                this->blocks.push_back(parseExpr<0>(expr_tarr));
+                if (isDecl(expr_tarr))
+                    this->blocks.push_back(new AstDecl(expr_tarr));
+                else
+                    this->blocks.push_back(parseExpr<0>(expr_tarr));
 
                 start = end + 1;  // eat the ENDL token
             }
+        }
+
+        AstSeq::AstSeq(AstSeq&& seq) noexcept :
+            blocks(std::move(seq.blocks))
+        {
+            line_num = seq.line_num;
+            col_num = seq.col_num;
         }
 
         AstSeq::~AstSeq()
@@ -1332,7 +1372,7 @@ namespace nn
 
             // parsing the signature
             // def _() <- minimum allowable signature
-            if (def_sig.size() < 4 || def_sig[0]->ty != TokenType::IDN || static_cast<const TokenImp<TokenType::IDN>*>(def_sig[0])->val != "def")
+            if (def_sig.size() < 4 || def_sig[0]->ty != TokenType::IDN || std::string("def") != static_cast<const TokenImp<TokenType::IDN>*>(def_sig[0])->val)
                 throw SyntaxError(def_sig[0], "Invalid def signature");
 
             if (def_sig[1]->ty != TokenType::IDN)
@@ -1341,31 +1381,52 @@ namespace nn
 
             int start = 2;
             int end;
+            cargs = nullptr;
             if (def_sig[start]->ty == TokenType::ANGLE_O)
             {
-                end = def_sig.search<TokenArray::brac_end<TokenType::ANGLE_O, TokenType::ANGLE_C>>();
+                end = def_sig.search<TokenArray::brac_end<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start + 1);
                 if (end < 0)
                     throw SyntaxError(def_sig[start], "Missing closing '>' in def signature");
-                TokenArray constargs_tarr({ def_sig, start, end });
-                cargs = new AstCargTuple(constargs_tarr);
-                start = end + 1;
-                if (start >= def_sig.size())
-                    throw SyntaxError(def_sig[end], "Missing expected '(' in def signature");
+                if (end != start + 1)
+                {
+                    TokenArray constargs_tarr({ def_sig, start, end });
+                    cargs = new AstCargTuple(constargs_tarr);
+                    start = end + 1;
+                    if (start >= def_sig.size())
+                        throw SyntaxError(def_sig[end], "Missing expected '(' in def signature");
+                }
+                else
+                    start += 2;
             }
+            if (!cargs)
+                cargs = new AstCargTuple({ def_sig, 0, 0 }); // empty slice
 
             if (def_sig[start]->ty != TokenType::ROUND_O)
                 throw SyntaxError(def_sig[start], "Missing expected '(' in def signature");
 
-            end = def_sig.search<TokenArray::is_same<TokenType::ROUND_C>>();
+            end = def_sig.search<TokenArray::brac_end<TokenType::ROUND_O, TokenType::ROUND_C>>(start + 1);
             if (end < 0)
                 throw SyntaxError(def_sig[start], "Missing closing ')' in def signature");
 
-            parseArgs({ def_sig, start + 1, end }, this->vargs);  // eating the opening (
+            if (end != start + 1)
+                parseArgs({ def_sig, start + 1, end }, this->vargs);  // eating the opening (
+        }
+
+        AstDef::AstDef(AstDef&& def) noexcept :
+            block(std::move(def.block)),
+            name(std::move(def.name)),
+            vargs(std::move(def.vargs))
+        {
+            line_num = def.line_num;
+            col_num = def.col_num;
+            cargs = def.cargs;
+            def.cargs = nullptr;
         }
 
         AstDef::~AstDef()
         {
-            delete cargs;
+            if (cargs)
+                delete cargs;
         }
 
         const std::string& AstDef::get_name() const
@@ -1387,7 +1448,7 @@ namespace nn
 
             // parsing the signature
             // intr _() <- minimum allowable signature
-            if (intr_sig.size() < 4 || intr_sig[0]->ty != TokenType::IDN || static_cast<const TokenImp<TokenType::IDN>*>(intr_sig[0])->val != "intr")
+            if (intr_sig.size() < 4 || intr_sig[0]->ty != TokenType::IDN || std::string("intr") != static_cast<const TokenImp<TokenType::IDN>*>(intr_sig[0])->val)
                 throw SyntaxError(intr_sig[0], "Invalid intr signature");
 
             if (intr_sig[1]->ty != TokenType::IDN)
@@ -1418,9 +1479,21 @@ namespace nn
             parseArgs({ intr_sig, start + 1, end }, this->vargs);  // eating the opening (
         }
 
+        AstIntr::AstIntr(AstIntr&& intr) noexcept :
+            block(std::move(intr.block)),
+            name(std::move(intr.name)),
+            vargs(std::move(intr.vargs))
+        {
+            line_num = intr.line_num;
+            col_num = intr.col_num;
+            cargs = intr.cargs;
+            intr.cargs = nullptr;
+        }
+
         AstIntr::~AstIntr()
         {
-            delete cargs;
+            if (cargs)
+                delete cargs;
         }
 
         AstFn::AstFn(const TokenArray& fn_sig, const TokenArray& fn_seq) :
@@ -1432,7 +1505,7 @@ namespace nn
 
             // parsing the signature
             // fn _() <- minimum allowable signature
-            if (fn_sig.size() < 4 || fn_sig[0]->ty != TokenType::IDN || static_cast<const TokenImp<TokenType::IDN>*>(fn_sig[0])->val != "fn")
+            if (fn_sig.size() < 4 || fn_sig[0]->ty != TokenType::IDN || std::string("fn") != static_cast<const TokenImp<TokenType::IDN>*>(fn_sig[0])->val)
                 throw SyntaxError(fn_sig[0], "Invalid fn signature");
 
             if (fn_sig[1]->ty != TokenType::IDN)
@@ -1447,6 +1520,22 @@ namespace nn
                 throw SyntaxError(fn_sig[start], "Missing closing ')' in fn signature");
 
             args = new AstCargTuple({ fn_sig, start, end });
+        }
+
+        AstFn::AstFn(AstFn&& fn) noexcept :
+            block(std::move(fn.block)),
+            name(std::move(fn.name))
+        {
+            line_num = fn.line_num;
+            col_num = fn.col_num;
+            args = fn.args;
+            fn.args = nullptr;
+        }
+
+        AstFn::~AstFn()
+        {
+            if (args)
+                delete args;
         }
 
         AstModImp::AstModImp(const TokenArray& tarr)
@@ -1485,7 +1574,7 @@ namespace nn
                 if (tarr[i]->ty != TokenType::IDN)
                     throw SyntaxError(tarr[i], "Invalid token");
 
-                const char* idn_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[i])->val;
+                std::string idn_name = static_cast<const TokenImp<TokenType::IDN>*>(tarr[i])->val;
                 if (idn_name == "import")
                 {
                     i++;

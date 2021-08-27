@@ -42,7 +42,7 @@ namespace nn
             bool init;
 
             Obj(ObjType ty);
-            virtual ~Obj() = 0;
+            virtual ~Obj() {}
 
             virtual bool bval() const = 0;
             virtual std::string str() const = 0;
@@ -178,7 +178,9 @@ namespace nn
             bool has_cargs;
         };
         template<> struct ObjData<ObjType::INVALID> {};
-        template<> struct ObjData<ObjType::VAR> {};
+        template<> struct ObjData<ObjType::VAR> {
+            std::shared_ptr<Obj> self;
+        };
         template<> struct ObjData<ObjType::BOOL> {
             bool val;
         };
@@ -203,6 +205,7 @@ namespace nn
             Edge* pEdge;
             std::vector<uint32_t> dims;
             bool carg_init;
+            bool is_static;
         };
         template<> struct ObjData<ObjType::DEF> {
             const AstDef* pdef;
@@ -217,7 +220,7 @@ namespace nn
             Scope* pscope;
         };
         template<> struct ObjData<ObjType::MODULE> {
-            AstModule mod;
+            //AstModule mod;
         };
         template<> struct ObjData<ObjType::PACKAGE> {
             std::unordered_map<std::string, ObjModule> mods;

@@ -1,0 +1,4 @@
+def model<>():
+    print "hello world"
+    tensor<1> ret
+    return ret

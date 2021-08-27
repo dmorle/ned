@@ -197,6 +197,8 @@ namespace nn
             pobj->call(ctx, obj_args);
             std::shared_ptr<Obj> pret(nullptr);
             pret.swap(last_ret);
+            if (!pret)
+                return create_obj_invalid();
             return pret;
         }
 
@@ -549,6 +551,9 @@ namespace nn
                     varcounts[var_name] = 0;
                 int id = varcounts[var_name]++;
                 ctx.graph().inputs[var_name + '-' + std::to_string(id)] = pten->data.pEdge;
+
+                if (is_static)
+                    pten->data.is_static = true;
             }
 
             return pobj;
@@ -705,6 +710,11 @@ namespace nn
             return std::next(start);
         }
 
+        void AstArgImm::eval(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const
+        {
+            cargs.push_back(pimm->eval(ctx));
+        }
+
         AstArgSig::Iter AstArgVar::carg_deduction(EvalCtx& ctx, const AstArgSig::Iter& start, const AstArgSig::Iter& end) const
         {
             if (!ctx.scope().contains(var_name))
@@ -759,6 +769,18 @@ namespace nn
             }
         }
 
+        void AstArgVar::eval(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const
+        {
+            if (is_packed)
+            {
+                // concatenating the cargs with an iteration through ctx[var_name]
+                auto vec = ctx.get(var_name)->iter(ctx);
+                cargs.insert(cargs.end(), vec.begin(), vec.end());
+            }
+            else
+                cargs.push_back(ctx.get(var_name));
+        }
+
         AstArgSig::Iter AstArgDecl::carg_deduction(EvalCtx& ctx, const AstArgSig::Iter& start, const AstArgSig::Iter& end) const
         {
             if (start == end)
@@ -775,6 +797,41 @@ namespace nn
             if (e_start != e_end)
                 throw GenerationError("Too many elements in the passed argument relative to its arg decl");
             return std::next(start);
+        }
+
+        void AstArgDecl::eval(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const
+        {
+            throw GenerationError("Invalid carg for top level def");
+        }
+        
+        std::shared_ptr<Obj> AstArgDecl::auto_gen(EvalCtx& ctx, const std::string& name) const
+        {
+            if (type_name != "tensor")
+                throw GenerationError("Top level def must only have tensor arguments");
+            if (!has_cargs)
+                throw GenerationError("Top level def args must be fully specified");
+
+            // evaluating the cargs of the tensor args given the current scope
+            std::vector<std::shared_ptr<Obj>> obj_cargs;
+            for (auto carg : cargs)
+                carg->eval(ctx, obj_cargs);
+
+            // creating the tensor from the cargs
+            std::shared_ptr<Obj> result = create_obj_dtype(ObjType::TENSOR, obj_cargs)->inst();
+            auto pten = std::static_pointer_cast<ObjTensor>(result);
+
+            // creating a new edge
+            pten->data.pEdge = new Edge();
+            pten->data.pEdge->dsc.rk = pten->data.dims.size();
+            for (auto e : pten->data.dims)
+                pten->data.pEdge->dsc.dims.push_back(e);
+
+            // adding the tensor as an input edge
+            if (ctx.graph().inputs.contains(name))
+                throw GenerationError("Top level def input tensor naming collision");
+            ctx.graph().inputs[name] = pten->data.pEdge;
+
+            return result;
         }
 
         void AstDef::eval(EvalCtx& ctx) const
@@ -819,19 +876,19 @@ namespace nn
             throw GenerationError("Not implemented");
         }
 
-        EvalCtx* AstModule::eval(const std::string& entry_point, std::vector<std::shared_ptr<Obj>>& cargs)
+        EvalCtx* AstModule::eval(const std::string& entry_point, const std::vector<std::shared_ptr<Obj>>& cargs)
         {
             EvalCtx* pctx = new EvalCtx();
 
             // Building EvalCtx
-            for (auto e : imps)
+            for (const auto& e : imps)
                 e.eval(*pctx);
 
-            for (auto e : fns)
+            for (const auto& e : fns)
                 e.eval(*pctx);
-            for (auto e : intrs)
+            for (const auto& e : intrs)
                 e.eval(*pctx);
-            for (auto e : defs)
+            for (const auto& e : defs)
                 e.eval(*pctx);
 
             // Finding the entry point
@@ -851,8 +908,17 @@ namespace nn
             // running model generation
             entry_def->call(*pctx, args);
 
-            // TODO: add last_ret to the model outputs
-            throw GenerationError("Not implemented");
+            if (!last_ret)
+                throw GenerationError("No return value from top level def");
+            if (last_ret->ty == ObjType::TENSOR)
+                pctx->graph().outputs.push_back(static_cast<ObjTensor*>(last_ret.get())->data.pEdge);
+            else
+                for (auto e : last_ret->iter(*pctx))
+                {
+                    if (e->ty != ObjType::TENSOR)
+                        throw GenerationError("Invalid return type from top level def");
+                    pctx->graph().outputs.push_back(static_cast<ObjTensor*>(e.get())->data.pEdge);
+                }
 
             return pctx;
         }

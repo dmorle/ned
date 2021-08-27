@@ -71,6 +71,8 @@ namespace nn
             {}
         };
 
+        std::string to_string(const Token* ptk);
+
         class SyntaxError :
             public std::exception
         {
@@ -204,6 +206,10 @@ namespace nn
             const Token* operator[](size_t idx) const noexcept;
             template<TokenType T> void push_back(const TokenImp<T>& tk);
             size_t size() const;
+
+#ifdef _DEBUG
+            void print() const;
+#endif
 
             template<TokenType Ty>
             static bool is_same(const TokenType ty)

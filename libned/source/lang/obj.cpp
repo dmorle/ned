@@ -98,7 +98,7 @@ namespace nn
         {
             check_init(this);
 
-            switch (ty)
+            switch (data.ety)
             {
             case ObjType::TYPE:
                 assert(!data.has_cargs);
@@ -201,6 +201,34 @@ namespace nn
             }
             return create_obj_bool(false);
         }
+
+        template<>
+        ObjInvalid::ObjImp() :
+            Obj(ObjType::INVALID)
+        {}
+
+        template<>
+        ObjInvalid::~ObjImp() {}
+
+        template<>
+        ObjVar::ObjImp() :
+            Obj(ObjType::VAR)
+        {
+            data.self = nullptr;
+        }
+
+        template<>
+        ObjVar::~ObjImp() {}
+
+        template<>
+        bool ObjVar::bval() const
+        {
+            if (!data.self)
+                return ObjImp::bval();
+            return data.self->bval();
+        }
+
+        // TODO: implement the rest of the ObjVar methods
 
         template<>
         ObjBool::ObjImp() :
@@ -1112,6 +1140,7 @@ namespace nn
             data.dims = {};
             data.pEdge = nullptr;
             data.carg_init = false;
+            data.is_static = false;
         }
 
         template<>
@@ -1219,7 +1248,7 @@ namespace nn
             // doing the call
             data.pdef->apply_cargs(ctx, data.cargs);  // If its empty, its empty
             data.pdef->carg_deduction(ctx, cpy_args);
-            auto pret = data.pdef->get_body().eval(ctx);  // not actually the return value, thats in last_ret
+            auto pret = data.pdef->get_body().eval(ctx);  // not actually the return value, that's in last_ret
             assert(pret->ty == ObjType::INVALID);
 
             // restoring the previous state and cleanup
@@ -1227,6 +1256,65 @@ namespace nn
             ctx.state = prev_state;
             ctx.block_name = prev_block;
             delete pscope;
+        }
+
+        template<>
+        ObjFn::ObjImp() :
+            Obj(ObjType::FN)
+        {
+            // TODO: Implement functions
+            throw GenerationError("Not Implemented");
+        }
+
+        template<>
+        ObjFn::~ObjImp()
+        {
+            // TODO: Implement functions
+            throw GenerationError("Not Implemented");
+        }
+
+        template<>
+        ObjIntr::ObjImp() :
+            Obj(ObjType::INTR)
+        {
+            // TODO: Implement intrinsics
+            throw GenerationError("Not Implmented");
+        }
+
+        template<>
+        ObjIntr::~ObjImp()
+        {
+            // TODO: Implement intrinsics
+            throw GenerationError("Not Implmented");
+        }
+
+        template<>
+        ObjModule::ObjImp() :
+            Obj(ObjType::MODULE)
+        {
+            // TODO: Implement modules
+            throw GenerationError("Not Implmented");
+        }
+
+        ObjModule::~ObjImp()
+        {
+            // TODO: Implement modules
+            throw GenerationError("Not Implmented");
+        }
+
+        template<>
+        ObjPackage::ObjImp() :
+            Obj(ObjType::PACKAGE)
+        {
+            // TODO: Implement packages
+            throw GenerationError("Not Implmented");
+        }
+
+        template<>
+        ObjPackage::~ObjImp()
+        {
+            // TODO: Implement packages
+            throw GenerationError("Not Implmented");
         }
 
         // Object contructors, not going to use factories

@@ -14,3 +14,4 @@ endif()
 # Include sub-projects.
 add_subdirectory ("libned")
 add_subdirectory ("pyned")
+# add_subdirectory ("cppned")
