@@ -89,7 +89,7 @@ namespace nn
             pgraph = new Graph();
             pscope = nullptr;
 
-            state = EvalState::CALL;
+            state = EvalState::STARTUP;
         }
 
         EvalCtx::~EvalCtx()
@@ -510,7 +510,7 @@ namespace nn
             {
                 std::vector<std::shared_ptr<Obj>> obj_cargs;
                 for (auto e : cargs)
-                    obj_cargs.push_back(e->eval(ctx));
+                    e->append_vec(ctx, obj_cargs);
                 dtype = dtype->cargs(obj_cargs);
             }
             std::shared_ptr<Obj> pobj = dtype->inst();
@@ -550,12 +550,13 @@ namespace nn
                 if (!varcounts.contains(var_name))
                     varcounts[var_name] = 0;
                 int id = varcounts[var_name]++;
-                ctx.graph().inputs[var_name + '-' + std::to_string(id)] = pten->data.pEdge;
+                ctx.graph().inputs[ctx.block_name + '-' + var_name + '-' + std::to_string(id)] = pten->data.pEdge;
 
                 if (is_static)
                     pten->data.is_static = true;
             }
 
+            ctx.scope()[var_name] = pobj;
             return pobj;
         }
 
@@ -660,7 +661,7 @@ namespace nn
             {
                 // greedly match the arguments
                 std::vector<std::shared_ptr<Obj>> matches;
-                while (start != end && dtype->eq(*start)->bval())
+                while (start != end && dtype->eq((*start)->type())->bval())
                 {
                     auto pobj = dtype->inst();
                     pobj->assign(*start);
@@ -899,14 +900,8 @@ namespace nn
             // applying cargs to the entry def
             std::shared_ptr<Obj> entry_def = it->second->cargs(cargs);
 
-            // Generating the arguments for the entry point
-            const auto& vargs = static_cast<const ObjDef*>(entry_def.get())->data.pdef->vargs;
-            std::vector<std::shared_ptr<Obj>> args;
-            for (auto& [decl, name] : vargs)
-                args.push_back(decl.auto_gen(*pctx, name));  // automatically generating the arguments one by one
-
-            // running model generation
-            entry_def->call(*pctx, args);
+            // running model generation EvalState::STARTUP will mean that entry_def->call will auto_gen() on the vargs
+            entry_def->call(*pctx, {});
 
             if (!last_ret)
                 throw GenerationError("No return value from top level def");

@@ -1,4 +1,9 @@
-def model<>():
+def xavier<int *shape>():
+    tensor<*shape> w
+    return w
+
+def model<int N>(tensor<N> inp):
     print "hello world"
-    tensor<1> ret
-    return ret
+    tensor<2 * N> out1 = xavier<2 * N>()
+    tensor out2 = xavier<N, N>()
+    return out1, out2

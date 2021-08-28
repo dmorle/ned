@@ -30,6 +30,7 @@ namespace nn
 
         enum class EvalState
         {
+            STARTUP,  // start of evaulation (use auto_gen on args)
             CALL,     // evaluating call arguments
             DEFSEQ,   // raw statements in a def
             DEFEXPR,  // part of an expression in a def

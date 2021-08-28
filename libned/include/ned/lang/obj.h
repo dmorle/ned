@@ -202,7 +202,7 @@ namespace nn
             std::vector<std::shared_ptr<Obj>> dtypes;
         };
         template<> struct ObjData<ObjType::TENSOR> {
-            Edge* pEdge;
+            mutable Edge* pEdge;
             std::vector<uint32_t> dims;
             bool carg_init;
             bool is_static;

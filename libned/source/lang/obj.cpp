@@ -36,7 +36,7 @@ namespace nn
             switch (ty)
             {
             case ObjType::TYPE:
-                return "object-ty";
+                return "type";
             case ObjType::INVALID:
                 return "invalid";
             case ObjType::VAR:
@@ -49,6 +49,8 @@ namespace nn
                 return "float";
             case ObjType::STR:
                 return "string";
+            case ObjType::ARRAY:
+                return "array";
             case ObjType::TUPLE:
                 return "tuple";
             case ObjType::TENSOR:
@@ -140,7 +142,10 @@ namespace nn
                 else
                     return create_obj_tuple();
             case ObjType::TENSOR:
-                throw GenerationError("TODO: tensor instantiation");
+                if (data.has_cargs)
+                    return create_obj_tensor(data.cargs);
+                else
+                    return create_obj_tensor();
             }
             throw GenerationError("Invalid type for instantiation");
         }
@@ -948,8 +953,10 @@ namespace nn
         template<>
         std::vector<std::shared_ptr<Obj>> ObjArray::iter(EvalCtx& ctx)
         {
-            // TODO: array iteration
-            throw GenerationError("Not implemented");
+            check_init(this);
+            for (auto e : data.elems)
+                check_init(e);
+            return data.elems;
         }
 
         template<>
@@ -1065,8 +1072,10 @@ namespace nn
         template<>
         std::vector<std::shared_ptr<Obj>> ObjTuple::iter(EvalCtx& ctx)
         {
-            // TODO: iterate through elements (required for carg deduction)
-            throw GenerationError("Not implemented");
+            check_init(this);
+            for (auto e : data.elems)
+                check_init(e);
+            return data.elems;
         }
 
         template<>
@@ -1181,11 +1190,26 @@ namespace nn
             init = true;
         }
 
+        std::shared_ptr<Obj> ObjTensor::copy() const
+        {
+            check_init(this);
+            assert(data.carg_init);
+
+            auto pobj = std::make_shared<ObjTensor>();
+            pobj->data.pEdge = data.pEdge;
+            pobj->data.dims = data.dims;  // copy assignment
+            pobj->data.carg_init = true;
+            pobj->init = true;
+            return pobj;
+        }
+
         template<>
         std::vector<std::shared_ptr<Obj>> ObjTensor::iter(EvalCtx& ctx)
         {
-            // TODO: iterate through the tensor dimensions (required for carg deduction)
-            throw GenerationError("Not implemented");
+            std::vector<std::shared_ptr<Obj>> iters;
+            for (auto e : data.dims)
+                iters.push_back(create_obj_int(e));
+            return iters;
         }
 
         std::shared_ptr<Obj> ObjTensor::eq(const std::shared_ptr<Obj>& val) const
@@ -1228,10 +1252,6 @@ namespace nn
             for (auto e : args)
                 check_init(e);
 
-            std::vector<std::shared_ptr<Obj>> cpy_args;
-            for (auto e : args)
-                cpy_args.push_back(e->copy());
-
             // creating a new scope for the def call
             Scope* pscope = new Scope();
 
@@ -1245,9 +1265,27 @@ namespace nn
             ctx.state = EvalState::DEFSEQ;
             ctx.block_name = data.pdef->get_name();
 
-            // doing the call
+            // applying the cargs, and evaluating the args
             data.pdef->apply_cargs(ctx, data.cargs);  // If its empty, its empty
+            std::vector<std::shared_ptr<Obj>> cpy_args;
+            if (prev_state == EvalState::STARTUP)
+            {
+                // Generating the arguments for the entry point
+                for (const auto& [decl, name] : data.pdef->get_vargs())
+                    cpy_args.push_back(decl.auto_gen(ctx, name));  // automatically generating the arguments one by one
+            }
+            else
+            {
+                // Normal def call, just copy the arguments
+                for (auto e : args)
+                    cpy_args.push_back(e->copy());
+            }
+
+            // doing the call
             data.pdef->carg_deduction(ctx, cpy_args);
+            // ensuring the variables in the scope are fully initialized
+            for (auto e : ctx.scope())
+                check_init(std::get<1>(e));
             auto pret = data.pdef->get_body().eval(ctx);  // not actually the return value, that's in last_ret
             assert(pret->ty == ObjType::INVALID);
 
@@ -1484,6 +1522,7 @@ namespace nn
                 pobj->data.dtypes.push_back(e);
                 pobj->data.elems.push_back(e->inst());
             }
+            pobj->init = true;
             return pobj;
         }
 
@@ -1493,6 +1532,7 @@ namespace nn
             pobj->data.elems = elems;
             for (auto e : elems)
                 pobj->data.dtypes.push_back(e->type());
+            pobj->init = true;
             return pobj;
         }
 

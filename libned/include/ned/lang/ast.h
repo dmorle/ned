@@ -560,6 +560,8 @@ namespace nn
             
         public:
             AstArgDecl(const TokenArray& tarr);
+            AstArgDecl(const AstArgDecl&) = delete;
+            AstArgDecl(AstArgDecl&&) noexcept;
             virtual ~AstArgDecl();
 
             virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const override;
@@ -571,8 +573,6 @@ namespace nn
         // root node
         class AstDef
         {
-            friend class AstModule;
-
             uint32_t line_num;
             uint32_t col_num;
 
@@ -594,6 +594,7 @@ namespace nn
             
             const std::string& get_name() const;
             const AstSeq& get_body() const;
+            const decltype(vargs)& get_vargs() const;
         };
 
         class AstIntr
