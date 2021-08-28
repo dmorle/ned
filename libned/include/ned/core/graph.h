@@ -11,31 +11,35 @@
 
 namespace nn
 {
-    struct Node;
-    namespace impl { class Obj; }
+    namespace lang { class Obj; }
 
-    struct Edge
+    namespace core
     {
-        tensor_dsc dsc = tensor_dsc{};
-        Node* input = nullptr;
-        int inpid = -1;
-        std::vector<std::pair<Node*, int>> outputs = {};
-    };
+        struct Node;
 
-    struct Node
-    {
-        std::string name;
-        std::vector<std::shared_ptr<impl::Obj>> cargs;
-        std::vector<Edge*> inputs;
-        std::vector<Edge*> outputs;
-    };
+        struct Edge
+        {
+            tensor_dsc dsc = tensor_dsc{};
+            Node* input = nullptr;
+            int inpid = -1;
+            std::vector<std::pair<Node*, int>> outputs = {};
+        };
 
-	class Graph
-	{
-    public:
-        std::map<std::string, Edge*> inputs;
-        std::vector<Edge*> outputs;
-	};
+        struct Node
+        {
+            std::string name;
+            std::vector<std::shared_ptr<lang::Obj>> cargs;
+            std::vector<Edge*> inputs;
+            std::vector<Edge*> outputs;
+        };
+
+        class Graph
+        {
+        public:
+            std::map<std::string, Edge*> inputs;
+            std::vector<Edge*> outputs;
+        };
+    }
 }
 
 #endif

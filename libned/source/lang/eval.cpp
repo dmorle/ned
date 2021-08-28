@@ -6,7 +6,7 @@
 
 namespace nn
 {
-    namespace impl
+    namespace lang
     {
         ObjType dec_typename_exc(const std::string& name)
         {
@@ -86,7 +86,7 @@ namespace nn
         EvalCtx::EvalCtx()
         {
             model_params = {};
-            pgraph = new Graph();
+            pgraph = new core::Graph();
             pscope = nullptr;
 
             state = EvalState::STARTUP;
@@ -136,7 +136,7 @@ namespace nn
             return *pscope;
         }
 
-        Graph& EvalCtx::graph() noexcept
+        core::Graph& EvalCtx::graph() noexcept
         {
             return *pgraph;
         }
@@ -546,7 +546,7 @@ namespace nn
                     throw GenerationError("Standalone tensor declarations must have constant arguments");
 
                 // creating a new edge
-                pten->data.pEdge = new Edge();
+                pten->data.pEdge = new core::Edge();
                 pten->data.pEdge->dsc.rk = pten->data.dims.size();
                 for (auto e : pten->data.dims)
                     pten->data.pEdge->dsc.dims.push_back(e);
@@ -832,7 +832,7 @@ namespace nn
             auto pten = std::static_pointer_cast<ObjTensor>(result);
 
             // creating a new edge
-            pten->data.pEdge = new Edge();
+            pten->data.pEdge = new core::Edge();
             pten->data.pEdge->dsc.rk = pten->data.dims.size();
             for (auto e : pten->data.dims)
                 pten->data.pEdge->dsc.dims.push_back(e);

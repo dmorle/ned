@@ -5,7 +5,7 @@
 
 namespace nn
 {
-    namespace impl
+    namespace lang
     {
         void check_init(const Obj* pobj)
         {
@@ -1385,7 +1385,7 @@ namespace nn
             delete pscope;
 
             // creating the new node based on the inputs and output from the intrinsic
-            Node* pnode = new Node();
+            core::Node* pnode = new core::Node();
             pnode->name = data.pintr->get_name();
             for (auto e : data.cargs)
                 pnode->cargs.push_back(e->copy());
@@ -1406,7 +1406,7 @@ namespace nn
                     if (!pten->data.carg_init)
                         throw GenerationError("Intrinsic output tensors must have a known shape");
                     // creating a new edge
-                    pten->data.pEdge = new Edge();
+                    pten->data.pEdge = new core::Edge();
                     pten->data.pEdge->dsc.rk = pten->data.dims.size();
                     for (auto e : pten->data.dims)
                         pten->data.pEdge->dsc.dims.push_back(e);
@@ -1433,7 +1433,7 @@ namespace nn
                         if (!pten->data.carg_init)
                             throw GenerationError("Intrinsic output tensors must have a known shape");
                         // creating a new edge
-                        pten->data.pEdge = new Edge();
+                        pten->data.pEdge = new core::Edge();
                         pten->data.pEdge->dsc.rk = pten->data.dims.size();
                         for (auto e : pten->data.dims)
                             pten->data.pEdge->dsc.dims.push_back(e);
@@ -1676,7 +1676,7 @@ namespace nn
             {
                 check_init(e);
                 check_type(ObjType::INT, e);
-                pobj->data.dims.push_back(static_cast<const ObjInt*>(e.get())->data.val);
+                pobj->data.dims.push_back((uint32_t)static_cast<const ObjInt*>(e.get())->data.val);
             }
             pobj->data.carg_init = true;
             pobj->init = true;

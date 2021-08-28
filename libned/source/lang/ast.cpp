@@ -5,7 +5,7 @@
 
 namespace nn
 {
-    namespace impl
+    namespace lang
     {
         bool isDecl(const TokenArray& tarr)
         {
@@ -26,7 +26,7 @@ namespace nn
             if (tarr.size() < pos + 3 || tarr[pos]->ty != TokenType::ANGLE_O)  // [static] ty<> name
                 return false;
 
-            int ret = tarr.search<TokenArray::brac_end<TokenType::ANGLE_O, TokenType::ANGLE_C>>(pos + 1);
+            int ret = tarr.search<TokenArray::brac_end<TokenType::ANGLE_O, TokenType::ANGLE_C>>((int)pos + 1);
             if (ret < 0)
                 throw SyntaxError(tarr[pos], "Missing closing '>'");
             assert(tarr[ret]->ty == TokenType::ANGLE_C);
@@ -293,12 +293,12 @@ namespace nn
 
             // shortcut for bracketed expressions
             if (tarr[0]->ty == TokenType::ROUND_O && tarr[tsz - 1]->ty == TokenType::ROUND_C)
-                return parseExpr<0>(TokenArray(tarr, 1, tsz - 1));
+                return parseExpr<0>(TokenArray(tarr, 1, (int)tsz - 1));
 
             int bbrac = 0;
             int sbrac = 0;
             int abrac = 0;
-            for (int i = tsz - 1; i >= 0; i--)
+            for (int i = (int)tsz - 1; i >= 0; i--)
             {
                 // Checking for brackets
                 switch (tarr[i]->ty)
@@ -356,12 +356,12 @@ namespace nn
 
             // shortcut for bracketed expressions
             if (tarr[0]->ty == TokenType::ROUND_O && tarr[tsz - 1]->ty == TokenType::ROUND_C)
-                return parseExpr<0>(TokenArray(tarr, 1, tsz - 1));
+                return parseExpr<0>(TokenArray(tarr, 1, (int)tsz - 1));
 
             int bbrac = 0;
             int sbrac = 0;
             int abrac = 0;
-            for (int i = tsz - 1; i >= 0; i--)
+            for (int i = (int)tsz - 1; i >= 0; i--)
             {
                 // Checking for brackets
                 switch (tarr[i]->ty)

@@ -73,7 +73,7 @@ inline bool is_idnchar(char c)
 
 namespace nn
 {
-    namespace impl
+    namespace lang
     {
         std::string to_string(const Token* ptk)
         {
@@ -284,11 +284,11 @@ namespace nn
 
         void lex_buf(char* buf, size_t bufsz, TokenArray& tarr)
         {
-            size_t line_num = 1;
-            size_t line_start = 0;
+            uint32_t line_num = 1;
+            uint32_t line_start = 0;
             bool use_indents = true;
 
-            for (size_t i = 0; i < bufsz;)
+            for (uint32_t i = 0; i < bufsz;)
             {
                 switch (buf[i])
                 {
@@ -443,7 +443,7 @@ namespace nn
                     use_indents = false;
 
                     // Handling numeric types
-                    size_t col_num = i - line_start;
+                    uint32_t col_num = i - line_start;
                     bool neg_val = false;
                     bool use_float = false;
                     if (buf[i] == '-')

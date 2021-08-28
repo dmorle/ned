@@ -9,7 +9,7 @@
 
 namespace nn
 {
-    namespace impl
+    namespace lang
     {
         class Obj;
         class AstBlock;
@@ -50,7 +50,7 @@ namespace nn
             std::shared_ptr<Obj> get(const std::string& name);
             bool contains(const std::string& name) const noexcept;
 
-            Graph& graph() noexcept;
+            core::Graph& graph() noexcept;
             Scope& scope() noexcept;
 
             std::map<std::string, std::shared_ptr<Obj>> defs;
@@ -62,7 +62,7 @@ namespace nn
             std::map<std::string, std::shared_ptr<Obj>> statics;
 
             std::vector<std::string> model_params;
-            Graph* pgraph;
+            core::Graph* pgraph;
             Scope* pscope;
 
             EvalState state;

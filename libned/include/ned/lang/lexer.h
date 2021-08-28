@@ -7,7 +7,7 @@
 
 namespace nn
 {
-    namespace impl
+    namespace lang
     {
         enum class TokenType
         {
@@ -254,25 +254,25 @@ namespace nn
             template<Keyword kw>
             static bool is_keyword(const Token* tk);
             template<> static bool is_keyword<Keyword::DEF>(const Token* tk)
-            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "def"; }
+            { return tk->ty == TokenType::IDN && std::string("def") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
             template<> static bool is_keyword<Keyword::IF>(const Token* tk)
-            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "if"; }
+            { return tk->ty == TokenType::IDN && std::string("if") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
             template<> static bool is_keyword<Keyword::ELIF>(const Token* tk)
-            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "elif"; }
+            { return tk->ty == TokenType::IDN && std::string("elif") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
             template<> static bool is_keyword<Keyword::ELSE>(const Token* tk)
-            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "else"; }
+            { return tk->ty == TokenType::IDN && std::string("else") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
             template<> static bool is_keyword<Keyword::FOR>(const Token* tk)
-            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "for"; }
+            { return tk->ty == TokenType::IDN && std::string("for") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
             template<> static bool is_keyword<Keyword::IN>(const Token* tk)
-            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "in"; }
+            { return tk->ty == TokenType::IDN && std::string("in") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
             template<> static bool is_keyword<Keyword::WHILE>(const Token* tk)
-            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "while"; }
+            { return tk->ty == TokenType::IDN && std::string("while") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
             template<> static bool is_keyword<Keyword::VAR>(const Token* tk)
-            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "var"; }
+            { return tk->ty == TokenType::IDN && std::string("var") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
             template<> static bool is_keyword<Keyword::IMPORT>(const Token* tk)
-            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "import"; }
+            { return tk->ty == TokenType::IDN && std::string("import") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
             template<> static bool is_keyword<Keyword::RETURN>(const Token* tk)
-            { return tk->ty == TokenType::IDN && static_cast<const TokenImp<TokenType::IDN>*>(tk)->val == "return"; }
+            { return tk->ty == TokenType::IDN && std::string("return") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
 
             template<int ILV>
             static int block_end(const TokenType ty, int position)

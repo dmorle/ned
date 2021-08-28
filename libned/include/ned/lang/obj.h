@@ -10,7 +10,7 @@
 
 namespace nn
 {
-    namespace impl
+    namespace lang
     {
         enum class ObjType
         {
@@ -202,7 +202,7 @@ namespace nn
             std::vector<std::shared_ptr<Obj>> dtypes;
         };
         template<> struct ObjData<ObjType::TENSOR> {
-            mutable Edge* pEdge;
+            mutable core::Edge* pEdge;
             std::vector<uint32_t> dims;
             bool carg_init;
             bool is_static;

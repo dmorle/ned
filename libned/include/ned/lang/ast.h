@@ -12,7 +12,7 @@
 
 namespace nn
 {
-    namespace impl
+    namespace lang
     {
         class AstSeq;
         class AstDef;
@@ -23,8 +23,8 @@ namespace nn
         {
         public:
             std::string file_name;
-            uint32_t line_num;
-            uint32_t col_num;
+            uint32_t line_num = 0;
+            uint32_t col_num = 0;
 
             virtual ~AstBlock() {}
 
@@ -44,8 +44,8 @@ namespace nn
             public AstExpr
         {
         protected:
-            AstExpr* pleft;
-            AstExpr* pright;
+            AstExpr* pleft = nullptr;
+            AstExpr* pright = nullptr;
 
         public:
             virtual ~AstBinOp();
