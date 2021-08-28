@@ -68,6 +68,8 @@ namespace nn
             EvalState state;
             std::string block_name;
         };
+
+        extern std::shared_ptr<Obj> last_ret;
     }
 }
 

@@ -807,6 +807,12 @@ namespace nn
         }
 
         template<>
+        std::string ObjStr::str() const
+        {
+            return data.val;
+        }
+
+        template<>
         std::shared_ptr<Obj> ObjStr::get(const std::string& item)
         {
             check_init(this);
@@ -1161,6 +1167,8 @@ namespace nn
             check_mtype(val);
             check_init(val);
 
+            // TODO: handle assignment to static tensors
+
             if (data.carg_init)
             {
                 // check to ensure the new value has the same rank and dimensions
@@ -1315,15 +1323,130 @@ namespace nn
         ObjIntr::ObjImp() :
             Obj(ObjType::INTR)
         {
-            // TODO: Implement intrinsics
-            throw GenerationError("Not Implmented");
+            data.pintr = nullptr;
+            data.cargs = {};
+            data.has_cargs = false;
         }
 
         template<>
-        ObjIntr::~ObjImp()
+        ObjIntr::~ObjImp() {}
+
+        template<>
+        std::shared_ptr<Obj> ObjIntr::cargs(const std::vector<std::shared_ptr<Obj>>& args)
         {
-            // TODO: Implement intrinsics
-            throw GenerationError("Not Implmented");
+            check_init(this);
+            if (data.has_cargs)
+                throw GenerationError("Const args have already been set");
+            return create_obj_intr(data.pintr, args);
+        }
+
+        template<>
+        void ObjIntr::call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const
+        {
+            check_init(this);
+            for (auto e : args)
+                check_init(e);
+
+            // copying the arguments for the new scope
+            std::vector<std::shared_ptr<Obj>> cpy_args;
+            for (auto e : args)
+            {
+                check_type(ObjType::TENSOR, e);
+                assert(std::static_pointer_cast<ObjTensor>(e)->data.pEdge);
+                cpy_args.push_back(e->copy());
+            }
+
+            // creating a new scope for the intr call
+            Scope* pscope = new Scope();
+
+            // saving the old state
+            Scope* prev_scope = ctx.pscope;
+            EvalState prev_state = ctx.state;
+            std::string prev_block = ctx.block_name;
+
+            // creating the new state
+            ctx.pscope = pscope;
+            ctx.state = EvalState::INTR;
+            ctx.block_name = data.pintr->get_name();
+
+            // applying the cargs, and evaluating the args
+            data.pintr->apply_cargs(ctx, data.cargs);  // If its empty, its empty
+            data.pintr->carg_deduction(ctx, cpy_args);
+            // ensuring the variables in the scope are fully initialized
+            for (auto e : ctx.scope())
+                check_init(std::get<1>(e));
+            auto pret = data.pintr->get_body().eval(ctx);  // not actually the return value, that's in last_ret
+            assert(pret->ty == ObjType::INVALID);
+
+            // restoring the previous state and cleanup
+            ctx.pscope = prev_scope;
+            ctx.state = prev_state;
+            ctx.block_name = prev_block;
+            delete pscope;
+
+            // creating the new node based on the inputs and output from the intrinsic
+            Node* pnode = new Node();
+            pnode->name = data.pintr->get_name();
+            for (auto e : data.cargs)
+                pnode->cargs.push_back(e->copy());
+            // node input connections
+            for (int i = 0; i < args.size(); i++)
+            {
+                std::static_pointer_cast<ObjTensor>(args[i])->data.pEdge->outputs.push_back({ pnode, i });  // edge output to node input
+                pnode->inputs.push_back(std::static_pointer_cast<ObjTensor>(args[i])->data.pEdge);  // node input to edge output
+            }
+            // node output connections
+            if (last_ret->ty == ObjType::TENSOR)
+            {
+                // single output
+
+                ObjTensor* pten = static_cast<ObjTensor*>(last_ret.get());
+                if (!pten->data.pEdge)  // creating the edge if needed
+                {
+                    if (!pten->data.carg_init)
+                        throw GenerationError("Intrinsic output tensors must have a known shape");
+                    // creating a new edge
+                    pten->data.pEdge = new Edge();
+                    pten->data.pEdge->dsc.rk = pten->data.dims.size();
+                    for (auto e : pten->data.dims)
+                        pten->data.pEdge->dsc.dims.push_back(e);
+                }
+                else if (pten->data.pEdge->input)  // if the edge already exists, make sure the input hasn't been mapped yet
+                    throw GenerationError("Edge input has already been mapped");
+                assert(pten->data.pEdge->inpid == -1);
+
+                pten->data.pEdge->input = pnode;  // edge input to node output
+                pten->data.pEdge->inpid = 0;
+                pnode->outputs.push_back(pten->data.pEdge);  // node output to edge input
+            }
+            else
+            {
+                // multiple outputs
+                const auto& outs = last_ret->iter(ctx);
+                for (int i = 0; i < outs.size(); i++)
+                {
+                    check_type(ObjType::TENSOR, outs[i]);
+
+                    ObjTensor* pten = static_cast<ObjTensor*>(outs[i].get());
+                    if (!pten->data.pEdge)  // creating the edge if needed
+                    {
+                        if (!pten->data.carg_init)
+                            throw GenerationError("Intrinsic output tensors must have a known shape");
+                        // creating a new edge
+                        pten->data.pEdge = new Edge();
+                        pten->data.pEdge->dsc.rk = pten->data.dims.size();
+                        for (auto e : pten->data.dims)
+                            pten->data.pEdge->dsc.dims.push_back(e);
+                    }
+                    else if (pten->data.pEdge->input)  // if the edge already exists, make sure the input hasn't been mapped yet
+                        throw GenerationError("Edge input has already been mapped");
+                    assert(pten->data.pEdge->inpid == -1);
+
+                    pten->data.pEdge->input = pnode;  // edge input to node output
+                    pten->data.pEdge->inpid = i;
+                    pnode->outputs.push_back(pten->data.pEdge);  // node output to edge input
+                }
+            }
         }
 
         template<>
@@ -1600,12 +1723,27 @@ namespace nn
 
         std::shared_ptr<ObjIntr> create_obj_intr()
         {
-            throw GenerationError("Not implemented");
+            return std::make_shared<ObjIntr>();
         }
 
         std::shared_ptr<ObjIntr> create_obj_intr(const AstIntr* pintr)
         {
-            throw GenerationError("Not implemented");
+            auto pobj = std::make_shared<ObjIntr>();
+            pobj->data.pintr = pintr;
+            pobj->init = true;
+            return pobj;
+        }
+
+        std::shared_ptr<ObjIntr> create_obj_intr(const AstIntr* pintr, const std::vector<std::shared_ptr<Obj>>& cargs)
+        {
+            auto pobj = std::make_shared<ObjIntr>();
+            pobj->data.pintr = pintr;
+            for (auto e : cargs)
+                check_init(e);
+            pobj->data.cargs = cargs;
+            pobj->data.has_cargs = true;
+            pobj->init = true;
+            return pobj;
         }
 
         std::shared_ptr<ObjModule> create_obj_module()

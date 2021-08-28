@@ -5,12 +5,14 @@
 #include <tuple>
 #include <vector>
 #include <string>
+#include <memory>
 
 #include <ned/core/tensor.h>
 
 namespace nn
 {
     struct Node;
+    namespace impl { class Obj; }
 
     struct Edge
     {
@@ -23,6 +25,7 @@ namespace nn
     struct Node
     {
         std::string name;
+        std::vector<std::shared_ptr<impl::Obj>> cargs;
         std::vector<Edge*> inputs;
         std::vector<Edge*> outputs;
     };

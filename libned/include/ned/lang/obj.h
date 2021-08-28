@@ -217,7 +217,8 @@ namespace nn
         };
         template<> struct ObjData<ObjType::INTR> {
             const AstIntr* pintr;
-            Scope* pscope;
+            std::vector<std::shared_ptr<Obj>> cargs;
+            bool has_cargs;
         };
         template<> struct ObjData<ObjType::MODULE> {
             //AstModule mod;
@@ -256,6 +257,7 @@ namespace nn
         std::shared_ptr< ObjFn      > create_obj_fn      (const AstFn* pfn);
         std::shared_ptr< ObjIntr    > create_obj_intr    ();
         std::shared_ptr< ObjIntr    > create_obj_intr    (const AstIntr* pintr);
+        std::shared_ptr< ObjIntr    > create_obj_intr    (const AstIntr* pintr, const std::vector<std::shared_ptr<Obj>>& cargs);
         std::shared_ptr< ObjModule  > create_obj_module  ();
         std::shared_ptr< ObjPackage > create_obj_package ();
     }

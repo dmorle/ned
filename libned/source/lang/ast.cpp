@@ -1478,26 +1478,35 @@ namespace nn
 
             int start = 2;
             int end;
+            cargs = nullptr;
             if (intr_sig[start]->ty == TokenType::ANGLE_O)
             {
-                end = intr_sig.search<TokenArray::brac_end<TokenType::ANGLE_O, TokenType::ANGLE_C>>();
+                end = intr_sig.search<TokenArray::brac_end<TokenType::ANGLE_O, TokenType::ANGLE_C>>(start + 1);
                 if (end < 0)
                     throw SyntaxError(intr_sig[start], "Missing closing '>' in intr signature");
-                TokenArray constargs_tarr({ intr_sig, start, end });
-                cargs = new AstCargTuple(constargs_tarr);
-                start = end + 1;
-                if (start >= intr_sig.size())
-                    throw SyntaxError(intr_sig[end], "Missing expected '(' in intr signature");
+                if (end != start + 1)
+                {
+                    TokenArray constargs_tarr({ intr_sig, start + 1, end });
+                    cargs = new AstCargTuple(constargs_tarr);
+                    start = end + 1;
+                    if (start >= intr_sig.size())
+                        throw SyntaxError(intr_sig[end], "Missing expected '(' in intr signature");
+                }
+                else
+                    start += 2;
             }
+            if (!cargs)
+                cargs = new AstCargTuple({ intr_sig, 0, 0 }); // empty slice
 
             if (intr_sig[start]->ty != TokenType::ROUND_O)
                 throw SyntaxError(intr_sig[start], "Missing expected '(' in intr signature");
 
-            end = intr_sig.search<TokenArray::is_same<TokenType::ROUND_C>>();
+            end = intr_sig.search<TokenArray::brac_end<TokenType::ROUND_O, TokenType::ROUND_C>>(start + 1);
             if (end < 0)
                 throw SyntaxError(intr_sig[start], "Missing closing ')' in intr signature");
 
-            parseArgs({ intr_sig, start + 1, end }, this->vargs);  // eating the opening (
+            if (end != start + 1)
+                parseArgs({ intr_sig, start + 1, end }, vargs);  // eating the opening (
         }
 
         AstIntr::AstIntr(AstIntr&& intr) noexcept :
@@ -1515,6 +1524,16 @@ namespace nn
         {
             if (cargs)
                 delete cargs;
+        }
+
+        const std::string& AstIntr::get_name() const
+        {
+            return name;
+        }
+
+        const AstSeq& AstIntr::get_body() const
+        {
+            return block;
         }
 
         AstFn::AstFn(const TokenArray& fn_sig, const TokenArray& fn_seq) :

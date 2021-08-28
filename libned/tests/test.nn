@@ -1,3 +1,7 @@
+intr add<int *shape>(tensor<*shape> t1, tensor<*shape> t2):
+    tensor<*shape> out
+    return out
+
 def xavier<int *shape>():
     tensor<*shape> w
     return w
@@ -6,4 +10,5 @@ def model<int N>(tensor<N> inp):
     print "hello world"
     tensor<2 * N> out1 = xavier<2 * N>()
     tensor out2 = xavier<N, N>()
+    out2 = add(out2, out2)
     return out1, out2

@@ -497,7 +497,12 @@ namespace nn
                 ctx.state = EvalState::DEFEXPR;
                 revert = true;
             }
-            pleft->eval(ctx)->assign(pright->eval(ctx));
+            auto pleft_obj = pleft->eval(ctx);
+            if (pleft_obj->ty == ObjType::TENSOR && ctx.state == EvalState::INTR)
+                throw GenerationError("Tensor assignment is not allowed in an intr block");
+            if (pleft_obj->ty == ObjType::TENSOR && ctx.state == EvalState::FN)
+                throw GenerationError("Tensor assignment is not allowed in a fn block");
+            pleft_obj->assign(pright->eval(ctx));
             if (revert)
                 ctx.state = EvalState::DEFSEQ;
             return create_obj_invalid();
@@ -564,7 +569,7 @@ namespace nn
         {
             if (last_ret)
                 return create_obj_invalid();
-            printf(val->eval(ctx)->str().c_str());
+            printf("%s\n", val->eval(ctx)->str().c_str());
             return create_obj_invalid();
         }
 
@@ -737,23 +742,27 @@ namespace nn
                             throw GenerationError("Not enough cargs in call to match the carg parameters");
                         if (e->ne(*it)->bval())
                             throw GenerationError("Value mismatch between call cargs and parameter cargs");
+                        it++;
                     }
                     return it;
                 }
                 while (it != end)
                 {
+                    std::shared_ptr<Obj> inst = arr_obj->data.dtype->inst();
                     try
                     {
-                        std::shared_ptr<Obj> inst = arr_obj->data.dtype->inst();
-                        inst->assign(*start);
-                        arr_obj->data.elems.push_back(inst);
+                        // this will throw a GenerationError if the type doesn't match
+                        inst->assign(*it);
                     }
                     catch (const GenerationError& e)
                     {
                         // Not an error, it just means the end of the packed parameters
                         return it;
                     }
+                    arr_obj->data.elems.push_back(inst);
+                    it++;
                 }
+                return it;
             }
             else
             {
@@ -793,7 +802,8 @@ namespace nn
             std::vector<std::shared_ptr<Obj>> elems = (*start)->iter(ctx);
             auto e_start = elems.begin();
             auto e_end = elems.end();
-            for (auto e : cargs)
+
+            for (const auto& e : cargs)
                 e_start = e->carg_deduction(ctx, e_start, e_end);
             if (e_start != e_end)
                 throw GenerationError("Too many elements in the passed argument relative to its arg decl");
@@ -864,6 +874,27 @@ namespace nn
         void AstIntr::eval(EvalCtx& ctx) const
         {
             ctx.defs.insert({ name, create_obj_intr(this) });
+        }
+
+        void AstIntr::apply_cargs(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const
+        {
+            std::vector<std::shared_ptr<Obj>> cargs_tuple = { create_obj_tuple(cargs) };
+            assert(this->cargs->match_args(ctx, cargs_tuple.begin(), cargs_tuple.end()) == cargs_tuple.end());
+        }
+
+        void AstIntr::carg_deduction(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& args) const
+        {
+            if (args.size() != vargs.size())
+                throw GenerationError("Argument count mismatch, expected " + std::to_string(vargs.size()) + ", recieved " + std::to_string(args.size()));
+            for (int i = 0; i < args.size(); i++)
+            {
+                std::shared_ptr<Obj> arg_cpy = args[i]->copy();
+                std::vector<std::shared_ptr<Obj>> arg_vec = { arg_cpy };
+                assert(std::get<0>(vargs[i]).carg_deduction(ctx, arg_vec.begin(), arg_vec.end()) == arg_vec.end());
+                if (ctx.scope().contains(std::get<1>(vargs[i])))
+                    throw GenerationError("Name collision in intr call");
+                ctx.scope()[std::get<1>(vargs[i])] = arg_cpy;
+            }
         }
 
         void AstFn::eval(EvalCtx& ctx) const
