@@ -1,0 +1,40 @@
+fn range(int n):
+    array<int, n> result
+    int i = 0
+    while i < n:
+        result[i] = i
+        i += 1
+    return result
+
+
+fn enumerate(array data):
+    array<tuple<int, data.dtype>, data.length> result
+    for int i in range(data.length):
+        result[i][0] = i
+        result[i][1] = data[i]
+    return result
+
+
+fn zip(array head, array* tail):
+    for array arr in tail:
+        if head.length != arr.length:
+            raise "Array length mismatch for zip"
+    array<type, tail.length + 1> dtype_data
+    dtype_data[0] = head.dtype
+    for int i in range(tail.length):
+        dtype_data[i + 1] = tail[i].dtype
+    
+    array<dtype_data, head.length> result;
+    for int i in range(head.length):
+        result[i][0] = head[i]
+        for int j in range(tail.length):
+            result[i][j + 1] = tail[j][i]
+    return result
+
+
+fn format(string fmt, string *params):
+    raise "Not implemented"
+
+
+fn split(string str, string key):
+    raise "Not implemented"

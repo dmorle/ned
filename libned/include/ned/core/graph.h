@@ -15,6 +15,12 @@ namespace nn
 
     namespace core
     {
+        class InvalidGraph :
+            public std::exception
+        {
+            InvalidGraph(const std::string& errmsg);
+        };
+
         struct Node;
 
         struct Edge
@@ -33,12 +39,15 @@ namespace nn
             std::vector<Edge*> outputs;
         };
 
-        class Graph
+        struct Graph
         {
-        public:
             std::map<std::string, Edge*> inputs;
             std::vector<Edge*> outputs;
         };
+
+        // modifies the given graph to include a gradient. Output gradient edges are returned
+        std::map<std::string, Edge*> generate_grad(Graph* pgraph);
+        void unroll_graph(Graph* pgraph, std::map<std::string, int> inp_counts, Graph& result);
     }
 }
 

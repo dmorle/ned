@@ -101,7 +101,7 @@ intr conv2d_intr<int C, int H, int W, int K, int M, int N>(tensor<C, H, W> inp, 
     return out
 
 
-def xavier<int* shape>():
+def xavier<int *shape>():
     tensor<*shape> param
     return param
 
