@@ -40,7 +40,7 @@ __global__ void div_pointwise(T* dst, const T* a, const T* b, size_t sz)
 }
 
 template<typename T>
-void AddPointwise<T>::eval(RunId id)
+void AddSame<T>::eval(RunId id)
 {
     void* data1 = inp1->get_data(id);
     void* data2 = inp2->get_data(id);
@@ -49,7 +49,7 @@ void AddPointwise<T>::eval(RunId id)
 }
 
 template<typename T>
-void SubPointwise<T>::eval(RunId id)
+void SubSame<T>::eval(RunId id)
 {
     void* data1 = inp1->get_data(id);
     void* data2 = inp2->get_data(id);
@@ -58,7 +58,7 @@ void SubPointwise<T>::eval(RunId id)
 }
 
 template<typename T>
-void MulPointwise<T>::eval(RunId id)
+void MulSame<T>::eval(RunId id)
 {
     void* data1 = inp1->get_data(id);
     void* data2 = inp2->get_data(id);
@@ -67,7 +67,7 @@ void MulPointwise<T>::eval(RunId id)
 }
 
 template<typename T>
-void DivPointwise<T>::eval(RunId id)
+void DivSame<T>::eval(RunId id)
 {
     void* data1 = inp1->get_data(id);
     void* data2 = inp2->get_data(id);
@@ -88,7 +88,7 @@ __global__ void sub_scalar(T* dst, const T* a, const T* b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
-        dst[i] = a[i] + b[0];
+        dst[i] = a[i] - b[0];
 }
 
 template<typename T>
@@ -96,7 +96,7 @@ __global__ void mul_scalar(T* dst, const T* a, const T* b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
-        dst[i] = a[i] + b[0];
+        dst[i] = a[i] * b[0];
 }
 
 template<typename T>
@@ -104,7 +104,7 @@ __global__ void div_scalar(T* dst, const T* a, const T* b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
-        dst[i] = a[i] + b[0];
+        dst[i] = a[i] / b[0];
 }
 
 template<typename T>
@@ -156,7 +156,7 @@ __global__ void sub_const(T* dst, const T* a, T b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
-        dst[i] = a[i] + b;
+        dst[i] = a[i] - b;
 }
 
 template<typename T>
@@ -164,7 +164,7 @@ __global__ void mul_const(T* dst, const T* a, T b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
-        dst[i] = a[i] + b;
+        dst[i] = a[i] * b;
 }
 
 template<typename T>
@@ -172,7 +172,7 @@ __global__ void div_const(T* dst, const T* a, T b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
-        dst[i] = a[i] + b;
+        dst[i] = a[i] / b;
 }
 
 template<typename T>

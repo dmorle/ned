@@ -6,7 +6,9 @@ add_library(
     libcuned STATIC
     
     "source/cugraph.cpp"
-    "source/nodes/add.cu"
+    "source/nodes/basic_ops.cu"
+    "source/nodes/matops.cu"
+    "source/nodes/activations.cu"
 
     "include/cuned/cugraph.h"
     "include/cuned/cunodes.h"
@@ -20,4 +22,4 @@ target_link_libraries(libcuned PRIVATE CUDA::cudart)
 
 set_property(TARGET libcuned PROPERTY LINKER_LANGUAGE CXX)
 set_property(TARGET libcuned PROPERTY CXX_STANDARD 20)
-set_target_properties (libcuned PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+set_property(TARGET libcuned PROPERTY CUDA_STANDARD 17)

@@ -29,6 +29,7 @@ namespace nn
             Node* input = nullptr;
             int inpid = -1;
             std::vector<std::pair<Node*, int>> outputs = {};
+            mutable void* opaque = nullptr;
         };
 
         struct Node

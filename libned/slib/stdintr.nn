@@ -1,0 +1,81 @@
+import stdfn
+
+intr add_same<int *shape>(tensor<*shape> left, tensor<*shape> right):
+    tensor<*shape> out
+    return out
+
+intr add_scalar<int* shape>(tensor<*shape> left, tensor<> right):
+    tensor<*shape> out
+    return out
+
+intr sub_same<int *shape>(tensor<*shape> left, tensor<*shape> right):
+    tensor<*shape> out
+    return out
+
+intr sub_scalar_right<int* shape>(tensor<*shape> left, tensor<> right):
+    tensor<*shape> out
+    return out
+
+intr sub_scalar_left<int *shape>(tensor<> left, tensor<*shape> right):
+    tensor<*shape> out
+    return out
+
+intr mul_same<int *shape>(tensor<*shape> left, tensor<*shape> right):
+    tensor<*shape> out
+    return out
+
+intr mul_scalar<int *shape>(tensor<*shape> left, tensor<> right):
+    tensor<*shape> out
+    return out
+
+intr div_same<int *shape>(tensor<*shape> left, tensor<*shape> right):
+    tensor<*shape> out
+    return out
+
+intr div_scalar_right<int *shape>(tensor<*shape>, tensor<> right):
+    tensor<*shape> out
+    return out
+
+intr div_scalar_left<int *shape>(tensor<>, tensor<*shape> right):
+    tensor<*shape> out
+    return out
+
+intr matmul<int M, int S, int N>(tensor<M, S> left, tensor<S, N> right):
+    tensor<M, N> out
+    return out
+
+intr matvec<int M, int N>(tensor<M, N> left, tensor<N> right):
+    tensor<M> out
+    return out
+
+intr permute<int *indicies, <int *shape>>(tensor<*shape> inp):
+    if indicies.length >= shape.length:
+        raise "Too many permutation indicies for input tensor rank"
+    array<bool, shape.length> givens
+    for int i in range(indicies.length):
+        int idx = indicies[i]
+        if idx < 0 or idx >= shape.length:
+            raise "Index out of bounds for the given tensor"
+        if givens[idx]:
+            raise "Repeated index"
+        givens[idx] = true
+
+    array<int, shape.length> complete_indicies
+    for int i in range(indicies.length):
+        complete_indicies[i] = indicies[i]
+    int ind_offset = indicies.length
+    for int i in range(shape.length):
+        if not givens[i]:
+            complete_indicies[ind_offset] = i
+            ind_offset += 1
+    if ind_offset != shape.length:
+        raise "I don't even know what happened here, I think this should be an assert"
+    
+    array<int, shape.length> new_shape
+    for int i in range(shape.length):
+        new_shape[i] = shape[complete_indicies[i]]
+    tensor<*new_shape> out
+    return out
+
+def transpose<int M, int N>(tensor<M, N> inp):
+    return permute<1, 0>(inp)
