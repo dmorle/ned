@@ -17,6 +17,7 @@ namespace nn
             TYPE,     // Type object
             INVALID,  // Invalid object type
             VAR,      // Generic object which destroys itself as soon as it gets the chance
+            FWIDTH,   // Float widths for tensors, ie f16, f32, f64
             BOOL,     // Boolean
             INT,      // Integer
             FLOAT,    // Floating point
@@ -82,6 +83,7 @@ namespace nn
         using ObjDType   = ObjImp< ObjType::TYPE    >;
         using ObjInvalid = ObjImp< ObjType::INVALID >;
         using ObjVar     = ObjImp< ObjType::VAR     >;
+        using ObjFWidth  = ObjImp< ObjType::FWIDTH  >;
         using ObjBool    = ObjImp< ObjType::BOOL    >;
         using ObjInt     = ObjImp< ObjType::INT     >;
         using ObjFloat   = ObjImp< ObjType::FLOAT   >;
@@ -181,6 +183,9 @@ namespace nn
         template<> struct ObjData<ObjType::VAR> {
             std::shared_ptr<Obj> self;
         };
+        template<> struct ObjData<ObjType::FWIDTH> {
+            core::tensor_dty dty;
+        };
         template<> struct ObjData<ObjType::BOOL> {
             bool val;
         };
@@ -204,6 +209,7 @@ namespace nn
         template<> struct ObjData<ObjType::TENSOR> {
             mutable core::Edge* pEdge;
             std::vector<uint32_t> dims;
+            core::tensor_dty dty;
             bool carg_init;
             bool is_static;
         };
@@ -234,6 +240,8 @@ namespace nn
         std::shared_ptr< ObjDType   > create_obj_dtype   (ObjType ty, const std::vector<std::shared_ptr<Obj>>& cargs);
         std::shared_ptr< ObjInvalid > create_obj_invalid ();
         std::shared_ptr< ObjVar     > create_obj_var     ();
+        std::shared_ptr< ObjFWidth  > create_obj_fwidth  ();
+        std::shared_ptr< ObjFWidth  > create_obj_fwidth  (core::tensor_dty dty);
         std::shared_ptr< ObjBool    > create_obj_bool    ();
         std::shared_ptr< ObjBool    > create_obj_bool    (bool val);
         std::shared_ptr< ObjInt     > create_obj_int     ();
@@ -249,7 +257,7 @@ namespace nn
         std::shared_ptr< ObjTuple   > create_obj_tuple   (const std::vector<std::shared_ptr<ObjDType>>& dtypes);
         std::shared_ptr< ObjTuple   > create_obj_tuple   (const std::vector<std::shared_ptr<Obj>>& elems);
         std::shared_ptr< ObjTensor  > create_obj_tensor  ();
-        std::shared_ptr< ObjTensor  > create_obj_tensor  (const std::vector<std::shared_ptr<Obj>>& dims);
+        std::shared_ptr< ObjTensor  > create_obj_tensor  (core::tensor_dty dty, const std::vector<uint32_t>& dims);
         std::shared_ptr< ObjDef     > create_obj_def     ();
         std::shared_ptr< ObjDef     > create_obj_def     (const AstDef* pdef);
         std::shared_ptr< ObjDef     > create_obj_def     (const AstDef* pdef, const std::vector<std::shared_ptr<Obj>>& cargs);

@@ -12,6 +12,8 @@ namespace nn
         {
             if (name == "var")
                 return ObjType::VAR;
+            else if (name == "fwidth")
+                return ObjType::FWIDTH;
             else if (name == "bool")
                 return ObjType::BOOL;
             else if (name == "int")
@@ -34,6 +36,8 @@ namespace nn
         {
             if (name == "var")
                 return ObjType::VAR;
+            else if (name == "fwidth")
+                return ObjType::FWIDTH;
             else if (name == "bool")
                 return ObjType::BOOL;
             else if (name == "int")
@@ -168,10 +172,24 @@ namespace nn
 
         std::shared_ptr<Obj> AstIdn::eval(EvalCtx& ctx) const
         {
+            // TODO: do all this shit in the lexer
+            
             // checking for types
             ObjType ty = dec_typename_inv(idn);
             if (ty != ObjType::INVALID)
                 return create_obj_dtype(ty);
+
+            // checking for keywords
+            if (std::string(idn) == "true")
+                return create_obj_bool(true);
+            else if (std::string(idn) == "false")
+                return create_obj_bool(false);
+            else if (std::string(idn) == "f16")
+                return create_obj_fwidth(core::tensor_dty::F16);
+            else if (std::string(idn) == "f32")
+                return create_obj_fwidth(core::tensor_dty::F32);
+            else if (std::string(idn) == "f64")
+                return create_obj_fwidth(core::tensor_dty::F64);
 
             // regular identifier stuff
             return ctx.get(idn);

@@ -105,6 +105,9 @@ namespace nn
             case ObjType::TYPE:
                 assert(!data.has_cargs);
                 return create_obj_dtype();
+            case ObjType::FWIDTH:
+                assert(!data.has_cargs);
+                return create_obj_fwidth();
             case ObjType::BOOL:
                 assert(!data.has_cargs);
                 return create_obj_bool();
@@ -121,7 +124,7 @@ namespace nn
                 if (data.has_cargs)
                 {
                     if (data.cargs.size() != 2)
-                        throw GenerationError("Invalid number of carg parameters to array type");
+                        throw GenerationError("Invalid number of carg parameters for array type");
                     check_type(ObjType::TYPE, data.cargs[0]);
                     check_type(ObjType::INT, data.cargs[1]);
                     return create_obj_array(std::static_pointer_cast<ObjDType>(data.cargs[0]), static_cast<const ObjInt*>(data.cargs[1].get())->data.val);
@@ -143,7 +146,19 @@ namespace nn
                     return create_obj_tuple();
             case ObjType::TENSOR:
                 if (data.has_cargs)
-                    return create_obj_tensor(data.cargs);
+                {
+                    if (data.cargs.size() == 0)
+                        throw GenerationError("Invalid number of carg parameters for tensor type");
+                    check_type(ObjType::FWIDTH, data.cargs[0]);
+                    std::vector<uint32_t> dims;
+                    for (size_t i = 1; i < data.cargs.size(); i++)
+                    {
+                        check_init(data.cargs[i]);
+                        check_type(ObjType::INT, data.cargs[i]);
+                        dims.push_back(std::static_pointer_cast<ObjInt>(data.cargs[i])->data.val);
+                    }
+                    return create_obj_tensor(std::static_pointer_cast<ObjFWidth>(data.cargs[0])->data.dty, dims);
+                }
                 else
                     return create_obj_tensor();
             }
@@ -234,6 +249,29 @@ namespace nn
         }
 
         // TODO: implement the rest of the ObjVar methods
+
+        template<>
+        ObjFWidth::ObjImp() :
+            Obj(ObjType::FWIDTH)
+        {
+            data.dty = core::tensor_dty::F32;
+        }
+
+        template<>
+        void ObjFWidth::assign(const std::shared_ptr<Obj>& val)
+        {
+            check_mtype(val);
+            check_init(val);
+            data.dty = mty(val)->data.dty;
+            init = true;
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjFWidth::copy() const
+        {
+            check_init(this);
+            return create_obj_fwidth(data.dty);
+        }
 
         template<>
         ObjBool::ObjImp() :
@@ -1544,6 +1582,19 @@ namespace nn
             return std::make_shared<ObjVar>();
         }
 
+        std::shared_ptr<ObjFWidth> create_obj_fwidth()
+        {
+            return std::make_shared<ObjFWidth>();
+        }
+
+        std::shared_ptr<ObjFWidth> create_obj_fwidth(core::tensor_dty dty)
+        {
+            auto pobj = std::make_shared<ObjFWidth>();
+            pobj->data.dty = dty;
+            pobj->init = true;
+            return pobj;
+        }
+
         std::shared_ptr<ObjBool> create_obj_bool()
         {
             auto pobj = std::make_shared<ObjBool>();
@@ -1668,16 +1719,12 @@ namespace nn
             return pobj;
         }
 
-        std::shared_ptr<ObjTensor> create_obj_tensor(const std::vector<std::shared_ptr<Obj>>& dims)
+        std::shared_ptr<ObjTensor> create_obj_tensor(core::tensor_dty dty, const std::vector<uint32_t>& dims)
         {
             auto pobj = std::make_shared<ObjTensor>();
             pobj->data.pEdge = nullptr;
-            for (auto e : dims)
-            {
-                check_init(e);
-                check_type(ObjType::INT, e);
-                pobj->data.dims.push_back((uint32_t)static_cast<const ObjInt*>(e.get())->data.val);
-            }
+            pobj->data.dims = dims;
+            pobj->data.dty = dty;
             pobj->data.carg_init = true;
             pobj->init = true;
             return pobj;

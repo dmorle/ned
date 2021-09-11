@@ -1,54 +1,54 @@
 import stdfn
 
-intr add_same<int *shape>(tensor<*shape> left, tensor<*shape> right):
+intr add_same_intr<fwidth ofw, fwidth lfw, fwidth rfw, int *shape>(tensor<lfw, *shape> left, tensor<rfw, *shape> right):
+    tensor<ofw, *shape> out
+    return out
+
+intr add_scalar_right_intr<fwidth ofw, fwidth lfw, fwidth rfw, int* shape>(tensor<lfw, *shape> left, tensor<rfw> right):
+    tensor<ofw, *shape> out
+    return out
+
+intr sub_same_intr<fwidth ofw, fwidth lfw, fwidth rfw, int *shape>(tensor<lfw, *shape> left, tensor<rfw, *shape> right):
+    tensor<ofw, *shape> out
+    return out
+
+intr sub_scalar_right_intr<fwidth ofw, fwidth lfw, fwidth rfw, int* shape>(tensor<lfw, *shape> left, tensor<rfw> right):
+    tensor<ofw, *shape> out
+    return out
+
+intr sub_scalar_left_intr<fwidth ofw, fwidth lfw, fwidth rfw, int *shape>(tensor<lfw> left, tensor<rfw, *shape> right):
     tensor<*shape> out
     return out
 
-intr add_scalar<int* shape>(tensor<*shape> left, tensor<> right):
-    tensor<*shape> out
+intr mul_same_intr<fwidth ofw, fwidth lfw, fwidth rfw, int *shape>(tensor<lfw, *shape> left, tensor<rfw, *shape> right):
+    tensor<ofw, *shape> out
     return out
 
-intr sub_same<int *shape>(tensor<*shape> left, tensor<*shape> right):
-    tensor<*shape> out
+intr mul_scalar_intr<fwidth ofw, fwidth lfw, fwidth rfw, int *shape>(tensor<lfw, *shape> left, tensor<rfw> right):
+    tensor<ofw, *shape> out
     return out
 
-intr sub_scalar_right<int* shape>(tensor<*shape> left, tensor<> right):
-    tensor<*shape> out
+intr div_same_intr<fwidth ofw, fwidth lfw, fwidth rfw, int *shape>(tensor<lfw, *shape> left, tensor<rfw, *shape> right):
+    tensor<ofw, *shape> out
     return out
 
-intr sub_scalar_left<int *shape>(tensor<> left, tensor<*shape> right):
-    tensor<*shape> out
+intr div_scalar_right_intr<fwidth ofw, fwidth lfw, fwidth rfw, int *shape>(tensor<lfw, *shape> left, tensor<rfw> right):
+    tensor<ofw, *shape> out
     return out
 
-intr mul_same<int *shape>(tensor<*shape> left, tensor<*shape> right):
-    tensor<*shape> out
+intr div_scalar_left_intr<fwidth ofw, fwidth lfw, fwidth rfw, int *shape>(tensor<lfw>, tensor<rfw, *shape> right):
+    tensor<ofw, *shape> out
     return out
 
-intr mul_scalar<int *shape>(tensor<*shape> left, tensor<> right):
-    tensor<*shape> out
+intr matmul_intr<fwidth ofw, fwidth lfw, fwidth rfw, int M, int S, int N>(tensor<lfw, M, S> left, tensor<rfw, S, N> right):
+    tensor<ofw, M, N> out
     return out
 
-intr div_same<int *shape>(tensor<*shape> left, tensor<*shape> right):
-    tensor<*shape> out
+intr matvec_intr<fwidth ofw, fwidth lfw, fwidth rfw, int M, int N>(tensor<lfw, M, N> left, tensor<rfw, N> right):
+    tensor<ofw, M> out
     return out
 
-intr div_scalar_right<int *shape>(tensor<*shape>, tensor<> right):
-    tensor<*shape> out
-    return out
-
-intr div_scalar_left<int *shape>(tensor<>, tensor<*shape> right):
-    tensor<*shape> out
-    return out
-
-intr matmul<int M, int S, int N>(tensor<M, S> left, tensor<S, N> right):
-    tensor<M, N> out
-    return out
-
-intr matvec<int M, int N>(tensor<M, N> left, tensor<N> right):
-    tensor<M> out
-    return out
-
-intr permute<int *indicies, <int *shape>>(tensor<*shape> inp):
+intr permute_intr<int *indicies, fwidth fw, <int *shape>>(tensor<fw, *shape> inp):
     if indicies.length >= shape.length:
         raise "Too many permutation indicies for input tensor rank"
     array<bool, shape.length> givens
@@ -74,8 +74,5 @@ intr permute<int *indicies, <int *shape>>(tensor<*shape> inp):
     array<int, shape.length> new_shape
     for int i in range(shape.length):
         new_shape[i] = shape[complete_indicies[i]]
-    tensor<*new_shape> out
+    tensor<fw, *new_shape> out
     return out
-
-def transpose<int M, int N>(tensor<M, N> inp):
-    return permute<1, 0>(inp)

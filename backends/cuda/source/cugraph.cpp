@@ -57,148 +57,122 @@ namespace nn
             Node* pret;
             switch (hash(pnode->name))
             {
-            case hash("add_same"):
-                if (pnode->name != "add_same") throw GraphError("Unrecognized graph node name: " + pnode->name);
+            case hash("add_same_intr"):
+                if (pnode->name != "add_same_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
                 assert(pnode->outputs[0]->opaque);
-                pret = new AddSame<float>(pnode->cargs,
-                    (Edge**)&pnode->inputs[0]->opaque,
-                    (Edge**)&pnode->inputs[1]->opaque,
-                    (Edge*)pnode->outputs[0]->opaque);
+                pret = new AddSame(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
                 break;
-            case hash("add_scalar_right"):
-                if (pnode->name != "add_scalar_right") throw GraphError("Unrecognized graph node name: " + pnode->name);
+            case hash("add_scalar_right_intr"):
+                if (pnode->name != "add_scalar_right_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 pnode->cargs;
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
                 assert(pnode->outputs[0]->opaque);
-                pret = new AddScalar<float>(pnode->cargs,
-                    (Edge**)&pnode->inputs[0]->opaque,
-                    (Edge**)&pnode->inputs[1]->opaque,
-                    (Edge*)pnode->outputs[0]->opaque);
-            case hash("add_scalar_left"):
-                if (pnode->name != "add_scalar_left") throw GraphError("Unrecognized graph node name: " + pnode->name);
+                pret = new AddScalar(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
+                break;
+            case hash("add_scalar_left_intr"):
+                if (pnode->name != "add_scalar_left_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 pnode->cargs;
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
                 assert(pnode->outputs[0]->opaque);
-                pret = new AddScalar<float>(pnode->cargs,
-                    (Edge**)&pnode->inputs[1]->opaque,
-                    (Edge**)&pnode->inputs[0]->opaque,
-                    (Edge*)pnode->outputs[0]->opaque);
-            case hash("sub_same"):
-                if (pnode->name != "sub_same") throw GraphError("Unrecognized graph node name: " + pnode->name);
+                pret = new AddScalar(pnode->cargs, pnode->inputs[1], pnode->inputs[0], pnode->outputs[0]);
+                break;
+            case hash("sub_same_intr"):
+                if (pnode->name != "sub_same_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
                 assert(pnode->outputs[0]->opaque);
-                pret = new SubSame<float>(pnode->cargs,
-                    (Edge**)&pnode->inputs[0]->opaque,
-                    (Edge**)&pnode->inputs[1]->opaque,
-                    (Edge*)pnode->outputs[0]->opaque);
+                pret = new SubSame(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
                 break;
-            case hash("sub_scalar_right"):
-                if (pnode->name != "sub_scalar_right") throw GraphError("Unrecognized graph node name: " + pnode->name);
+            case hash("sub_scalar_right_intr"):
+                if (pnode->name != "sub_scalar_right_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
                 assert(pnode->outputs[0]->opaque);
-                pret = new SubScalar<float>(pnode->cargs,
-                    (Edge**)&pnode->inputs[0]->opaque,
-                    (Edge**)&pnode->inputs[1]->opaque,
-                    (Edge*)pnode->outputs[0]->opaque);
+                pret = new SubScalar(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
                 break;
-            case hash("sub_scalar_left"):
-                if (pnode->name != "sub_scalar_left") throw GraphError("Unrecognized graph node name: " + pnode->name);
+            //case hash("sub_scalar_left_intr"):
+            //    if (pnode->name != "sub_scalar_left_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
+            //    assert(pnode->inputs.size() == 2);
+            //    assert(pnode->outputs.size() == 1);
+            //    assert(pnode->outputs[0]->opaque);
+            //    pret = new SubScalar(pnode->cargs,
+            //        (Edge**)&pnode->inputs[1]->opaque,
+            //        (Edge**)&pnode->inputs[0]->opaque,
+            //        (Edge*)pnode->outputs[0]->opaque);
+            //    break;
+            case hash("mul_same_intr"):
+                if (pnode->name != "mul_same_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
                 assert(pnode->outputs[0]->opaque);
-                pret = new SubScalar<float>(pnode->cargs,
-                    (Edge**)&pnode->inputs[1]->opaque,
-                    (Edge**)&pnode->inputs[0]->opaque,
-                    (Edge*)pnode->outputs[0]->opaque);
+                pret = new MulSame(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
                 break;
-            case hash("mul_same"):
-                if (pnode->name != "mul_same") throw GraphError("Unrecognized graph node name: " + pnode->name);
+            case hash("mul_scalar_right_intr"):
+                if (pnode->name != "mul_scalar_right_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
                 assert(pnode->outputs[0]->opaque);
-                pret = new MulSame<float>(pnode->cargs,
-                    (Edge**)&pnode->inputs[0]->opaque,
-                    (Edge**)&pnode->inputs[1]->opaque,
-                    (Edge*)pnode->outputs[0]->opaque);
+                pret = new MulScalar(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
                 break;
-            case hash("mul_scalar_right"):
-                if (pnode->name != "mul_scalar_right") throw GraphError("Unrecognized graph node name: " + pnode->name);
+            case hash("mul_scalar_left_intr"):
+                if (pnode->name != "mul_scalar_left_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
                 assert(pnode->outputs[0]->opaque);
-                pret = new MulScalar<float>(pnode->cargs,
-                    (Edge**)&pnode->inputs[0]->opaque,
-                    (Edge**)&pnode->inputs[1]->opaque,
-                    (Edge*)pnode->outputs[0]->opaque);
+                pret = new MulScalar(pnode->cargs, pnode->inputs[1], pnode->inputs[0], pnode->outputs[0]);
                 break;
-            case hash("mul_scalar_left"):
-                if (pnode->name != "mul_scalar_left") throw GraphError("Unrecognized graph node name: " + pnode->name);
+            case hash("div_same_intr"):
+                if (pnode->name != "div_same_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
                 assert(pnode->outputs[0]->opaque);
-                pret = new MulScalar<float>(pnode->cargs,
-                    (Edge**)&pnode->inputs[1]->opaque,
-                    (Edge**)&pnode->inputs[0]->opaque,
-                    (Edge*)pnode->outputs[0]->opaque);
+                pret = new DivSame(pnode->cargs, pnode->inputs[1], pnode->inputs[0], pnode->outputs[0]);
                 break;
-            case hash("div_same"):
-                if (pnode->name != "div_same") throw GraphError("Unrecognized graph node name: " + pnode->name);
+            case hash("div_scalar_right_intr"):
+                if (pnode->name != "div_scalar_right_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
                 assert(pnode->outputs[0]->opaque);
-                pret = new DivSame<float>(pnode->cargs,
-                    (Edge**)&pnode->inputs[0]->opaque,
-                    (Edge**)&pnode->inputs[1]->opaque,
-                    (Edge*)pnode->outputs[0]->opaque);
+                pret = new DivScalar(pnode->cargs, pnode->inputs[1], pnode->inputs[0], pnode->outputs[0]);
                 break;
-            case hash("div_scalar_right"):
-                if (pnode->name != "div_scalar_right") throw GraphError("Unrecognized graph node name: " + pnode->name);
-                assert(pnode->inputs.size() == 2);
-                assert(pnode->outputs.size() == 1);
-                assert(pnode->outputs[0]->opaque);
-                pret = new DivScalar<float>(pnode->cargs,
-                    (Edge**)&pnode->inputs[0]->opaque,
-                    (Edge**)&pnode->inputs[1]->opaque,
-                    (Edge*)pnode->outputs[0]->opaque);
-                break;
-            case hash("div_scalar_left"):
-                if (pnode->name != "div_scalar_left") throw GraphError("Unrecognized graph node name: " + pnode->name);
-                assert(pnode->inputs.size() == 2);
-                assert(pnode->outputs.size() == 1);
-                assert(pnode->outputs[0]->opaque);
-                pret = new DivScalar<float>(pnode->cargs,
-                    (Edge**)&pnode->inputs[1]->opaque,
-                    (Edge**)&pnode->inputs[0]->opaque,
-                    (Edge*)pnode->outputs[0]->opaque);
-                break;
-            case hash("sigmoid"):
-                if (pnode->name != "sigmoid") throw GraphError("Unrecognized graph node name: " + pnode->name);
-                break;
-            case hash("tanh"):
-                if (pnode->name != "tanh") throw GraphError("Unrecognized graph node name: " + pnode->name);
-                break;
-            case hash("relu"):
-                if (pnode->name != "relu") throw GraphError("Unrecognized graph node name: " + pnode->name);
-                break;
-            case hash("leaky_relu"):
-                if (pnode->name != "leaky_relu") throw GraphError("Unrecognized graph node name: " + pnode->name);
-                break;
-            case hash("matmul"):
-                if (pnode->name != "matmul") throw GraphError("Unrecognized graph node name: " + pnode->name);
-                assert(pnode->inputs.size() == 2);
-                assert(pnode->outputs.size() == 1);
-                assert(pnode->outputs[0]->opaque);
-                pret = new MatMul<float>(pnode->cargs,
-                    (Edge**)&pnode->inputs[1]->opaque,
-                    (Edge**)&pnode->inputs[0]->opaque,
-                    (Edge*)pnode->outputs[0]->opaque);
-                break;
+            //case hash("div_scalar_left_intr"):
+            //    if (pnode->name != "div_scalar_left_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
+            //    assert(pnode->inputs.size() == 2);
+            //    assert(pnode->outputs.size() == 1);
+            //    assert(pnode->outputs[0]->opaque);
+            //    pret = new DivScalar(pnode->cargs,
+            //        (Edge**)&pnode->inputs[1]->opaque,
+            //        (Edge**)&pnode->inputs[0]->opaque,
+            //        (Edge*)pnode->outputs[0]->opaque);
+            //    break;
+            //case hash("sigmoid_intr"):
+            //    if (pnode->name != "sigmoid_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
+            //    break;
+            //case hash("tanh_intr"):
+            //    if (pnode->name != "tanh_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
+            //    break;
+            //case hash("relu_intr"):
+            //    if (pnode->name != "relu_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
+            //    break;
+            //case hash("leaky_relu_intr"):
+            //    if (pnode->name != "leaky_relu_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
+            //    break;
+            //case hash("matmul_intr"):
+            //    if (pnode->name != "matmul_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
+            //    assert(pnode->inputs.size() == 2);
+            //    assert(pnode->outputs.size() == 1);
+            //    assert(pnode->outputs[0]->opaque);
+            //    pret = new MatMul(pnode->cargs,
+            //        (Edge**)&pnode->inputs[1]->opaque,
+            //        (Edge**)&pnode->inputs[0]->opaque,
+            //        (Edge*)pnode->outputs[0]->opaque);
+            //    break;
+            default:
+                throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
             }
 
             // assigning the edge dependancies

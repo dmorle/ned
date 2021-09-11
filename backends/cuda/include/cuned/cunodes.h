@@ -4,45 +4,52 @@
 #include <cuned/cugraph.h>
 #include <ned/lang/obj.h>
 
+#include <cassert>
+
 #include <cuda_runtime.h>
 
 namespace nn
 {
     namespace cuda
     {
-        template<typename T>
         class BinOpSame :
             public Node
         {
+        protected:
             size_t sz;
+            core::tensor_dty inp1_dty;
+            core::tensor_dty inp2_dty;
+            core::tensor_dty out_dty;
             Edge* inp1;
             Edge* inp2;
             Edge* out;
 
         public:
-            BinOpSame(const std::vector<std::shared_ptr<lang::Obj>>& cargs, Edge** pinp1, Edge** pinp2, Edge* out)
+            BinOpSame(const std::vector<std::shared_ptr<lang::Obj>>& cargs, core::Edge* inp1, core::Edge* inp2, core::Edge* out)
             {
+                assert(out->opaque);
+
                 sz = 1;
-                for (auto& e : cargs)
+                for (auto& e : inp1->dsc.dims)
+                    sz *= e;
+                if (!inp1->opaque)
                 {
-                    assert(e->ty == lang::ObjType::INT);
-                    sz *= std::static_pointer_cast<lang::ObjInt>(e)->data.val;
-                }
-                if (!*pinp1)
-                {
-                    *pinp1 = new Edge();
+                    inp1->opaque = new Edge();
                     // TODO: check to make sure it was allocated
-                    cudaMalloc(&(*pinp1)->data, sz * sizeof(T));
+                    cudaMalloc(&((Edge*)inp1->opaque)->data, sz * core::dtype_size(inp1->dsc.dty));
                 }
-                if (!*pinp2)
+                if (!inp2->opaque)
                 {
-                    *pinp2 = new Edge();
+                    inp2->opaque = new Edge();
                     // TODO: check to make sure it was allocated
-                    cudaMalloc(&(*pinp2)->data, sz * sizeof(T));
+                    cudaMalloc(&((Edge*)inp2->opaque)->data, sz * core::dtype_size(inp2->dsc.dty));
                 }
-                inp1 = *pinp1;
-                inp2 = *pinp2;
-                this->out = out;
+                this->inp1 = (Edge*)inp1->opaque;
+                this->inp2 = (Edge*)inp2->opaque;
+                this->out = (Edge*)out->opaque;
+                inp1_dty = inp1->dsc.dty;
+                inp2_dty = inp2->dsc.dty;
+                out_dty = out->dsc.dty;
             }
             ~BinOpSame()
             {
@@ -52,200 +59,149 @@ namespace nn
             }
         };
 
-        template<typename T>
         class AddSame :
-            public BinOpSame<T>
+            public BinOpSame
         {
         public:
-            using BinOpSame<T>::BinOpSame;
+            using BinOpSame::BinOpSame;
             virtual void eval(RunId id) override;
         };
 
-        template<typename T>
         class SubSame :
-            public BinOpSame<T>
+            public BinOpSame
         {
         public:
-            using BinOpSame<T>::BinOpSame;
+            using BinOpSame::BinOpSame;
             virtual void eval(RunId id) override;
         };
 
-        template<typename T>
         class MulSame :
-            public BinOpSame<T>
+            public BinOpSame
         {
         public:
-            using BinOpSame<T>::BinOpSame;
+            using BinOpSame::BinOpSame;
             virtual void eval(RunId id) override;
         };
 
-        template<typename T>
         class DivSame :
-            public BinOpSame<T>
+            public BinOpSame
         {
         public:
-            using BinOpSame<T>::BinOpSame;
+            using BinOpSame::BinOpSame;
             virtual void eval(RunId id) override;
         };
 
-        template<typename T>
         class BinOpScalar :
             public Node
         {
+        protected:
             size_t sz;
+            core::tensor_dty inp_dty;
+            core::tensor_dty val_dty;
+            core::tensor_dty out_dty;
             Edge* inp;
             Edge* val;
             Edge* out;
 
         public:
-            BinOpScalar(const std::vector<std::shared_ptr<lang::Obj>>& cargs, Edge** pinp, Edge** pval, Edge* out)
+            BinOpScalar(const std::vector<std::shared_ptr<lang::Obj>>& cargs, core::Edge* inp, core::Edge* val, core::Edge* out)
             {
+                assert(out->opaque);
+
                 sz = 1;
-                for (auto& e : cargs)
+                for (auto& e : inp->dsc.dims)
+                    sz *= e;
+                if (!inp->opaque)
                 {
-                    assert(e->ty == lang::ObjType::INT);
-                    sz *= std::static_pointer_cast<lang::ObjInt>(e)->data.val;
-                }
-                if (!*pinp)
-                {
-                    *pinp = new Edge();
+                    inp->opaque = new Edge();
                     // TODO: check to make sure it was allocated
-                    cudaMalloc(&(*pinp)->data, sz * sizeof(T));
+                    cudaMalloc(&((Edge*)inp->opaque)->data, sz * core::dtype_size(inp->dsc.dty));
                 }
-                if (!*pval)
+                if (!val->opaque)
                 {
-                    *pval = new Edge();
+                    val->opaque = new Edge();
                     // TODO: check to make sure it was allocated
-                    cudaMalloc(&(*pval)->data, sizeof(T));
+                    cudaMalloc(&((Edge*)val->opaque)->data, core::dtype_size(val->dsc.dty));
                 }
-                inp = *pinp;
-                val = *pval;
-                this->out = out;
+                this->inp = (Edge*)inp->opaque;
+                this->val = (Edge*)val->opaque;
+                this->out = (Edge*)out->opaque;
+                inp_dty = inp->dsc.dty;
+                val_dty = val->dsc.dty;
+                out_dty = out->dsc.dty;
             }
             ~BinOpScalar() { delete inp; delete val; }
         };
 
-        template<typename T>
         class AddScalar :
-            public BinOpScalar<T>
+            public BinOpScalar
         {
         public:
-            using BinOpScalar<T>::BinOpScalar;
+            using BinOpScalar::BinOpScalar;
             virtual void eval(RunId id) override;
         };
 
-        template<typename T>
         class SubScalar :
-            public BinOpScalar<T>
+            public BinOpScalar
         {
         public:
-            using BinOpScalar<T>::BinOpScalar;
+            using BinOpScalar::BinOpScalar;
             virtual void eval(RunId id) override;
         };
 
-        template<typename T>
         class MulScalar :
-            public BinOpScalar<T>
+            public BinOpScalar
         {
         public:
-            using BinOpScalar<T>::BinOpScalar;
+            using BinOpScalar::BinOpScalar;
             virtual void eval(RunId id) override;
         };
 
-        template<typename T>
         class DivScalar :
-            public BinOpScalar<T>
+            public BinOpScalar
         {
         public:
-            using BinOpScalar<T>::BinOpScalar;
+            using BinOpScalar::BinOpScalar;
             virtual void eval(RunId id) override;
         };
 
-        template<typename T>
-        class BinOpConst :
-            public Node
-        {
-            size_t sz;
-            Edge* inp;
-            T val;
-            Edge* out;
-
-        public:
-            BinOpConst(size_t sz, Edge* inp, T val, Edge* out) :
-                sz(sz), inp(inp), val(val), out(out) {}
-            ~BinOpConst() { delete inp; }
-        };
-
-        template<typename T>
-        class AddConst :
-            public BinOpConst
-        {
-        public:
-            using BinOpConst<T>::BinOpConst;
-            virtual void eval(RunId id) override;
-        };
-
-        template<typename T>
-        class SubConst :
-            public BinOpConst
-        {
-        public:
-            using BinOpConst<T>::BinOpConst;
-            virtual void eval(RunId id) override;
-        };
-
-        template<typename T>
-        class MulConst :
-            public BinOpConst
-        {
-        public:
-            using BinOpConst<T>::BinOpConst;
-            virtual void eval(RunId id) override;
-        };
-
-        template<typename T>
-        class DivConst :
-            public BinOpConst
-        {
-        public:
-            using BinOpConst<T>::BinOpConst;
-            virtual void eval(RunId id) override;
-        };
-
-        template<typename T>
         class MatMul :
             public Node
         {
             size_t m;
             size_t s;
             size_t n;
+            core::tensor_dty inp1_dty;
+            core::tensor_dty inp2_dty;
+            core::tensor_dty out_dty;
             Edge* inp1;
             Edge* inp2;
             Edge* out;
 
         public:
-            MatMul(const std::vector<std::shared_ptr<lang::Obj>>& cargs, Edge** pinp1, Edge** pinp2, Edge* out)
+            MatMul(const std::vector<std::shared_ptr<lang::Obj>>& cargs, core::Edge* inp1, core::Edge* inp2, core::Edge* out)
             {
-                assert(cargs.size() == 3);
-                assert(cargs[0]->ty == lang::ObjType::INT);
-                assert(cargs[1]->ty == lang::ObjType::INT);
-                assert(cargs[2]->ty == lang::ObjType::INT);
-                m = std::static_pointer_cast<lang::ObjInt>(cargs[0])->data.val;
-                s = std::static_pointer_cast<lang::ObjInt>(cargs[1])->data.val;
-                n = std::static_pointer_cast<lang::ObjInt>(cargs[2])->data.val;
-                if (!*pinp1)
+                assert(inp1->dsc.dims.size() == 2);
+                assert(inp2->dsc.dims.size() == 2);
+                m = inp1->dsc.dims[0];
+                s = inp1->dsc.dims[1];
+                n = out->dsc.dims[1];
+                if (!inp1->opaque)
                 {
-                    *pinp1 = new Edge{};
-                    cudaMalloc(&(*pinp1)->data, m * s * sizeof(T));
+                    inp1->opaque = new Edge{};
+                    cudaMalloc(&((Edge*)inp1->opaque)->data, m * s * sizeof(T));
                 }
-                if (*pinp2)
+                if (!inp2->opaque)
                 {
-                    *pinp2 = new Edge{};
-                    cudaMalloc(&(*pinp2)->data, s * n * sizeof(T));
+                    inp2->opaque = new Edge{};
+                    cudaMalloc(&((Edge*)inp2->opaque)->data, s * n * sizeof(T));
                 }
-                inp1 = *pinp1;
-                inp2 = *pinp2;
-                this->out = out;
+                this->inp1 = (Edge*)inp1->opaque;
+                this->inp2 = (Edge*)inp2->opaque;
+                this->out = (Edge*)out->opaque;
+                inp1_dty = inp1->dsc.dty;
+                inp2_dty = inp2->dsc.dty;
+                out_dty = out->dsc.dty;
             }
 
             virtual void eval(RunId id) override;

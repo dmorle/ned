@@ -7,202 +7,341 @@ using namespace cuda;
 
 constexpr int bsz = 32;
 
-template<typename T>
-__global__ void add_pointwise(T* dst, const T* a, const T* b, size_t sz)
+// Compile time recursion = manual recursion
+#define dispatch_binop(binop, dty1, dty2, dty3, arg1, arg2, arg3, arg4)                                                                            \
+    switch (dty1)                                                                                                                                  \
+    {                                                                                                                                              \
+    case core::tensor_dty::F16:                                                                                                                    \
+        switch (dty2)                                                                                                                              \
+        {                                                                                                                                          \
+        case core::tensor_dty::F16:                                                                                                                \
+            switch (dty3)                                                                                                                          \
+            {                                                                                                                                      \
+            case core::tensor_dty::F16:                                                                                                            \
+                binop<core::tensor_dty::F16, core::tensor_dty::F16, core::tensor_dty::F16><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F32:                                                                                                            \
+                binop<core::tensor_dty::F16, core::tensor_dty::F16, core::tensor_dty::F32><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F64:                                                                                                            \
+                binop<core::tensor_dty::F16, core::tensor_dty::F16, core::tensor_dty::F64><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            }                                                                                                                                      \
+            break;                                                                                                                                 \
+        case core::tensor_dty::F32:                                                                                                                \
+            switch (dty3)                                                                                                                          \
+            {                                                                                                                                      \
+            case core::tensor_dty::F16:                                                                                                            \
+                binop<core::tensor_dty::F16, core::tensor_dty::F32, core::tensor_dty::F16><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F32:                                                                                                            \
+                binop<core::tensor_dty::F16, core::tensor_dty::F32, core::tensor_dty::F32><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F64:                                                                                                            \
+                binop<core::tensor_dty::F16, core::tensor_dty::F32, core::tensor_dty::F64><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            }                                                                                                                                      \
+            break;                                                                                                                                 \
+        case core::tensor_dty::F64:                                                                                                                \
+            switch (dty3)                                                                                                                          \
+            {                                                                                                                                      \
+            case core::tensor_dty::F16:                                                                                                            \
+                binop<core::tensor_dty::F16, core::tensor_dty::F64, core::tensor_dty::F16><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F32:                                                                                                            \
+                binop<core::tensor_dty::F16, core::tensor_dty::F64, core::tensor_dty::F32><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F64:                                                                                                            \
+                binop<core::tensor_dty::F16, core::tensor_dty::F64, core::tensor_dty::F64><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            }                                                                                                                                      \
+            break;                                                                                                                                 \
+        }                                                                                                                                          \
+        break;                                                                                                                                     \
+    case core::tensor_dty::F32:                                                                                                                    \
+        switch (dty2)                                                                                                                              \
+        {                                                                                                                                          \
+        case core::tensor_dty::F16:                                                                                                                \
+            switch (dty3)                                                                                                                          \
+            {                                                                                                                                      \
+            case core::tensor_dty::F16:                                                                                                            \
+                binop<core::tensor_dty::F32, core::tensor_dty::F16, core::tensor_dty::F16><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F32:                                                                                                            \
+                binop<core::tensor_dty::F32, core::tensor_dty::F16, core::tensor_dty::F32><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F64:                                                                                                            \
+                binop<core::tensor_dty::F32, core::tensor_dty::F16, core::tensor_dty::F64><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            }                                                                                                                                      \
+            break;                                                                                                                                 \
+        case core::tensor_dty::F32:                                                                                                                \
+            switch (dty3)                                                                                                                          \
+            {                                                                                                                                      \
+            case core::tensor_dty::F16:                                                                                                            \
+                binop<core::tensor_dty::F32, core::tensor_dty::F32, core::tensor_dty::F16><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F32:                                                                                                            \
+                binop<core::tensor_dty::F32, core::tensor_dty::F32, core::tensor_dty::F32><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F64:                                                                                                            \
+                binop<core::tensor_dty::F32, core::tensor_dty::F32, core::tensor_dty::F64><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            }                                                                                                                                      \
+            break;                                                                                                                                 \
+        case core::tensor_dty::F64:                                                                                                                \
+            switch (dty3)                                                                                                                          \
+            {                                                                                                                                      \
+            case core::tensor_dty::F16:                                                                                                            \
+                binop<core::tensor_dty::F32, core::tensor_dty::F64, core::tensor_dty::F16><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F32:                                                                                                            \
+                binop<core::tensor_dty::F32, core::tensor_dty::F64, core::tensor_dty::F32><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F64:                                                                                                            \
+                binop<core::tensor_dty::F32, core::tensor_dty::F64, core::tensor_dty::F64><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            }                                                                                                                                      \
+            break;                                                                                                                                 \
+        }                                                                                                                                          \
+        break;                                                                                                                                     \
+    case core::tensor_dty::F64:                                                                                                                    \
+        switch (dty2)                                                                                                                              \
+        {                                                                                                                                          \
+        case core::tensor_dty::F16:                                                                                                                \
+            switch (dty3)                                                                                                                          \
+            {                                                                                                                                      \
+            case core::tensor_dty::F16:                                                                                                            \
+                binop<core::tensor_dty::F64, core::tensor_dty::F16, core::tensor_dty::F16><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F32:                                                                                                            \
+                binop<core::tensor_dty::F64, core::tensor_dty::F16, core::tensor_dty::F32><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F64:                                                                                                            \
+                binop<core::tensor_dty::F64, core::tensor_dty::F16, core::tensor_dty::F64><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            }                                                                                                                                      \
+            break;                                                                                                                                 \
+        case core::tensor_dty::F32:                                                                                                                \
+            switch (dty3)                                                                                                                          \
+            {                                                                                                                                      \
+            case core::tensor_dty::F16:                                                                                                            \
+                binop<core::tensor_dty::F64, core::tensor_dty::F32, core::tensor_dty::F16><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F32:                                                                                                            \
+                binop<core::tensor_dty::F64, core::tensor_dty::F32, core::tensor_dty::F32><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F64:                                                                                                            \
+                binop<core::tensor_dty::F64, core::tensor_dty::F32, core::tensor_dty::F64><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            }                                                                                                                                      \
+            break;                                                                                                                                 \
+        case core::tensor_dty::F64:                                                                                                                \
+            switch (dty3)                                                                                                                          \
+            {                                                                                                                                      \
+            case core::tensor_dty::F16:                                                                                                            \
+                binop<core::tensor_dty::F64, core::tensor_dty::F64, core::tensor_dty::F16><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F32:                                                                                                            \
+                binop<core::tensor_dty::F64, core::tensor_dty::F64, core::tensor_dty::F32><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            case core::tensor_dty::F64:                                                                                                            \
+                binop<core::tensor_dty::F64, core::tensor_dty::F64, core::tensor_dty::F64><<<(sz + bsz - 1) / bsz, bsz>>>(arg1, arg2, arg3, arg4); \
+                break;                                                                                                                             \
+            }                                                                                                                                      \
+            break;                                                                                                                                 \
+        }                                                                                                                                          \
+        break;                                                                                                                                     \
+    }
+
+template<typename INP1, typename INP2, typename OUT>
+__global__ void add_pointwise(OUT* dst, const INP1* a, const INP2* b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
         dst[i] = a[i] + b[i];
 }
 
-template<typename T>
-__global__ void sub_pointwise(T* dst, const T* a, const T* b, size_t sz)
+template<typename INP1, typename INP2, typename OUT>
+__global__ void sub_pointwise(OUT* dst, const INP1* a, const INP2* b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
         dst[i] = a[i] - b[i];
 }
 
-template<typename T>
-__global__ void mul_pointwise(T* dst, const T* a, const T* b, size_t sz)
+template<typename INP1, typename INP2, typename OUT>
+__global__ void mul_pointwise(OUT* dst, const INP1* a, const INP2* b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
         dst[i] = a[i] * b[i];
 }
 
-template<typename T>
-__global__ void div_pointwise(T* dst, const T* a, const T* b, size_t sz)
+template<typename INP1, typename INP2, typename OUT>
+__global__ void div_pointwise(OUT* dst, const INP1* a, const INP2* b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
         dst[i] = a[i] / b[i];
 }
 
-template<typename T>
-void AddSame<T>::eval(RunId id)
+void AddSame::eval(RunId id)
 {
     void* data1 = inp1->get_data(id);
     void* data2 = inp2->get_data(id);
-    add_pointwise<T><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data1, data2, sz);
+    dispatch_binop(add_pointwise, inp1_dty, inp2_dty, out_dty, out->data, data1, data2, sz);
     out->id = id;
 }
 
-template<typename T>
-void SubSame<T>::eval(RunId id)
+void SubSame::eval(RunId id)
 {
     void* data1 = inp1->get_data(id);
     void* data2 = inp2->get_data(id);
-    sub_pointwise<T><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data1, data2, sz);
+    dispatch_binop(sub_pointwise, inp1_dty, inp2_dty, out_dty, out->data, data1, data2, sz);
     out->id = id;
 }
 
-template<typename T>
-void MulSame<T>::eval(RunId id)
+void MulSame::eval(RunId id)
 {
     void* data1 = inp1->get_data(id);
     void* data2 = inp2->get_data(id);
-    mul_pointwise<T><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data1, data2, sz);
+    dispatch_binop(mul_pointwise, inp1_dty, inp2_dty, out_dty, out->data, data1, data2, sz);
     out->id = id;
 }
 
-template<typename T>
-void DivSame<T>::eval(RunId id)
+void DivSame::eval(RunId id)
 {
     void* data1 = inp1->get_data(id);
     void* data2 = inp2->get_data(id);
-    div_pointwise<T><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data1, data2, sz);
+    dispatch_binop(div_pointwise, inp1_dty, inp2_dty, out_dty, out->data, data1, data2, sz);
     out->id = id;
 }
 
-template<typename T>
-__global__ void add_scalar(T* dst, const T* a, const T* b, size_t sz)
+template<typename INP1, typename INP2, typename OUT>
+__global__ void add_scalar(OUT* dst, const INP1* a, const INP2* b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
         dst[i] = a[i] + b[0];
 }
 
-template<typename T>
-__global__ void sub_scalar(T* dst, const T* a, const T* b, size_t sz)
+template<typename INP1, typename INP2, typename OUT>
+__global__ void sub_scalar(OUT* dst, const INP1* a, const INP2* b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
         dst[i] = a[i] - b[0];
 }
 
-template<typename T>
-__global__ void mul_scalar(T* dst, const T* a, const T* b, size_t sz)
+template<typename INP1, typename INP2, typename OUT>
+__global__ void mul_scalar(OUT* dst, const INP1* a, const INP2* b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
         dst[i] = a[i] * b[0];
 }
 
-template<typename T>
-__global__ void div_scalar(T* dst, const T* a, const T* b, size_t sz)
+template<typename INP1, typename INP2, typename OUT>
+__global__ void div_scalar(OUT* dst, const INP1* a, const INP2* b, size_t sz)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < sz)
         dst[i] = a[i] / b[0];
 }
 
-template<typename T>
-void AddScalar<T>::eval(RunId id)
+void AddScalar::eval(RunId id)
 {
     void* data = inp->get_data(id);
     void* scalar = val->get_data(id);
-    add_scalar<T><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data, scalar, sz);
+    dispatch_binop(add_scalar, inp_dty, val_dty, out_dty, out->data, data, scalar, sz);
     out->id = id;
 }
 
-template<typename T>
-void SubScalar<T>::eval(RunId id)
+void SubScalar::eval(RunId id)
 {
     void* data = inp->get_data(id);
     void* scalar = val->get_data(id);
-    sub_scalar<T><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data, scalar, sz);
+    dispatch_binop(sub_scalar, inp_dty, val_dty, out_dty, out->data, data, scalar, sz);
     out->id = id;
 }
 
-template<typename T>
-void MulScalar<T>::eval(RunId id)
+void MulScalar::eval(RunId id)
 {
     void* data = inp->get_data(id);
     void* scalar = val->get_data(id);
-    mul_scalar<T><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data, scalar, sz);
+    dispatch_binop(mul_scalar, inp_dty, val_dty, out_dty, out->data, data, scalar, sz);
     out->id = id;
 }
 
-template<typename T>
-void DivScalar<T>::eval(RunId id)
+void DivScalar::eval(RunId id)
 {
     void* data = inp->get_data(id);
     void* scalar = val->get_data(id);
-    div_scalar<T><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data, scalar, sz);
+    dispatch_binop(div_scalar, inp_dty, val_dty, out_dty, out->data, data, scalar, sz);
     out->id = id;
 }
 
-template<typename T>
-__global__ void add_const(T* dst, const T* a, T b, size_t sz)
-{
-    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < sz)
-        dst[i] = a[i] + b;
-}
-
-template<typename T>
-__global__ void sub_const(T* dst, const T* a, T b, size_t sz)
-{
-    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < sz)
-        dst[i] = a[i] - b;
-}
-
-template<typename T>
-__global__ void mul_const(T* dst, const T* a, T b, size_t sz)
-{
-    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < sz)
-        dst[i] = a[i] * b;
-}
-
-template<typename T>
-__global__ void div_const(T* dst, const T* a, T b, size_t sz)
-{
-    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < sz)
-        dst[i] = a[i] / b;
-}
-
-template<typename T>
-void AddConst<T>::eval(RunId id)
-{
-    void* data = inp->get_data(id);
-    add_scalar<T><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data, val, sz);
-    out->id = id;
-}
-
-template<typename T>
-void SubConst<T>::eval(RunId id)
-{
-    void* data = inp->get_data(id);
-    sub_scalar<T><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data, val, sz);
-    out->id = id;
-}
-
-template<typename T>
-void MulConst<T>::eval(RunId id)
-{
-    void* data = inp->get_data(id);
-    mul_scalar<T><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data, val, sz);
-    out->id = id;
-}
-
-template<typename T>
-void DivConst<T>::eval(RunId id)
-{
-    void* data = inp->get_data(id);
-    div_scalar<T><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data, val, sz);
-    out->id = id;
-}
+//template<typename core::tensor_dty>
+//__global__ void add_const(core::tensor_dty* dst, const core::tensor_dty* a, core::tensor_dty b, size_t sz)
+//{
+//    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+//    if (i < sz)
+//        dst[i] = a[i] + b;
+//}
+//
+//template<typename core::tensor_dty>
+//__global__ void sub_const(core::tensor_dty* dst, const core::tensor_dty* a, core::tensor_dty b, size_t sz)
+//{
+//    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+//    if (i < sz)
+//        dst[i] = a[i] - b;
+//}
+//
+//template<typename core::tensor_dty>
+//__global__ void mul_const(core::tensor_dty* dst, const core::tensor_dty* a, core::tensor_dty b, size_t sz)
+//{
+//    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+//    if (i < sz)
+//        dst[i] = a[i] * b;
+//}
+//
+//template<typename core::tensor_dty>
+//__global__ void div_const(core::tensor_dty* dst, const core::tensor_dty* a, core::tensor_dty b, size_t sz)
+//{
+//    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+//    if (i < sz)
+//        dst[i] = a[i] / b;
+//}
+//
+//template<typename core::tensor_dty>
+//void AddConst::eval(RunId id)
+//{
+//    void* data = inp->get_data(id);
+//    add_scalar<core::tensor_dty><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data, val, sz);
+//    out->id = id;
+//}
+//
+//template<typename core::tensor_dty>
+//void SubConst::eval(RunId id)
+//{
+//    void* data = inp->get_data(id);
+//    sub_scalar<core::tensor_dty><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data, val, sz);
+//    out->id = id;
+//}
+//
+//template<typename core::tensor_dty>
+//void MulConst::eval(RunId id)
+//{
+//    void* data = inp->get_data(id);
+//    mul_scalar<core::tensor_dty><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data, val, sz);
+//    out->id = id;
+//}
+//
+//template<typename core::tensor_dty>
+//void DivConst::eval(RunId id)
+//{
+//    void* data = inp->get_data(id);
+//    div_scalar<core::tensor_dty><<<(sz + bsz - 1) / bsz, bsz>>>(out->data, data, val, sz);
+//    out->id = id;
+//}
