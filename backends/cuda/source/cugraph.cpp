@@ -37,8 +37,6 @@ namespace nn
         {
             if (data)
                 cudaFree(data);
-            if (dependancy)
-                delete dependancy;
         }
 
         void* Edge::get_data(RunId id)
@@ -52,53 +50,50 @@ namespace nn
             return data;
         }
 
-        Node* translate_node(const core::Node* pnode)
+        void translate_node(const core::Node* pnode)
         {
-            Node* pret;
+            for (auto out : pnode->outputs)
+                assert(out->opaque);
+
+            Node* npnode;
             switch (hash(pnode->name))
             {
             case hash("add_same_intr"):
                 if (pnode->name != "add_same_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
-                assert(pnode->outputs[0]->opaque);
-                pret = new AddSame(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
+                npnode = new AddSame(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
                 break;
             case hash("add_scalar_right_intr"):
                 if (pnode->name != "add_scalar_right_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 pnode->cargs;
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
-                assert(pnode->outputs[0]->opaque);
-                pret = new AddScalar(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
+                npnode = new AddScalar(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
                 break;
             case hash("add_scalar_left_intr"):
                 if (pnode->name != "add_scalar_left_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 pnode->cargs;
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
-                assert(pnode->outputs[0]->opaque);
-                pret = new AddScalar(pnode->cargs, pnode->inputs[1], pnode->inputs[0], pnode->outputs[0]);
+                npnode = new AddScalar(pnode->cargs, pnode->inputs[1], pnode->inputs[0], pnode->outputs[0]);
                 break;
             case hash("sub_same_intr"):
                 if (pnode->name != "sub_same_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
-                assert(pnode->outputs[0]->opaque);
-                pret = new SubSame(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
+                npnode = new SubSame(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
                 break;
             case hash("sub_scalar_right_intr"):
                 if (pnode->name != "sub_scalar_right_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
-                assert(pnode->outputs[0]->opaque);
-                pret = new SubScalar(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
+                npnode = new SubScalar(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
                 break;
             //case hash("sub_scalar_left_intr"):
             //    if (pnode->name != "sub_scalar_left_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
             //    assert(pnode->inputs.size() == 2);
             //    assert(pnode->outputs.size() == 1);
-            //    assert(pnode->outputs[0]->opaque);
             //    pret = new SubScalar(pnode->cargs,
             //        (Edge**)&pnode->inputs[1]->opaque,
             //        (Edge**)&pnode->inputs[0]->opaque,
@@ -108,42 +103,36 @@ namespace nn
                 if (pnode->name != "mul_same_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
-                assert(pnode->outputs[0]->opaque);
-                pret = new MulSame(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
+                npnode = new MulSame(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
                 break;
             case hash("mul_scalar_right_intr"):
                 if (pnode->name != "mul_scalar_right_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
-                assert(pnode->outputs[0]->opaque);
-                pret = new MulScalar(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
+                npnode = new MulScalar(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
                 break;
             case hash("mul_scalar_left_intr"):
                 if (pnode->name != "mul_scalar_left_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
-                assert(pnode->outputs[0]->opaque);
-                pret = new MulScalar(pnode->cargs, pnode->inputs[1], pnode->inputs[0], pnode->outputs[0]);
+                npnode = new MulScalar(pnode->cargs, pnode->inputs[1], pnode->inputs[0], pnode->outputs[0]);
                 break;
             case hash("div_same_intr"):
                 if (pnode->name != "div_same_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
-                assert(pnode->outputs[0]->opaque);
-                pret = new DivSame(pnode->cargs, pnode->inputs[1], pnode->inputs[0], pnode->outputs[0]);
+                npnode = new DivSame(pnode->cargs, pnode->inputs[1], pnode->inputs[0], pnode->outputs[0]);
                 break;
             case hash("div_scalar_right_intr"):
                 if (pnode->name != "div_scalar_right_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 2);
                 assert(pnode->outputs.size() == 1);
-                assert(pnode->outputs[0]->opaque);
-                pret = new DivScalar(pnode->cargs, pnode->inputs[1], pnode->inputs[0], pnode->outputs[0]);
+                npnode = new DivScalar(pnode->cargs, pnode->inputs[1], pnode->inputs[0], pnode->outputs[0]);
                 break;
             //case hash("div_scalar_left_intr"):
             //    if (pnode->name != "div_scalar_left_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
             //    assert(pnode->inputs.size() == 2);
             //    assert(pnode->outputs.size() == 1);
-            //    assert(pnode->outputs[0]->opaque);
             //    pret = new DivScalar(pnode->cargs,
             //        (Edge**)&pnode->inputs[1]->opaque,
             //        (Edge**)&pnode->inputs[0]->opaque,
@@ -165,7 +154,6 @@ namespace nn
             //    if (pnode->name != "matmul_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
             //    assert(pnode->inputs.size() == 2);
             //    assert(pnode->outputs.size() == 1);
-            //    assert(pnode->outputs[0]->opaque);
             //    pret = new MatMul(pnode->cargs,
             //        (Edge**)&pnode->inputs[1]->opaque,
             //        (Edge**)&pnode->inputs[0]->opaque,
@@ -177,14 +165,96 @@ namespace nn
 
             // assigning the edge dependancies
             for (auto out : pnode->outputs)
-                ((Edge*)out->opaque)->dependancy = pret;
-            return pret;
+                ((Edge*)out->opaque)->dependancy = npnode;
+
+            // marking the node as translated
+            pnode->opaque = npnode;
+
+            // recursing over the graph
+            for (auto inp : pnode->inputs)
+                if (!inp->opaque)
+                    translate_node(inp->input);
+        }
+
+        void detach_edge(const core::Edge* pEdge, std::unordered_set<Edge*>& edge_set, std::unordered_set<Node*>& node_set);
+        void detach_node(const core::Node* pNode, std::unordered_set<Edge*>& edge_set, std::unordered_set<Node*>& node_set);
+
+        void detach_edge(const core::Edge* pEdge, std::unordered_set<Edge*>& edge_set, std::unordered_set<Node*>& node_set)
+        {
+            edge_set.insert({ (Edge*)pEdge->opaque });
+            pEdge->opaque = nullptr;
+            if (pEdge->input->opaque)
+                detach_node(pEdge->input, edge_set, node_set);
+        }
+
+        void detach_node(const core::Node* pNode, std::unordered_set<Edge*>& edge_set, std::unordered_set<Node*>& node_set)
+        {
+            node_set.insert({ (Node*)pNode->opaque });
+            pNode->opaque = nullptr;
+            for (auto inp : pNode->inputs)
+                if (inp->opaque)
+                    detach_edge(inp, edge_set, node_set);
         }
 
         CuGraph::CuGraph(const core::Graph* pgraph)
         {
-            // Starting from the graph outputs and going to the graph inputs
+            // Creating a new graph off the opaque points of the given
+            for (auto out : pgraph->outputs)
+            {
+                // Creating the output edge
+                size_t sz = 1;
+                for (auto e : out->dsc.dims)
+                    sz *= e;
+                Edge* nout = new Edge();
+                // TODO: check for allocation failure
+                cudaMalloc(&nout->data, sz * core::dtype_size(out->dsc.dty));
+                out->opaque = nout;
 
+                // translating all edge dependancies
+                if (!out->input->opaque)
+                    translate_node(out->input);
+            }
+
+            // Stealing pointers to the graph outputs
+            for (auto out : pgraph->outputs)
+                outputs.push_back((Edge*)out->opaque);
+            // Stealing pointers to the graph inputs
+            for (auto& [name, inp] : pgraph->inputs)
+                inputs[name] = (Edge*)inp->opaque;
+
+            // Detaching the newly created graph from the given graph (setting all the opaque pointers to null)
+            for (auto out : pgraph->outputs)
+                detach_edge(out, this->edge_set, this->node_set);
+
+            curr_eval = RunId{};
+        }
+
+        CuGraph::~CuGraph()
+        {
+            for (auto e : edge_set)
+                delete e;
+            for (auto e : node_set)
+                delete e;
+        }
+
+        void CuGraph::assign_input(std::string& name, void* data, size_t nbytes)
+        {
+            // TODO: check for errors
+            cudaMemcpy(inputs[name]->data, data, nbytes, cudaMemcpyKind::cudaMemcpyHostToDevice);
+        }
+
+        void CuGraph::eval()
+        {
+            curr_eval++;
+            // Evaluating each edge for the current run
+            for (auto out : outputs)
+                out->get_data(curr_eval);
+        }
+
+        void CuGraph::get_output(size_t out_num, void* data, size_t nbytes)
+        {
+            // TODO: check for errors
+            cudaMemcpy(outputs[out_num]->data, data, nbytes, cudaMemcpyKind::cudaMemcpyDeviceToHost);
         }
     }
 }

@@ -2,6 +2,7 @@
 #define CUNED_GRAPH_H
 
 #include <ned/core/graph.h>
+#include <unordered_set>
 
 namespace nn
 {
@@ -40,16 +41,22 @@ namespace nn
             virtual void eval(RunId id) = 0;
         };
 
-        Node* translate_node(const core::Node* pnode);
-
         class CuGraph
         {
             std::map<std::string, Edge*> inputs;
             std::vector<Edge*> outputs;
+            RunId curr_eval;
+
+            std::unordered_set<Edge*> edge_set;
+            std::unordered_set<Node*> node_set;
 
         public:
             CuGraph(const core::Graph* pgraph);
             ~CuGraph();
+
+            void assign_input(std::string& name, void* data, size_t nbytes);
+            void eval();
+            void get_output(size_t out_num, void* data, size_t nbytes);
         };
     }
 }

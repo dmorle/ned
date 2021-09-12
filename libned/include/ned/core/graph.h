@@ -38,6 +38,7 @@ namespace nn
             std::vector<std::shared_ptr<lang::Obj>> cargs;
             std::vector<Edge*> inputs;
             std::vector<Edge*> outputs;
+            mutable void* opaque = nullptr;
         };
 
         struct Graph
