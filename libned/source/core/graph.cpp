@@ -6,7 +6,7 @@ namespace nn
     {
         std::map<std::string, Edge*> generate_grad(Graph* pgraph)
         {
-
+            throw std::exception("Not implemented");
         }
     }
 }

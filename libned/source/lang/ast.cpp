@@ -1578,6 +1578,16 @@ namespace nn
                 delete args;
         }
 
+        const std::string& AstFn::get_name() const
+        {
+            return name;
+        }
+
+        const AstSeq& AstFn::get_body() const
+        {
+            return block;
+        }
+
         AstModImp::AstModImp(const TokenArray& tarr)
         {
             assert(tarr.size() != 0);

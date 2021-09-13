@@ -640,6 +640,9 @@ namespace nn
             ~AstFn();
 
             void eval(EvalCtx& ctx) const;
+
+            const std::string& get_name() const;
+            const AstSeq& get_body() const;
         };
 
         class AstModImp
@@ -659,12 +662,12 @@ namespace nn
 
         class AstModule
         {
+        public:
             std::vector<AstModImp> imps;
             std::vector<AstDef> defs;
             std::vector<AstFn> fns;
             std::vector<AstIntr> intrs;
 
-        public:
             AstModule(const TokenArray& tarr);
 
             EvalCtx* eval(const std::string& entry_point, const std::vector<std::shared_ptr<Obj>>& cargs);

@@ -14,19 +14,15 @@ else ()
 endif ()
 
 set(PYNED_HEADERS
-    "include/pyned/lang/astobj.h"
     "include/pyned/lang/methods.h"
-    "include/pyned/lang/syntaxerr.h"
-    "include/pyned/lang/generr.h"
+    "include/pyned/lang/ast.h"
 )
 
 add_executable(
     pynedl
     "source/lang/module.cpp"
     "source/lang/methods.cpp"
-    "source/lang/astobj.cpp"
-    "source/lang/syntaxerr.cpp"
-    "source/lang/generr.cpp"
+    "source/lang/ast.cpp"
     ${PYNED_HEADERS}
 )
 

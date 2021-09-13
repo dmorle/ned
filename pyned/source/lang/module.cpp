@@ -1,5 +1,6 @@
 #include <pyned/pyned.h>
 #include <pyned/lang/methods.h>
+#include <pyned/lang/ast.h>
 
 static struct PyMethodDef LangMethods[] =
 {
@@ -28,10 +29,24 @@ static struct PyModuleDef LangModule =
 
 PyMODINIT_FUNC PyInit_lang()
 {
+	if (PyType_Ready(&AstObjectType) < 0)
+		return NULL;
+
     PyObject* pModule = PyModule_Create(&LangModule);
     if (!pModule)
         return NULL;
-    return pModule;
+
+	Py_INCREF(&AstObjectType);
+	if (PyModule_AddObject(pModule, "ast", (PyObject*)&AstObjectType) < 0)
+		goto AstObjectError;
+
+	return pModule;
+
+AstObjectError:
+	Py_DECREF(&AstObjectType);
+
+	Py_DECREF(&pModule);
+    return NULL;
 }
 
 int main(int argc, char* argv[])
@@ -43,7 +58,7 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 
-	if (PyImport_AppendInittab("pyned.lang", PyInit_lang) == -1)
+	if (PyImport_AppendInittab("pyned.cpp.lang", PyInit_lang) == -1)
 	{
 		fprintf(stderr, "Error: could not extend in-built modules table\n");
 		exit(1);
@@ -52,7 +67,7 @@ int main(int argc, char* argv[])
 	Py_SetProgramName(program);
 	Py_Initialize();
 
-	PyObject* pModule = PyImport_ImportModule("pyned.lang");
+	PyObject* pModule = PyImport_ImportModule("pyned.cpp.lang");
 	if (!pModule)
 	{
 		PyErr_Print();

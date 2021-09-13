@@ -5,6 +5,7 @@ include_directories("include")
 add_library(
     libned STATIC
 
+    "source/core/tensor.cpp"
     "source/core/graph.cpp"
 
     "source/lang/eval.cpp"

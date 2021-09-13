@@ -258,6 +258,9 @@ namespace nn
         }
 
         template<>
+        ObjFWidth::~ObjImp() {}
+
+        template<>
         void ObjFWidth::assign(const std::shared_ptr<Obj>& val)
         {
             check_mtype(val);
