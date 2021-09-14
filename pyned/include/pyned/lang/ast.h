@@ -23,25 +23,25 @@ static PyMethodDef AstObjectMethods[] =
     {
         "is_valid",
         (PyCFunction)AstObjectIsValid,
-        METH_VARARGS,
+        METH_FASTCALL,
         NULL
     },
     {
         "list_defs",
         (PyCFunction)AstObjectListDefs,
-        METH_VARARGS,
+        METH_FASTCALL,
         NULL
     },
     {
         "list_intrs",
         (PyCFunction)AstObjectListIntrs,
-        METH_VARARGS,
+        METH_FASTCALL,
         NULL
     },
     {
         "list_fns",
         (PyCFunction)AstObjectListFns,
-        METH_VARARGS,
+        METH_FASTCALL,
         NULL
     },
     {
@@ -55,7 +55,7 @@ static PyMethodDef AstObjectMethods[] =
 static PyTypeObject AstObjectType =
 {
     .ob_base = PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pyned.lang.ast",
+    .tp_name = "pyned.cpp.lang.ast",
     .tp_basicsize = sizeof(AstObject),
     .tp_itemsize = 0,
     .tp_dealloc = AstObjectDealloc,

@@ -2,7 +2,7 @@
 
 #include <pyned/lang/ast.h>
 
-PyObject* parse_file(PyObject* self, PyObject* const* args, Py_ssize_t nargs)
+extern "C" PyObject* parse_file(PyObject* self, PyObject* const* args, Py_ssize_t nargs)
 {
     CHECK_ARGNUM(nargs, 1);
     int fd = PyObject_AsFileDescriptor(args[0]);
@@ -74,4 +74,9 @@ PyObject* parse_file(PyObject* self, PyObject* const* args, Py_ssize_t nargs)
     }
 
     return (PyObject*)pAst;
+}
+
+extern "C" PyObject* eval_ast(PyObject* self, PyObject* const* args, Py_ssize_t nargs)
+{
+    return NULL;
 }

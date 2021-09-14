@@ -16,6 +16,7 @@ endif ()
 set(PYNED_HEADERS
     "include/pyned/lang/methods.h"
     "include/pyned/lang/ast.h"
+    "include/pyned/lang/obj.h"
 )
 
 add_executable(
@@ -23,6 +24,7 @@ add_executable(
     "source/lang/module.cpp"
     "source/lang/methods.cpp"
     "source/lang/ast.cpp"
+    "source/lang/obj.cpp"
     ${PYNED_HEADERS}
 )
 

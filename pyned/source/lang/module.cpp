@@ -1,6 +1,7 @@
 #include <pyned/pyned.h>
 #include <pyned/lang/methods.h>
 #include <pyned/lang/ast.h>
+#include <pyned/lang/obj.h>
 
 static struct PyMethodDef LangMethods[] =
 {
@@ -10,6 +11,12 @@ static struct PyMethodDef LangMethods[] =
         METH_FASTCALL,
         "parses a *.nn file into an AST"
     },
+	{
+		"eval_ast",
+		(PyCFunction)eval_ast,
+		METH_FASTCALL,
+		"evaluates an AST to produce a computation graph"
+	},
 	{
 		NULL,
 		NULL,
@@ -40,7 +47,14 @@ PyMODINIT_FUNC PyInit_lang()
 	if (PyModule_AddObject(pModule, "ast", (PyObject*)&AstObjectType) < 0)
 		goto AstObjectError;
 
+	Py_INCREF(&NedObjObjectType);
+	if (PyModule_AddObject(pModule, "obj", (PyObject*)&NedObjObjectType) < 0)
+		goto NedObjObjectError;
+
 	return pModule;
+
+NedObjObjectError:
+	Py_DECREF(&NedObjObjectType);
 
 AstObjectError:
 	Py_DECREF(&AstObjectType);

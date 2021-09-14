@@ -12,10 +12,10 @@
 
 extern "C" PyObject* AstObjectNew(PyTypeObject* type, PyObject* args, PyObject* kwds)
 {
-    AstObject* self = (AstObject*)type->tp_alloc(type, 0);
+    PyObject* self = type->tp_alloc(type, 0);
     if (!self)
         return PyErr_NoMemory();
-    return (PyObject*)self;
+    return self;
 }
 
 extern "C" int AstObjectInit(PyObject* self, PyObject* args, PyObject* kwds)
