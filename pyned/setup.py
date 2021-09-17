@@ -33,15 +33,20 @@ lang_src = [os.path.join(root, file)
             for file in files
             if file.split(".")[-1] == "cpp"]
 
-core_ext = Extension(
-    name="core",
-    sources=core_src,
-    include_dirs=inc_dirs,
-    library_dirs=lib_dirs,
-    libraries=libs,
-    language="c++",
-    extra_compile_args=["/std:c++latest"]
-)
+# core_ext = Extension(
+#     name="core",
+#     sources=core_src,
+#     include_dirs=inc_dirs,
+#     library_dirs=lib_dirs,
+#     libraries=libs,
+#     define_macros=[("Py_DEBUG", 1)] if "${CMAKE_BUILD_TYPE}" == "Debug" else [],
+#     language="c++",
+#     extra_compile_args=[
+#         "/std:c++latest",
+#         "/MTd" if "${CMAKE_BUILD_TYPE}" == "Debug" else "/MT",
+#         "/MDd" if "${CMAKE_BUILD_TYPE}" == "Debug" else "/MD"
+#     ]
+# )
 
 lang_ext = Extension(
     name="lang",
@@ -49,6 +54,7 @@ lang_ext = Extension(
     include_dirs=inc_dirs,
     library_dirs=lib_dirs,
     libraries=libs,
+    define_macros=[("Py_DEBUG", 1)] if "${CMAKE_BUILD_TYPE}" == "Debug" else [],
     language="c++",
     extra_compile_args=["/std:c++latest"]
 )
@@ -58,8 +64,16 @@ setup(
     version="0.0.1",
     description="Python interface for the NEtwork Description language",
     author="Dario Morle",
-    ext_package="pyned.bin",
-    ext_modules=[core_ext, lang_ext],
-    packages=["pyned"],
-    package_dir={"pyned": "./pyned"}
+    ext_package="_pyned",
+    ext_modules=[lang_ext],#[core_ext, lang_ext],
+    packages=[
+        "pyned",
+        "pyned.lang"# ,
+        # "pyned.core"
+    ],
+    package_dir={
+        "pyned": "./pyned",
+        "pyned.lang": "./pyned/lang"# ,
+        # "pyned.core": "./pyned/core"
+    }
 )

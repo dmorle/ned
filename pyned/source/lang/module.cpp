@@ -3,6 +3,10 @@
 #include <pyned/lang/ast.h>
 #include <pyned/lang/obj.h>
 
+#ifndef PYNED_ENV_PTH
+#define PYNED_ENV_PTH ""
+#endif
+
 static struct PyMethodDef LangMethods[] =
 {
     {
@@ -39,16 +43,19 @@ PyMODINIT_FUNC PyInit_lang()
 	if (PyType_Ready(&AstObjectType) < 0)
 		return NULL;
 
+	if (PyType_Ready(&NedObjObjectType) < 0)
+		return NULL;
+
     PyObject* pModule = PyModule_Create(&LangModule);
     if (!pModule)
         return NULL;
 
 	Py_INCREF(&AstObjectType);
-	if (PyModule_AddObject(pModule, "ast", (PyObject*)&AstObjectType) < 0)
+	if (PyModule_AddObject(pModule, "Ast", (PyObject*)&AstObjectType) < 0)
 		goto AstObjectError;
 
 	Py_INCREF(&NedObjObjectType);
-	if (PyModule_AddObject(pModule, "obj", (PyObject*)&NedObjObjectType) < 0)
+	if (PyModule_AddObject(pModule, "Obj", (PyObject*)&NedObjObjectType) < 0)
 		goto NedObjObjectError;
 
 	return pModule;
@@ -72,7 +79,7 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 
-	if (PyImport_AppendInittab("pyned.cpp.lang", PyInit_lang) == -1)
+	if (PyImport_AppendInittab("_pyned.lang", PyInit_lang) == -1)
 	{
 		fprintf(stderr, "Error: could not extend in-built modules table\n");
 		exit(1);
@@ -81,13 +88,40 @@ int main(int argc, char* argv[])
 	Py_SetProgramName(program);
 	Py_Initialize();
 
-	PyObject* pModule = PyImport_ImportModule("pyned.cpp.lang");
+	PyObject* pPath = PySys_GetObject("path");
+	if (!pPath)
+	{
+		fprintf(stderr, "Error: unable to retrieve the python path variable\n");
+		exit(-1);
+	}
+	if (!PyList_Check(pPath))
+	{
+		fprintf(stderr, "Error: sys.path is not a list object");
+		exit(-1);
+	}
+	PyObject* pPkgPath = PyUnicode_FromString(PYNED_ENV_PTH);
+	PyList_Append(pPath, pPkgPath);
+
+	PyObject* pModule = PyImport_ImportModule("_pyned.lang");
 	if (!pModule)
 	{
 		PyErr_Print();
-		fprintf(stderr, "Error: could not import module 'pyned.lang'\n");
+		fprintf(stderr, "Error: could not import module '_pyned.lang'\n");
 	}
 
+	PyObject* dict = PyDict_New();
+	PyDict_SetItemString(dict, "lang", pModule);
+	PyObject* ret = PyRun_String("lang.Obj(1)", Py_single_input, dict, dict);
+	Py_DECREF(dict);
+	Py_DECREF(ret);
+
+	// cleaning up the sys.path variable
+	PyObject* npPath = PyList_GetSlice(pPath, 0, PyList_GET_SIZE(pPath) - 2);
+	Py_DECREF(pPath);
+	Py_DECREF(pPkgPath);
+	PySys_SetObject("path", npPath);
+
 	PyMem_RawFree(program);
+
 	return 0;
 }

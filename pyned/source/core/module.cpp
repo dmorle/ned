@@ -26,7 +26,7 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 
-	if (PyImport_AppendInittab("pyned.core", PyInit_core) == -1)
+	if (PyImport_AppendInittab("pyned._core", PyInit_core) == -1)
 	{
 		fprintf(stderr, "Error: could not extend in-built modules table\n");
 		exit(1);
@@ -35,11 +35,11 @@ int main(int argc, char* argv[])
 	Py_SetProgramName(program);
 	Py_Initialize();
 
-	PyObject* pModule = PyImport_ImportModule("pyned.core");
+	PyObject* pModule = PyImport_ImportModule("_pyned.core");
 	if (!pModule)
 	{
 		PyErr_Print();
-		fprintf(stderr, "Error: could not import module 'pyned.core'\n");
+		fprintf(stderr, "Error: could not import module '_pyned.core'\n");
 	}
 
 	PyMem_RawFree(program);

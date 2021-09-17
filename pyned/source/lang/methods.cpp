@@ -1,6 +1,7 @@
 #include <pyned/pyned.h>
 
 #include <pyned/lang/ast.h>
+#include <pyned/lang/ast.h>
 
 extern "C" PyObject* parse_file(PyObject* self, PyObject* const* args, Py_ssize_t nargs)
 {

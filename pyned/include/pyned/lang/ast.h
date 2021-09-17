@@ -55,7 +55,7 @@ static PyMethodDef AstObjectMethods[] =
 static PyTypeObject AstObjectType =
 {
     .ob_base = PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pyned.cpp.lang.ast",
+    .tp_name = "_pyned.lang.Ast",
     .tp_basicsize = sizeof(AstObject),
     .tp_itemsize = 0,
     .tp_dealloc = AstObjectDealloc,

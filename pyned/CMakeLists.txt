@@ -13,6 +13,8 @@ else ()
     link_libraries("python38")
 endif ()
 
+add_compile_definitions(PYNED_ENV_PTH="${CMAKE_CURRENT_SOURCE_DIR}/pyned-env/Lib/site-packages")
+
 set(PYNED_HEADERS
     "include/pyned/lang/methods.h"
     "include/pyned/lang/ast.h"

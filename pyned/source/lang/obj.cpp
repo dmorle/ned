@@ -2,7 +2,7 @@
 #include <pyned/lang/obj.h>
 
 #define pSelf   ((NedObjObject*)self)
-#define pObj   (pSelf->pObj)
+#define m_obj   (pSelf->pObj)
 
 extern "C" std::shared_ptr<lang::Obj> pyToNed(PyObject * pVal)
 {
@@ -187,6 +187,7 @@ extern "C" PyObject* NedObjObjectNew(PyTypeObject* type, PyObject* args, PyObjec
     PyObject* self = type->tp_alloc(type, 0);
     if (!self)
         return PyErr_NoMemory();
+    m_obj = nullptr;
     return self;
 }
 
@@ -199,8 +200,8 @@ extern "C" int NedObjObjectInit(PyObject* self, PyObject* args, PyObject* kwargs
     }
 
     PyObject* pVal = PyTuple_GetItem(args, 0);
-    pObj = pyToNed(pVal);
-    if (!pObj)
+    m_obj = pyToNed(pVal);
+    if (!m_obj)
         return -1;
     return 0;
 }
@@ -220,15 +221,35 @@ extern "C" void NedObjObjectDealloc(PyObject* self)
 
 extern "C" PyObject* NedObjObjectGet(PyObject* self, PyObject* const* args, Py_ssize_t nargs)
 {
-
+    return nedToPy(m_obj);
 }
 
-extern "C" PyObject* NedObjObjectInst(PyObject* self, PyObject* const* args, Py_ssize_t nargs)
+extern "C" PyObject * NedObjObjectGetInst(PyObject * self, PyObject* const* args, Py_ssize_t nargs)
 {
-
+    std::shared_ptr<lang::Obj> inst;
+    try
+    {
+        inst = m_obj->inst();
+    }
+    catch (lang::GenerationError& generr)
+    {
+        PyErr_SetString(PyExc_ValueError, generr.what());
+        return NULL;
+    }
+    return nedToPy(inst);
 }
 
 extern "C" PyObject* NedObjObjectGetType(PyObject* self, PyObject* const* args, Py_ssize_t nargs)
 {
-
+    std::shared_ptr<lang::Obj> type;
+    try
+    {
+        type = m_obj->type();
+    }
+    catch (lang::GenerationError& generr)
+    {
+        PyErr_SetString(PyExc_ValueError, generr.what());
+        return NULL;
+    }
+    return nedToPy(type);
 }

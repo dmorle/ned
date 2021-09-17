@@ -1,4 +1,4 @@
-from pyned.cpp.lang import parse_file as cpp_parse_file
+from _pyned.lang import parse_file as cpp_parse_file
 from .errors import NedSyntaxError
 
 

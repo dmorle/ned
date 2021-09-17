@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 #include <cassert>
+#include <cmath>
 
 #ifdef _DEBUG
 #include <iostream>

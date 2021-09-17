@@ -4,18 +4,19 @@
 #include <pyned/pyned.h>
 #include <memory>
 
-struct NedObjObject
+typedef struct
 {
     PyObject_HEAD
     std::shared_ptr<lang::Obj> pObj;
-};
+}
+NedObjObject;
 
 extern "C" PyObject* NedObjObjectNew(PyTypeObject* type, PyObject* args, PyObject* kwargs);
 extern "C" int       NedObjObjectInit(PyObject* self, PyObject* args, PyObject* kwargs);
 extern "C" void      NedObjObjectDealloc(PyObject* self);
 
 extern "C" PyObject* NedObjObjectGet    (PyObject* self, PyObject* const* args, Py_ssize_t nargs);
-extern "C" PyObject* NedObjObjectInst   (PyObject* self, PyObject* const* args, Py_ssize_t nargs);
+extern "C" PyObject* NedObjObjectGetInst(PyObject* self, PyObject* const* args, Py_ssize_t nargs);
 extern "C" PyObject* NedObjObjectGetType(PyObject* self, PyObject* const* args, Py_ssize_t nargs);
 
 static PyMethodDef NedObjObjectMethods[] =
@@ -23,19 +24,19 @@ static PyMethodDef NedObjObjectMethods[] =
     {
         "get",
         (PyCFunction)NedObjObjectGet,
-        METH_FASTCALL,
+        METH_VARARGS,
         NULL
     },
     {
-        "instantiate",
-        (PyCFunction)NedObjObjectInst,
-        METH_FASTCALL,
+        "get_inst",
+        (PyCFunction)NedObjObjectGetInst,
+        METH_VARARGS,
         NULL
     },
     {
         "get_type",
         (PyCFunction)NedObjObjectGetType,
-        METH_FASTCALL,
+        METH_VARARGS,
         NULL
     },
     {
@@ -49,7 +50,7 @@ static PyMethodDef NedObjObjectMethods[] =
 static PyTypeObject NedObjObjectType =
 {
     .ob_base = PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "pyned.cpp.lang.obj",
+    .tp_name = "_pyned.lang.Obj",
     .tp_basicsize = sizeof(NedObjObject),
     .tp_itemsize = 0,
     .tp_dealloc = NedObjObjectDealloc,
