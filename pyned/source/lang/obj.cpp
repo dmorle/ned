@@ -209,8 +209,9 @@ extern "C" int NedObjObjectInit(PyObject* self, PyObject* args, PyObject* kwargs
 extern "C" void NedObjObjectDealloc(PyObject* self)
 {
     PyTypeObject* tp = Py_TYPE(self);
+    if (tp->tp_flags & Py_TPFLAGS_HEAPTYPE)
+        Py_DECREF(tp);
     tp->tp_free(self);
-    Py_DECREF(tp);
 }
 
 /*

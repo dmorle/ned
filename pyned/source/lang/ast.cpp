@@ -1,8 +1,7 @@
 #include <pyned/pyned.h>
 #include <pyned/lang/ast.h>
 
-#define pSelf   ((AstObject*)self)
-#define pAst   (pSelf->pAst)
+#define pSelf ((AstObject*)self)
 
 /*
  *
@@ -15,25 +14,25 @@ extern "C" PyObject* AstObjectNew(PyTypeObject* type, PyObject* args, PyObject* 
     PyObject* self = type->tp_alloc(type, 0);
     if (!self)
         return PyErr_NoMemory();
+    pSelf->pAst = NULL;
     return self;
 }
 
 extern "C" int AstObjectInit(PyObject* self, PyObject* args, PyObject* kwds)
 {
     // Ignoring all arguments
-    pAst = NULL;
     return 0;
 }
 
 extern "C" void AstObjectDealloc(PyObject* self)
 {
+    if (pSelf->pAst)
+        delete pSelf->pAst;
+
     PyTypeObject* tp = Py_TYPE(self);
-
-    if (pAst)
-        delete pAst;
-
+    if (tp->tp_flags & Py_TPFLAGS_HEAPTYPE)
+        Py_DECREF(tp);
     tp->tp_free(self);
-    Py_DECREF(tp);
 }
 
 /*
@@ -46,7 +45,7 @@ extern "C" PyObject* AstObjectIsValid(PyObject * self, PyObject* const* args, Py
 {
     CHECK_ARGNUM(nargs, 0);
 
-    if (pAst)
+    if (pSelf->pAst)
         Py_RETURN_TRUE;
     Py_RETURN_FALSE;
 }
@@ -55,18 +54,18 @@ extern "C" PyObject* AstObjectListDefs(PyObject * self, PyObject* const* args, P
 {
     CHECK_ARGNUM(nargs, 0);
 
-    if (!pAst)
+    if (!pSelf->pAst)
     {
         PyErr_SetString(PyExc_ValueError, "Uninitialized ast object");
         return NULL;
     }
 
-    PyObject* pList = PyList_New(pAst->defs.size());
+    PyObject* pList = PyList_New(pSelf->pAst->defs.size());
     if (!pList)
         return PyErr_NoMemory();
-    for (size_t i = 0; i < pAst->defs.size(); i++)
+    for (size_t i = 0; i < pSelf->pAst->defs.size(); i++)
     {
-        const std::string& name = pAst->defs[i].get_name();
+        const std::string& name = pSelf->pAst->defs[i].get_name();
         PyObject* pStr = PyUnicode_FromStringAndSize(name.c_str(), name.size());
         // TODO: check for memory allocation failure
         PyList_SET_ITEM(pList, i, pStr);
@@ -78,18 +77,18 @@ extern "C" PyObject * AstObjectListIntrs(PyObject * self, PyObject* const* args,
 {
     CHECK_ARGNUM(nargs, 0);
 
-    if (!pAst)
+    if (!pSelf->pAst)
     {
         PyErr_SetString(PyExc_ValueError, "Uninitialized ast object");
         return NULL;
     }
 
-    PyObject* pList = PyList_New(pAst->intrs.size());
+    PyObject* pList = PyList_New(pSelf->pAst->intrs.size());
     if (!pList)
         return PyErr_NoMemory();
-    for (size_t i = 0; i < pAst->intrs.size(); i++)
+    for (size_t i = 0; i < pSelf->pAst->intrs.size(); i++)
     {
-        const std::string& name = pAst->intrs[i].get_name();
+        const std::string& name = pSelf->pAst->intrs[i].get_name();
         PyObject* pStr = PyUnicode_FromStringAndSize(name.c_str(), name.size());
         // TODO: check for memory allocation failure
         PyList_SET_ITEM(pList, i, pStr);
@@ -101,18 +100,18 @@ extern "C" PyObject * AstObjectListFns(PyObject * self, PyObject* const* args, P
 {
     CHECK_ARGNUM(nargs, 0);
 
-    if (!pAst)
+    if (!pSelf->pAst)
     {
         PyErr_SetString(PyExc_ValueError, "Uninitialized ast object");
         return NULL;
     }
 
-    PyObject* pList = PyList_New(pAst->fns.size());
+    PyObject* pList = PyList_New(pSelf->pAst->fns.size());
     if (!pList)
         return PyErr_NoMemory();
-    for (size_t i = 0; i < pAst->fns.size(); i++)
+    for (size_t i = 0; i < pSelf->pAst->fns.size(); i++)
     {
-        const std::string& name = pAst->fns[i].get_name();
+        const std::string& name = pSelf->pAst->fns[i].get_name();
         PyObject* pStr = PyUnicode_FromStringAndSize(name.c_str(), name.size());
         // TODO: check for memory allocation failure
         PyList_SET_ITEM(pList, i, pStr);

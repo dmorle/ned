@@ -1,9 +1,9 @@
-from pyned.cpp import lang
+from pyned import lang
 
 
 def main():
-    with open("hello_world.nn", "r") as f:
-        ast = lang.parse_file(f)
+    ast = lang.parse_file("pyned/examples/hello_world/hello_world.nn")
+    print(ast)
 
 
 if __name__ == "__main__":

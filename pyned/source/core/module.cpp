@@ -26,7 +26,7 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 
-	if (PyImport_AppendInittab("pyned._core", PyInit_core) == -1)
+	if (PyImport_AppendInittab("_pyned.core", PyInit_core) == -1)
 	{
 		fprintf(stderr, "Error: could not extend in-built modules table\n");
 		exit(1);

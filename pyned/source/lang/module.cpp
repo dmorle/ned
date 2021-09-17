@@ -7,7 +7,7 @@
 #define PYNED_ENV_PTH ""
 #endif
 
-static struct PyMethodDef LangMethods[] =
+static PyMethodDef LangMethods[] =
 {
     {
         "parse_file",
@@ -29,7 +29,7 @@ static struct PyMethodDef LangMethods[] =
 	}
 };
 
-static struct PyModuleDef LangModule =
+static PyModuleDef LangModule =
 {
     PyModuleDef_HEAD_INIT,
     "lang",                 // Module name
@@ -110,10 +110,14 @@ int main(int argc, char* argv[])
 	}
 
 	PyObject* dict = PyDict_New();
-	PyDict_SetItemString(dict, "lang", pModule);
-	PyObject* ret = PyRun_String("lang.Obj(1)", Py_single_input, dict, dict);
+	PyObject* pPynedLang = PyImport_ImportModule("pyned.lang");
+	PyDict_SetItemString(dict, "lang", pPynedLang);
+	PyObject* ret = PyRun_String("lang.parse_file(\"C:/Users/dmorl/source/repos/ned/pyned/examples/hello_world/hello_world.nn\")", Py_single_input, dict, dict);
 	Py_DECREF(dict);
-	Py_DECREF(ret);
+	if (ret)
+		Py_DECREF(ret);
+	else
+		PyErr_Print();
 
 	// cleaning up the sys.path variable
 	PyObject* npPath = PyList_GetSlice(pPath, 0, PyList_GET_SIZE(pPath) - 2);
