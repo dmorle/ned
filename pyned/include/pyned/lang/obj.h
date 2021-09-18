@@ -11,6 +11,8 @@ typedef struct
 }
 NedObjObject;
 
+#ifdef PYNEDL_SRC
+
 extern "C" PyObject* NedObjObjectNew(PyTypeObject* type, PyObject* args, PyObject* kwargs);
 extern "C" int       NedObjObjectInit(PyObject* self, PyObject* args, PyObject* kwargs);
 extern "C" void      NedObjObjectDealloc(PyObject* self);
@@ -60,5 +62,7 @@ static PyTypeObject NedObjObjectType =
     .tp_init = NedObjObjectInit,
     .tp_new = NedObjObjectNew
 };
+
+#endif  // PYNEDL_SRC
 
 #endif

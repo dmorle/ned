@@ -98,8 +98,10 @@ namespace nn
 
         EvalCtx::~EvalCtx()
         {
-            delete pgraph;
-            delete pscope;
+            if (pgraph)
+                delete pgraph;
+            if (pscope)
+                delete pscope;
 
             for (auto e : defs)
                 delete std::static_pointer_cast<ObjDef>(std::get<1>(e))->data.pdef;

@@ -3,7 +3,11 @@
 
 #include <pyned/pyned.h>
 
+#ifdef PYNEDL_SRC
+
 extern "C" PyObject* parse_file(PyObject* self, PyObject* const* args, Py_ssize_t nargs);
 extern "C" PyObject* eval_ast(PyObject* self, PyObject* const* args, Py_ssize_t nargs);
+
+#endif
 
 #endif

@@ -9,6 +9,8 @@ struct AstObject
     lang::AstModule* pAst;
 };
 
+#ifdef PYNEDL_SRC
+
 extern "C" PyObject* AstObjectNew(PyTypeObject* type, PyObject* args, PyObject* kwargs);
 extern "C" int       AstObjectInit(PyObject* self, PyObject* args, PyObject* kwargs);
 extern "C" void      AstObjectDealloc(PyObject* self);
@@ -65,5 +67,7 @@ static PyTypeObject AstObjectType =
     .tp_init = AstObjectInit,
     .tp_new = AstObjectNew
 };
+
+#endif // PYNEDL_SRC
 
 #endif

@@ -1,3 +1,5 @@
+#define PYNEDL_SRC
+
 #include <pyned/pyned.h>
 #include <pyned/lang/methods.h>
 #include <pyned/lang/ast.h>
