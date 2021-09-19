@@ -4,6 +4,9 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#include <ned/core/tensor.h>
+#include <ned/core/graph.h>
+
 #include <ned/lang/eval.h>
 #include <ned/lang/obj.h>
 #include <ned/lang/ast.h>

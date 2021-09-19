@@ -1,14 +1,14 @@
-intr add<int *shape>(tensor<*shape> t1, tensor<*shape> t2):
+intr add<fwidth fw, int *shape>(tensor<*shape> t1, tensor<*shape> t2):
     tensor<*shape> out
     return out
 
-def xavier<int *shape>():
-    tensor<*shape> w
+def xavier<fwidth fw, int *shape>():
+    tensor<fw, *shape> w
     return w
 
-def model<int N>(tensor<N> inp):
+def model<int N>(tensor<f32, N> inp):
     print "hello world"
-    tensor<2 * N> out1 = xavier<2 * N>()
-    tensor out2 = xavier<N, N>()
+    tensor<f32, 2 * N> out1 = xavier<2 * N>()
+    tensor out2 = xavier<f32, N, N>()
     out2 = add(out2, out2)
     return out1, out2

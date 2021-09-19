@@ -15,12 +15,16 @@ set(PYNED_HEADERS
     "include/pyned/lang/obj.h"
     
     "include/pyned/core/graph.h"
+    "include/pyned/core/node.h"
+    "include/pyned/core/edge.h"
 )
 
 add_library(
     libpynedc STATIC
     "source/core/module.cpp"
     "source/core/graph.cpp"
+    "source/core/node.cpp"
+    "source/core/edge.cpp"
     ${PYNED_HEADERS}
 )
 

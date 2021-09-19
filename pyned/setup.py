@@ -62,11 +62,7 @@ setup(
     author="Dario Morle",
     ext_package="_pyned",
     ext_modules=[core_ext, lang_ext],
-    packages=[
-        "pyned",
-        "pyned.lang",
-        "pyned.core"
-    ],
+    packages=["pyned"],
     package_dir={
         "pyned": "./pyned",
         "pyned.lang": "./pyned/lang",

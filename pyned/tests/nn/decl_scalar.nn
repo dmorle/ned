@@ -1,0 +1,3 @@
+def model<>():
+    tensor<f32> out
+    return out

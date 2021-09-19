@@ -103,6 +103,7 @@ namespace nn
         public:
             AstIdn();
             AstIdn(const Token* ptk);
+            AstIdn(const std::string& str);
 
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };

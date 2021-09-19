@@ -227,7 +227,7 @@ extern "C" PyObject* NedObjObjectGet(PyObject* self, PyObject* const* args, Py_s
     return nedToPy(m_obj);
 }
 
-extern "C" PyObject * NedObjObjectGetInst(PyObject * self, PyObject* const* args, Py_ssize_t nargs)
+extern "C" PyObject* NedObjObjectGetInst(PyObject* self, PyObject* const* args, Py_ssize_t nargs)
 {
     std::shared_ptr<lang::Obj> inst;
     try

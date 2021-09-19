@@ -1,5 +1,5 @@
-#ifndef PYNED_LANG_GRAPH_H
-#define PYNED_LANG_GRAPH_H
+#ifndef PYNED_CORE_GRAPH_H
+#define PYNED_CORE_GRAPH_H
 
 #include <pyned/pyned.h>
 
@@ -15,10 +15,51 @@ extern "C" PyObject* GraphObjectNew(PyTypeObject* type, PyObject* args, PyObject
 extern "C" int       GraphObjectInit(PyObject* self, PyObject* args, PyObject* kwargs);
 extern "C" void      GraphObjectDealloc(PyObject* self);
 
-//extern "C" PyObject* GraphObject
+extern "C" PyObject* GraphObjectIsValid    (PyObject* self, PyObject* const* args, Py_ssize_t nargs);
+extern "C" PyObject* GraphObjectOutputSize (PyObject* self, PyObject* const* args, Py_ssize_t nargs);
+extern "C" PyObject* GraphObjectInputSize  (PyObject* self, PyObject* const* args, Py_ssize_t nargs);
+extern "C" PyObject* GraphObjectListInputs (PyObject* self, PyObject* const* args, Py_ssize_t nargs);
+extern "C" PyObject* GraphObjectGetOutput  (PyObject* self, PyObject* const* args, Py_ssize_t nargs);
+extern "C" PyObject* GraphObjectGetInput   (PyObject* self, PyObject* const* args, Py_ssize_t nargs);
 
 static PyMethodDef GraphObjectMethods[] =
 {
+    {
+        "is_valid",
+        (PyCFunction)GraphObjectIsValid,
+        METH_FASTCALL,
+        NULL
+    },
+    {
+        "output_size",
+        (PyCFunction)GraphObjectOutputSize,
+        METH_FASTCALL,
+        NULL
+    },
+    {
+        "input_size",
+        (PyCFunction)GraphObjectInputSize,
+        METH_FASTCALL,
+        NULL
+    },
+    {
+        "list_inputs",
+        (PyCFunction)GraphObjectListInputs,
+        METH_FASTCALL,
+        NULL
+    },
+    {
+        "get_output",
+        (PyCFunction)GraphObjectGetOutput,
+        METH_FASTCALL,
+        NULL
+    },
+    {
+        "get_input",
+        (PyCFunction)GraphObjectGetInput,
+        METH_FASTCALL,
+        NULL
+    },
     {
         NULL,
         NULL,

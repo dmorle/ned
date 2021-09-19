@@ -90,42 +90,13 @@ int main(int argc, char* argv[])
 	Py_SetProgramName(program);
 	Py_Initialize();
 
-	PyObject* pPath = PySys_GetObject("path");
-	if (!pPath)
-	{
-		fprintf(stderr, "Error: unable to retrieve the python path variable\n");
-		exit(-1);
-	}
-	if (!PyList_Check(pPath))
-	{
-		fprintf(stderr, "Error: sys.path is not a list object");
-		exit(-1);
-	}
-	PyObject* pPkgPath = PyUnicode_FromString(PYNED_ENV_PTH);
-	PyList_Append(pPath, pPkgPath);
-
-	PyObject* pModule = PyImport_ImportModule("_pyned.lang");
+	PyObject* pModule = PyImport_ImportModule("_pyned.core");
 	if (!pModule)
 	{
 		PyErr_Print();
-		fprintf(stderr, "Error: could not import module '_pyned.lang'\n");
+		fprintf(stderr, "Error: could not import module '_pyned.core'\n");
 	}
-
-	PyObject* dict = PyDict_New();
-	PyObject* pPynedLang = PyImport_ImportModule("pyned.lang");
-	PyDict_SetItemString(dict, "lang", pPynedLang);
-	PyObject* ret = PyRun_String("lang.parse_file(\"C:/Users/dmorl/source/repos/ned/pyned/examples/hello_world/hello_world.nn\")", Py_single_input, dict, dict);
-	Py_DECREF(dict);
-	if (ret)
-		Py_DECREF(ret);
-	else
-		PyErr_Print();
-
-	// cleaning up the sys.path variable
-	PyObject* npPath = PyList_GetSlice(pPath, 0, PyList_GET_SIZE(pPath) - 2);
-	Py_DECREF(pPath);
-	Py_DECREF(pPkgPath);
-	PySys_SetObject("path", npPath);
+	Py_DECREF(pModule);
 
 	PyMem_RawFree(program);
 

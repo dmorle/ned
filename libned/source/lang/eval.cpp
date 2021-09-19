@@ -87,6 +87,11 @@ namespace nn
             traceback.push_back({ file_name, line_num, col_num });
         }
 
+        char const* GenerationError::what() const
+        {
+            return errmsg.c_str();
+        }
+
         EvalCtx::EvalCtx()
         {
             model_params = {};
@@ -801,14 +806,34 @@ namespace nn
 
         void AstArgVar::eval(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const
         {
-            if (is_packed)
+            try
             {
-                // concatenating the cargs with an iteration through ctx[var_name]
-                auto vec = ctx.get(var_name)->iter(ctx);
-                cargs.insert(cargs.end(), vec.begin(), vec.end());
+                if (is_packed)
+                {
+                    // concatenating the cargs with an iteration through ctx[var_name]
+                    auto vec = ctx.get(var_name)->iter(ctx);
+                    cargs.insert(cargs.end(), vec.begin(), vec.end());
+                }
+                else
+                    cargs.push_back(ctx.get(var_name));
             }
-            else
-                cargs.push_back(ctx.get(var_name));
+            catch (GenerationError& generr)
+            {
+                if (generr.errmsg.starts_with("Unable to resolve identifier"))
+                {
+                    // This is a hack for now until I come up with a better solution
+                    auto obj = AstIdn(var_name).eval(ctx);
+                    if (is_packed)
+                    {
+                        auto vec = obj->iter(ctx);
+                        cargs.insert(cargs.end(), vec.begin(), vec.end());
+                    }
+                    else
+                        cargs.push_back(obj);
+                }
+                else
+                    throw generr;
+            }
         }
 
         AstArgSig::Iter AstArgDecl::carg_deduction(EvalCtx& ctx, const AstArgSig::Iter& start, const AstArgSig::Iter& end) const

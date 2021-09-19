@@ -602,6 +602,13 @@ namespace nn
             idn = static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val;
         }
 
+        AstIdn::AstIdn(const std::string& str)
+        {
+            line_num = 0;
+            col_num = 0;
+            idn = str;
+        }
+
         AstTuple::AstTuple(const TokenArray& tarr)
         {
             assert(tarr.size() != 0);

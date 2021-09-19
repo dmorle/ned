@@ -113,9 +113,10 @@ extern "C" PyObject* eval_ast(PyObject* self, PyObject* const* args, Py_ssize_t 
     PyObject* pAstType;
     PyObject* pNedObjType;
     PyObject* pGraphType;
+    PyObject* pEntryPointASCII;
     int ret;
 
-    std::string entry_point;
+    char* entry_point;
     std::vector<std::shared_ptr<lang::Obj>> cargs;
     lang::EvalCtx* pctx;
     GraphObject* pGraph;
@@ -136,13 +137,13 @@ extern "C" PyObject* eval_ast(PyObject* self, PyObject* const* args, Py_ssize_t 
         PyErr_SetString(PyExc_TypeError, "Expected _pyned.lang.Ast type as first argument to eval_ast");
         goto on_ast_error;
     }
-    if (!PyUnicode_Check(args[1], &PyBaseString))
+    if (!PyUnicode_Check(args[1]))
     {
         PyErr_SetString(PyExc_TypeError, "Expected str type as second argument to eval_ast");
         goto on_ast_error;
     }
 
-    // Building the cargs
+    // Type checking the cargs
     pNedObjType = PyObject_GetAttrString(pPynedLangMod, "Obj");
     Py_DECREF(pPynedLangMod);
     if (!pNedObjType)
@@ -161,9 +162,21 @@ extern "C" PyObject* eval_ast(PyObject* self, PyObject* const* args, Py_ssize_t 
     Py_DECREF(pNedObjType);
 
     // Actually evaluating the script
-    entry_point = PyUnicode_AS_DATA(args[1]);
+    pEntryPointASCII = PyUnicode_AsASCIIString(args[1]);
+    if (!pEntryPointASCII)
+        return NULL;
+    entry_point = PyBytes_AsString(pEntryPointASCII);
+    if (!entry_point)
+        return NULL;
     for (int i = 2; i < nargs; i++)
+    {
         cargs.push_back(((NedObjObject*)args[i])->pObj);
+        if (!cargs.back())
+        {
+            PyErr_SetString(PyExc_ValueError, "Recieved uninitialized carg argument in eval_ast call");
+            return NULL;
+        }
+    }
     try
     {
         pctx = ((AstObject*)args[0])->pAst->eval(entry_point, cargs);

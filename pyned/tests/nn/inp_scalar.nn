@@ -1,0 +1,2 @@
+def model<>(tensor<f32> inp):
+    return inp

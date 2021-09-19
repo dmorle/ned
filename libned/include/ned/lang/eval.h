@@ -26,6 +26,8 @@ namespace nn
 
             void tb_touch(AstBlock* pblock);
             void tb_touch(const std::string& file_name, uint32_t line_num, uint32_t col_num);
+
+            virtual char const* what() const override;
         };
 
         enum class EvalState

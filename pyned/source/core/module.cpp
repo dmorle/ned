@@ -1,7 +1,9 @@
 #define PYNEDC_SRC
 
 #include <pyned/pyned.h>
-#include <pyned/lang/methods.h>
+#include <pyned/core/graph.h>
+#include <pyned/core/edge.h>
+#include <pyned/core/node.h>
 
 static struct PyModuleDef CoreModule =
 {
@@ -13,10 +15,44 @@ static struct PyModuleDef CoreModule =
 
 PyMODINIT_FUNC PyInit_core()
 {
+	if (PyType_Ready(&GraphObjectType) < 0)
+		return NULL;
+
+	if (PyType_Ready(&EdgeObjectType) < 0)
+		return NULL;
+
+	if (PyType_Ready(&NodeObjectType) < 0)
+		return NULL;
+
     PyObject* pModule = PyModule_Create(&CoreModule);
     if (!pModule)
         return NULL;
+
+	Py_INCREF(&GraphObjectType);
+	if (PyModule_AddObject(pModule, "Graph", (PyObject*)&GraphObjectType) < 0)
+		goto GraphObjectError;
+
+	Py_INCREF(&EdgeObjectType);
+	if (PyModule_AddObject(pModule, "Edge", (PyObject*)&EdgeObjectType) < 0)
+		goto EdgeObjectError;
+
+	Py_INCREF(&NodeObjectType);
+	if (PyModule_AddObject(pModule, "Node", (PyObject*)&NodeObjectType) < 0)
+		goto NodeObjectError;
+
     return pModule;
+
+NodeObjectError:
+	Py_DECREF(&NodeObjectType);
+
+EdgeObjectError:
+	Py_DECREF(&EdgeObjectType);
+
+GraphObjectError:
+	Py_DECREF(&GraphObjectType);
+
+	Py_DECREF(&pModule);
+	return NULL;
 }
 
 int main(int argc, char* argv[])
@@ -43,6 +79,7 @@ int main(int argc, char* argv[])
 		PyErr_Print();
 		fprintf(stderr, "Error: could not import module '_pyned.core'\n");
 	}
+	Py_DECREF(pModule);
 
 	PyMem_RawFree(program);
 	return 0;

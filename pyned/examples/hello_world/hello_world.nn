@@ -1,2 +1,0 @@
-def model<>():
-    print "hello world"
