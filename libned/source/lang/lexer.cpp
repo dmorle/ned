@@ -209,6 +209,9 @@ namespace nn
         {
             if (!is_slice)
                 std::free(pbuf);
+
+            // offsets are always dynamically allocated
+            std::free(offsets);
         }
 
         TokenArray::TokenArray(TokenArray&& tarr) noexcept

@@ -1,0 +1,3 @@
+def model<int *shape>():
+    tensor<f32, *shape> out
+    return out

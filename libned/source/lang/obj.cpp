@@ -41,6 +41,8 @@ namespace nn
                 return "invalid";
             case ObjType::VAR:
                 return "var";
+            case ObjType::FWIDTH:
+                return "fwidth";
             case ObjType::BOOL:
                 return "bool";
             case ObjType::INT:
@@ -274,6 +276,32 @@ namespace nn
         {
             check_init(this);
             return create_obj_fwidth(data.dty);
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjFWidth::eq(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+            check_mtype(val);
+
+            auto pobj = create_obj_bool();
+            pobj->data.val = data.dty == mty(val)->data.dty;
+            pobj->init = true;
+            return pobj;
+        }
+
+        template<>
+        std::shared_ptr<Obj> ObjFWidth::ne(const std::shared_ptr<Obj>& val) const
+        {
+            check_init(this);
+            check_init(val);
+            check_mtype(val);
+
+            auto pobj = create_obj_bool();
+            pobj->data.val = data.dty != mty(val)->data.dty;
+            pobj->init = true;
+            return pobj;
         }
 
         template<>
@@ -1246,8 +1274,10 @@ namespace nn
 
             auto pobj = std::make_shared<ObjTensor>();
             pobj->data.pEdge = data.pEdge;
+            pobj->data.dty = data.dty;
             pobj->data.dims = data.dims;  // copy assignment
             pobj->data.carg_init = true;
+            pobj->data.is_static = data.is_static;
             pobj->init = true;
             return pobj;
         }
@@ -1256,6 +1286,7 @@ namespace nn
         std::vector<std::shared_ptr<Obj>> ObjTensor::iter(EvalCtx& ctx)
         {
             std::vector<std::shared_ptr<Obj>> iters;
+            iters.push_back(create_obj_fwidth(data.dty));
             for (auto e : data.dims)
                 iters.push_back(create_obj_int(e));
             return iters;

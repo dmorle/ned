@@ -1,0 +1,2 @@
+def model<int *shape>(tensor<f32, *shape> inp):
+    return inp

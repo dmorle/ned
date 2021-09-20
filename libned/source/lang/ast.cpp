@@ -116,7 +116,7 @@ namespace nn
         AstExpr* splitExpr<2>(const TokenArray& tarr, int split_point)
         {
             assert(split_point < tarr.size() - 1);
-            
+
             TokenArray left(tarr, 0, split_point);
             TokenArray right(tarr, split_point + 1);
 
@@ -183,7 +183,7 @@ namespace nn
             // ex: .val<4, 5>.test[0].fn<>()[::].h[5:]()
             if (tarr.size() == 0)
                 return pleft;
-            
+
             int end;
             switch (tarr[0]->ty)
             {
@@ -233,7 +233,7 @@ namespace nn
             // shortcut for bracketed expressions
             if (tarr[0]->ty == TokenType::ROUND_O && tarr[tsz - 1]->ty == TokenType::ROUND_C)
                 return parseExpr<0>(TokenArray(tarr, 1, tsz - 1));
-            
+
             int bbrac = 0;
             int sbrac = 0;
             int abrac = 0;
@@ -660,6 +660,15 @@ namespace nn
             }
         }
 
+        AstCall::~AstCall()
+        {
+            if (pleft)
+                delete pleft;
+            for (auto e : args)
+                if (e)
+                    delete e;
+        }
+
         AstCargs::AstCargs(AstExpr* pleft, const TokenArray& tarr)
         {
             line_num = pleft->line_num;
@@ -681,6 +690,15 @@ namespace nn
                 if (start == tarr.size())
                     throw SyntaxError(tarr[end], "Empty constarg parameter");
             }
+        }
+
+        AstCargs::~AstCargs()
+        {
+            if (pleft)
+                delete pleft;
+            for (auto e : args)
+                if (e)
+                    delete e;
         }
 
         AstIdx::AstIdx(AstExpr* pleft, const TokenArray& tarr)
@@ -710,6 +728,14 @@ namespace nn
             */
         }
 
+        AstIdx::~AstIdx()
+        {
+            if (pleft)
+                delete pleft;
+            if (pidx)
+                delete pidx;
+        }
+
         AstDot::AstDot(AstExpr* pleft, const Token* ptk)
         {
             assert(ptk->ty == TokenType::IDN);
@@ -718,6 +744,12 @@ namespace nn
             col_num = ptk->col_num;
             this->pleft = pleft;
             this->member = static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val;
+        }
+
+        AstDot::~AstDot()
+        {
+            if (pleft)
+                delete pleft;
         }
 
         AstNeg::AstNeg(const TokenArray& tarr)
@@ -729,6 +761,12 @@ namespace nn
             pexpr = parseExpr<5>(tarr);
         }
 
+        AstNeg::~AstNeg()
+        {
+            if (pexpr)
+                delete pexpr;
+        }
+
         AstPack::AstPack(const TokenArray& tarr)
         {
             assert(tarr.size() != 0);
@@ -736,6 +774,12 @@ namespace nn
             col_num = tarr[0]->col_num;
 
             pexpr = parseExpr<5>(tarr);
+        }
+
+        AstPack::~AstPack()
+        {
+            if (pexpr)
+                delete pexpr;
         }
 
         AstAdd::AstAdd(const TokenArray& left, const TokenArray& right)
@@ -1144,12 +1188,14 @@ namespace nn
 
         AstArgImm::~AstArgImm()
         {
-            delete pimm;
+            if (pimm)
+                delete pimm;
         }
 
         AstArgVar::AstArgVar(const TokenArray& tarr)
         {
             assert(tarr.size() > 0);
+            pseudo_imm = false;
             if (tarr.size() == 1)
             {
                 if (tarr[0]->ty != TokenType::IDN)

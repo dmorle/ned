@@ -128,6 +128,8 @@ namespace nn
 
         public:
             AstCall(AstExpr* pleft, const TokenArray& tarr);
+            virtual ~AstCall();
+
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
@@ -139,6 +141,7 @@ namespace nn
 
         public:
             AstCargs(AstExpr* pleft, const TokenArray& tarr);
+            virtual ~AstCargs();
 
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
@@ -152,6 +155,7 @@ namespace nn
 
         public:
             AstIdx(AstExpr* pleft, const TokenArray& tarr);
+            virtual ~AstIdx();
             //void parseSlice(const TokenArray& tarr);
 
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
@@ -165,6 +169,7 @@ namespace nn
 
         public:
             AstDot(AstExpr* pleft, const Token* ptk);
+            virtual ~AstDot();
 
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
@@ -176,6 +181,7 @@ namespace nn
 
         public:
             AstNeg(const TokenArray& tarr);
+            virtual ~AstNeg();
 
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
@@ -187,6 +193,7 @@ namespace nn
 
         public:
             AstPack(const TokenArray& tarr);
+            virtual ~AstPack();
 
             virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
             virtual void append_vec(EvalCtx&, std::vector<std::shared_ptr<Obj>>&) const;
@@ -544,6 +551,7 @@ namespace nn
         {
             bool is_packed;
             std::string var_name;
+            mutable bool pseudo_imm;
 
         public:
             AstArgVar(const TokenArray& tarr);

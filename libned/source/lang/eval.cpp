@@ -108,12 +108,13 @@ namespace nn
             if (pscope)
                 delete pscope;
 
-            for (auto e : defs)
-                delete std::static_pointer_cast<ObjDef>(std::get<1>(e))->data.pdef;
-            for (auto e : fns)
-                delete std::static_pointer_cast<ObjFn>(std::get<1>(e))->data.pfn;
-            for (auto e : intrs)
-                delete std::static_pointer_cast<ObjIntr>(std::get<1>(e))->data.pintr;
+            // I think this should be taken care of by AstModule
+            //for (auto e : defs)
+            //    delete std::static_pointer_cast<ObjDef>(std::get<1>(e))->data.pdef;
+            //for (auto e : fns)
+            //    delete std::static_pointer_cast<ObjFn>(std::get<1>(e))->data.pfn;
+            //for (auto e : intrs)
+            //    delete std::static_pointer_cast<ObjIntr>(std::get<1>(e))->data.pintr;
         }
 
         std::shared_ptr<Obj> EvalCtx::get(const std::string& name)
@@ -544,7 +545,6 @@ namespace nn
                 dtype = dtype->cargs(obj_cargs);
             }
             std::shared_ptr<Obj> pobj = dtype->inst();
-
             if (is_static)
             {
                 // generating a globally unique identifier
@@ -705,7 +705,7 @@ namespace nn
             // match exactly one element
             ctx.scope()[var_name] = dtype->inst();
             ctx.scope()[var_name]->assign(*start);
-            return ++start;
+            return std::next(start);
         }
 
         std::vector<std::shared_ptr<Obj>>::iterator AstCargTuple::match_args(
@@ -717,7 +717,10 @@ namespace nn
             if (start == end)
             {
                 for (it = elems.begin(); it != elems.end(); it++)
-                    assert((*it)->match_args(ctx, start, end) == start);
+                {
+                    auto ret = (*it)->match_args(ctx, start, end);
+                    assert(ret == start);
+                }
                 return start;
             }
             if ((*start)->ty != ObjType::TUPLE)
@@ -748,6 +751,16 @@ namespace nn
 
         AstArgSig::Iter AstArgVar::carg_deduction(EvalCtx& ctx, const AstArgSig::Iter& start, const AstArgSig::Iter& end) const
         {
+            if (pseudo_imm)
+            {
+                // An extension of my temporary pseudo_imm hack (Using AstArgVar as a stand-in AstArgImm for special cases)
+                if (start == end)
+                    throw GenerationError("Missing data for carg deduction");
+                if (AstIdn(var_name).eval(ctx)->ne(*start)->bval())
+                    throw GenerationError("Argument data mismatch");
+                return std::next(start);
+            }
+
             if (!ctx.scope().contains(var_name))
                 throw GenerationError("Unable to find carg parameter " + var_name);
             std::shared_ptr<Obj> carg_obj = ctx.scope()[var_name];
@@ -819,17 +832,11 @@ namespace nn
             }
             catch (GenerationError& generr)
             {
-                if (generr.errmsg.starts_with("Unable to resolve identifier"))
+                if (!is_packed && generr.errmsg.starts_with("Unable to resolve identifier"))
                 {
                     // This is a hack for now until I come up with a better solution
-                    auto obj = AstIdn(var_name).eval(ctx);
-                    if (is_packed)
-                    {
-                        auto vec = obj->iter(ctx);
-                        cargs.insert(cargs.end(), vec.begin(), vec.end());
-                    }
-                    else
-                        cargs.push_back(obj);
+                    cargs.push_back(AstIdn(var_name).eval(ctx));
+                    pseudo_imm = true;
                 }
                 else
                     throw generr;
@@ -898,18 +905,22 @@ namespace nn
         void AstDef::apply_cargs(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const
         {
             std::vector<std::shared_ptr<Obj>> cargs_tuple = { create_obj_tuple(cargs) };
-            assert(this->cargs->match_args(ctx, cargs_tuple.begin(), cargs_tuple.end()) == cargs_tuple.end());
+            auto ret = this->cargs->match_args(ctx, cargs_tuple.begin(), cargs_tuple.end());
+            assert(ret == cargs_tuple.end());
         }
 
         void AstDef::carg_deduction(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& args) const
         {
+            // I don't need to take packed arguments into account here since they aren't allowed as arguments in def signatures.
+            // So the number of arguments parsed by the ast should always match one to one with the arguments the def was called with
             if (args.size() != vargs.size())
                 throw GenerationError("Argument count mismatch, expected " + std::to_string(vargs.size()) + ", recieved " + std::to_string(args.size()));
             for (int i = 0; i < args.size(); i++)
             {
                 std::shared_ptr<Obj> arg_cpy = args[i]->copy();
                 std::vector<std::shared_ptr<Obj>> arg_vec = { arg_cpy };
-                assert(std::get<0>(vargs[i]).carg_deduction(ctx, arg_vec.begin(), arg_vec.end()) == arg_vec.end());
+                auto ret = std::get<0>(vargs[i]).carg_deduction(ctx, arg_vec.begin(), arg_vec.end());
+                assert(ret == arg_vec.end());
                 if (ctx.scope().contains(std::get<1>(vargs[i])))
                     throw GenerationError("Name collision in def call");
                 ctx.scope()[std::get<1>(vargs[i])] = arg_cpy;
@@ -924,7 +935,8 @@ namespace nn
         void AstIntr::apply_cargs(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const
         {
             std::vector<std::shared_ptr<Obj>> cargs_tuple = { create_obj_tuple(cargs) };
-            assert(this->cargs->match_args(ctx, cargs_tuple.begin(), cargs_tuple.end()) == cargs_tuple.end());
+            auto ret = this->cargs->match_args(ctx, cargs_tuple.begin(), cargs_tuple.end());
+            assert(ret == cargs_tuple.end());
         }
 
         void AstIntr::carg_deduction(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& args) const
@@ -935,7 +947,8 @@ namespace nn
             {
                 std::shared_ptr<Obj> arg_cpy = args[i]->copy();
                 std::vector<std::shared_ptr<Obj>> arg_vec = { arg_cpy };
-                assert(std::get<0>(vargs[i]).carg_deduction(ctx, arg_vec.begin(), arg_vec.end()) == arg_vec.end());
+                auto ret = std::get<0>(vargs[i]).carg_deduction(ctx, arg_vec.begin(), arg_vec.end());
+                assert(ret == arg_vec.end());
                 if (ctx.scope().contains(std::get<1>(vargs[i])))
                     throw GenerationError("Name collision in intr call");
                 ctx.scope()[std::get<1>(vargs[i])] = arg_cpy;
@@ -990,6 +1003,10 @@ namespace nn
                         throw GenerationError("Invalid return type from top level def");
                     pctx->graph().outputs.push_back(static_cast<ObjTensor*>(e.get())->data.pEdge);
                 }
+
+            // cleaning up the globals
+            varcounts = {};
+            last_ret = nullptr;
 
             return pctx;
         }
