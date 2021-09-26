@@ -1,0 +1,8 @@
+intr binop<fwidth fw, int *shape>(tensor<fw, *shape> left, tensor<fw, *shape> right):
+    tensor<fw, *shape> out
+    return out
+
+def model<fwidth fw, int *shape>():
+    tensor<fw, *shape> inp1
+    tensor<fw, *shape> inp2
+    return binop(inp1, inp2)

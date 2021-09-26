@@ -12,6 +12,20 @@ namespace nn
 {
     namespace cuda
     {
+        inline size_t fwidth_size(core::tensor_dty dty)
+        {
+            switch (dty)
+            {
+            case core::tensor_dty::F16:
+                return 2;
+            case core::tensor_dty::F32:
+                return 4;
+            case core::tensor_dty::F64:
+                return 8;
+            }
+            return 0;
+        }
+
         class BinOpSame :
             public Node
         {
@@ -189,12 +203,12 @@ namespace nn
                 if (!inp1->opaque)
                 {
                     inp1->opaque = new Edge{};
-                    cudaMalloc(&((Edge*)inp1->opaque)->data, m * s * sizeof(T));
+                    cudaMalloc(&((Edge*)inp1->opaque)->data, m * s * fwidth_size(inp1->dsc.dty));
                 }
                 if (!inp2->opaque)
                 {
                     inp2->opaque = new Edge{};
-                    cudaMalloc(&((Edge*)inp2->opaque)->data, s * n * sizeof(T));
+                    cudaMalloc(&((Edge*)inp2->opaque)->data, s * n * fwidth_size(inp2->dsc.dty));
                 }
                 this->inp1 = (Edge*)inp1->opaque;
                 this->inp2 = (Edge*)inp2->opaque;

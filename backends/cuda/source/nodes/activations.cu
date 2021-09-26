@@ -6,5 +6,3 @@ using namespace nn;
 using namespace cuda;
 
 constexpr int bsz = 32;
-
-

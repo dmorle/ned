@@ -13,11 +13,11 @@ extern "C" std::shared_ptr<lang::Obj> pyToNed(PyObject * pVal)
         PyObject* pAsciiStr = PyUnicode_AsASCIIString(pVal);
         char* str = PyBytes_AsString(pAsciiStr);
 
-        if (strcmp(str, "f16") == 0)
+        if (strcmp(str, "dtype.f16") == 0)
             return lang::create_obj_fwidth(core::tensor_dty::F16);
-        else if (strcmp(str, "f32") == 0)
+        else if (strcmp(str, "dtype.f32") == 0)
             return lang::create_obj_fwidth(core::tensor_dty::F32);
-        else if (strcmp(str, "f64") == 0)
+        else if (strcmp(str, "dtype.f64") == 0)
             return lang::create_obj_fwidth(core::tensor_dty::F64);
         else if (strcmp(str, "fwidth") == 0)
             return lang::create_obj_dtype(lang::ObjType::FWIDTH);
@@ -93,6 +93,7 @@ extern "C" std::shared_ptr<lang::Obj> pyToNed(PyObject * pVal)
         return lang::create_obj_tuple(objs);
     }
     PyErr_SetString(PyExc_TypeError, "Invalid initialization type for ned object");
+    return nullptr;
 }
 
 extern "C" PyObject* nedToPy(const std::shared_ptr<lang::Obj>& obj)

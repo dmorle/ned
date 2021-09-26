@@ -1,5 +1,5 @@
 from _pyned import lang as _lang
-from .core import Graph
+from .core import Graph, dtype
 
 
 class NedSyntaxError(Exception):
@@ -19,6 +19,8 @@ class Obj:
     def __init__(self, data):
         if type(data) is _lang.Obj:
             self._obj = data
+        elif type(data) is dtype:
+            self._obj = _lang.Obj(str(data))
         else:
             self._obj = _lang.Obj(data)
 
@@ -29,8 +31,8 @@ class Ast:
         assert ast.is_valid()
         self._ast: _lang.Ast = ast
 
-    def eval(self, entry_point: str, *cargs: Obj) -> Graph:
-        ret = _lang.eval_ast(self._ast, entry_point, *[carg._obj for carg in cargs])
+    def eval(self, entry_point: str, cargs=tuple()) -> Graph:
+        ret = _lang.eval_ast(self._ast, entry_point, *[Obj(carg)._obj for carg in cargs])
         if type(ret) is str:
             raise NedGenerationError(ret)
         return Graph(ret)

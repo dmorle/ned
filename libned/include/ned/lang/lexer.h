@@ -3,7 +3,14 @@
 
 #include <vector>
 #include <string>
+#if __cplusplus >= 202002L
 #include <format>
+#else
+namespace std {
+    template<class... Args>
+    string format(const string&, const Args&...) { return ""; }
+}
+#endif
 
 namespace nn
 {

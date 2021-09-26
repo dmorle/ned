@@ -9,5 +9,3 @@ template<typename T>
 __global__ void matmul(T* dst, const T* A, const T* B)
 {
 }
-
-

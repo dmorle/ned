@@ -1,0 +1,5 @@
+intr identity<fwidth fw, int *shape>(tensor<fw, *shape> inp):
+    return inp
+
+def model<fwidth fw, int *shape>(tensor<fw, *shape> inp):
+    return identity(inp)
