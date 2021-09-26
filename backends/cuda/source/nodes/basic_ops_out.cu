@@ -19,6 +19,7 @@ void AddSame::eval(RunId id)
                 add_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -29,7 +30,9 @@ void AddSame::eval(RunId id)
                 add_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     case core::tensor_dty::F64:
         switch (inp2_dty)
         {
@@ -43,6 +46,7 @@ void AddSame::eval(RunId id)
                 add_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -53,7 +57,9 @@ void AddSame::eval(RunId id)
                 add_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     }
     out->id = id;
 }
@@ -78,6 +84,7 @@ void SubSame::eval(RunId id)
                 sub_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -88,7 +95,9 @@ void SubSame::eval(RunId id)
                 sub_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     case core::tensor_dty::F64:
         switch (inp2_dty)
         {
@@ -102,6 +111,7 @@ void SubSame::eval(RunId id)
                 sub_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -112,7 +122,9 @@ void SubSame::eval(RunId id)
                 sub_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     }
     out->id = id;
 }
@@ -137,6 +149,7 @@ void MulSame::eval(RunId id)
                 mul_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -147,7 +160,9 @@ void MulSame::eval(RunId id)
                 mul_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     case core::tensor_dty::F64:
         switch (inp2_dty)
         {
@@ -161,6 +176,7 @@ void MulSame::eval(RunId id)
                 mul_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -171,7 +187,9 @@ void MulSame::eval(RunId id)
                 mul_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     }
     out->id = id;
 }
@@ -196,6 +214,7 @@ void DivSame::eval(RunId id)
                 div_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -206,7 +225,9 @@ void DivSame::eval(RunId id)
                 div_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     case core::tensor_dty::F64:
         switch (inp2_dty)
         {
@@ -220,6 +241,7 @@ void DivSame::eval(RunId id)
                 div_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -230,7 +252,9 @@ void DivSame::eval(RunId id)
                 div_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     }
     out->id = id;
 }
@@ -255,6 +279,7 @@ void AddScalar::eval(RunId id)
                 add_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -265,7 +290,9 @@ void AddScalar::eval(RunId id)
                 add_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     case core::tensor_dty::F64:
         switch (val_dty)
         {
@@ -279,6 +306,7 @@ void AddScalar::eval(RunId id)
                 add_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -289,7 +317,9 @@ void AddScalar::eval(RunId id)
                 add_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     }
     out->id = id;
 }
@@ -314,6 +344,7 @@ void SubScalar::eval(RunId id)
                 sub_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -324,7 +355,9 @@ void SubScalar::eval(RunId id)
                 sub_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     case core::tensor_dty::F64:
         switch (val_dty)
         {
@@ -338,6 +371,7 @@ void SubScalar::eval(RunId id)
                 sub_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -348,7 +382,9 @@ void SubScalar::eval(RunId id)
                 sub_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     }
     out->id = id;
 }
@@ -373,6 +409,7 @@ void MulScalar::eval(RunId id)
                 mul_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -383,7 +420,9 @@ void MulScalar::eval(RunId id)
                 mul_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     case core::tensor_dty::F64:
         switch (val_dty)
         {
@@ -397,6 +436,7 @@ void MulScalar::eval(RunId id)
                 mul_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -407,7 +447,9 @@ void MulScalar::eval(RunId id)
                 mul_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     }
     out->id = id;
 }
@@ -432,6 +474,7 @@ void DivScalar::eval(RunId id)
                 div_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -442,7 +485,9 @@ void DivScalar::eval(RunId id)
                 div_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     case core::tensor_dty::F64:
         switch (val_dty)
         {
@@ -456,6 +501,7 @@ void DivScalar::eval(RunId id)
                 div_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         case core::tensor_dty::F64:
             switch (out_dty)
             {
@@ -466,7 +512,9 @@ void DivScalar::eval(RunId id)
                 div_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
+            break;
         }
+        break;
     }
     out->id = id;
 }

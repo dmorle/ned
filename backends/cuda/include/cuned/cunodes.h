@@ -65,12 +65,6 @@ namespace nn
                 inp2_dty = inp2->dsc.dty;
                 out_dty = out->dsc.dty;
             }
-            ~BinOpSame()
-            {
-                // This will cause a double free, I need to find a way to mark the edges as deleted
-                delete inp1;
-                delete inp2;
-            }
         };
 
         class AddSame :
@@ -144,7 +138,6 @@ namespace nn
                 val_dty = val->dsc.dty;
                 out_dty = out->dsc.dty;
             }
-            ~BinOpScalar() { delete inp; delete val; }
         };
 
         class AddScalar :

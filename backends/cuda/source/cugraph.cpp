@@ -26,6 +26,16 @@ namespace nn
 {
     namespace cuda
     {
+        GraphError::GraphError(const std::string& errmsg)
+        {
+            this->errmsg = errmsg;
+        }
+
+        const char* GraphError::what() const
+        {
+            return errmsg.c_str();
+        }
+
         Edge::Edge()
         {
             data = nullptr;
@@ -183,7 +193,7 @@ namespace nn
         {
             edge_set.insert({ (Edge*)pEdge->opaque });
             pEdge->opaque = nullptr;
-            if (pEdge->input->opaque)
+            if (pEdge->input && pEdge->input->opaque)  // An input exists and it hasn't already been freed
                 detach_node(pEdge->input, edge_set, node_set);
         }
 
@@ -223,6 +233,7 @@ namespace nn
                 inputs[name] = (Edge*)inp->opaque;
 
             // Detaching the newly created graph from the given graph (setting all the opaque pointers to null)
+            // While detaching, all nodes and edges are added to a set for deletion without double freeing for non-trivial topologies
             for (auto out : pgraph->outputs)
                 detach_edge(out, this->edge_set, this->node_set);
 
@@ -237,24 +248,29 @@ namespace nn
                 delete e;
         }
 
-        void CuGraph::assign_input(std::string& name, void* data, size_t nbytes)
+        RunId CuGraph::generate_id()
+        {
+            return ++curr_eval;
+        }
+
+        void CuGraph::assign_input(const std::string& name, void* data, size_t nbytes, RunId id)
         {
             // TODO: check for errors
             cudaMemcpy(inputs[name]->data, data, nbytes, cudaMemcpyKind::cudaMemcpyHostToDevice);
+            inputs[name]->id = id;
         }
 
-        void CuGraph::eval()
+        void CuGraph::eval(RunId id)
         {
-            curr_eval++;
             // Evaluating each edge for the current run
             for (auto out : outputs)
-                out->get_data(curr_eval);
+                out->get_data(id);
         }
 
         void CuGraph::get_output(size_t out_num, void* data, size_t nbytes)
         {
             // TODO: check for errors
-            cudaMemcpy(outputs[out_num]->data, data, nbytes, cudaMemcpyKind::cudaMemcpyDeviceToHost);
+            cudaMemcpy(data, outputs[out_num]->data, nbytes, cudaMemcpyKind::cudaMemcpyDeviceToHost);
         }
     }
 }

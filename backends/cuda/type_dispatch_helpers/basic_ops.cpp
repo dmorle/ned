@@ -49,7 +49,7 @@ void write_dispatch(ostream& ofs, const string& indent, const string& fn_name, v
     {
         ofs << indent;
         write_call(ofs, fn_name, curr_types);
-        ofs << endl << indent << "break;" << endl;
+        ofs << endl;
         return;
     }
 
@@ -61,6 +61,7 @@ void write_dispatch(ostream& ofs, const string& indent, const string& fn_name, v
         curr_types.push_back(get<1>(fw_map));
         write_dispatch(ofs, indent + "    ", fn_name, curr_types, vector(cases.begin() + 1, cases.end()));
         curr_types.pop_back();
+        ofs << indent << "    break;" << endl;
     }
     ofs << indent << "}" << endl;
 }

@@ -26,6 +26,8 @@ set_property(TARGET libcuned PROPERTY LINKER_LANGUAGE CXX)
 set_property(TARGET libcuned PROPERTY CXX_STANDARD 20)
 set_property(TARGET libcuned PROPERTY CUDA_STANDARD 17)
 
+add_compile_definitions(TEST_DIR="${CMAKE_SOURCE_DIR}/backends/cuda/tests/")
+
 add_executable(
     libcuned_tests
     "tests/main.cpp"

@@ -15,6 +15,8 @@ namespace nn
             std::string errmsg;
 
             GraphError(const std::string& errmsg);
+
+            const char* what() const override;
         };
 
         using RunId = uint32_t;
@@ -54,8 +56,9 @@ namespace nn
             CuGraph(const core::Graph* pgraph);
             ~CuGraph();
 
-            void assign_input(std::string& name, void* data, size_t nbytes);
-            void eval();
+            RunId generate_id();
+            void assign_input(const std::string& name, void* data, size_t nbytes, RunId id);
+            void eval(RunId id);
             void get_output(size_t out_num, void* data, size_t nbytes);
         };
     }
