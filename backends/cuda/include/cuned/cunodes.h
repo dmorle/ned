@@ -50,13 +50,15 @@ namespace nn
                 {
                     inp1->opaque = new Edge();
                     // TODO: check to make sure it was allocated
-                    cudaMalloc(&((Edge*)inp1->opaque)->data, sz * core::dtype_size(inp1->dsc.dty));
+                    cudaMalloc(&((Edge*)inp1->opaque)->forward_data, sz * core::dtype_size(inp1->dsc.dty));
+                    cudaMalloc(&((Edge*)inp1->opaque)->backward_data, sz * core::dtype_size(inp1->dsc.dty));
                 }
                 if (!inp2->opaque)
                 {
                     inp2->opaque = new Edge();
                     // TODO: check to make sure it was allocated
-                    cudaMalloc(&((Edge*)inp2->opaque)->data, sz * core::dtype_size(inp2->dsc.dty));
+                    cudaMalloc(&((Edge*)inp2->opaque)->forward_data, sz * core::dtype_size(inp2->dsc.dty));
+                    cudaMalloc(&((Edge*)inp2->opaque)->backward_data, sz * core::dtype_size(inp2->dsc.dty));
                 }
                 this->inp1 = (Edge*)inp1->opaque;
                 this->inp2 = (Edge*)inp2->opaque;
@@ -72,7 +74,8 @@ namespace nn
         {
         public:
             using BinOpSame::BinOpSame;
-            virtual void eval(RunId id) override;
+            virtual void forward(RunId id) override;
+            virtual void backward(RunId id) override;
         };
 
         class SubSame :
@@ -80,7 +83,8 @@ namespace nn
         {
         public:
             using BinOpSame::BinOpSame;
-            virtual void eval(RunId id) override;
+            virtual void forward(RunId id) override;
+            virtual void backward(RunId id) override;
         };
 
         class MulSame :
@@ -88,7 +92,8 @@ namespace nn
         {
         public:
             using BinOpSame::BinOpSame;
-            virtual void eval(RunId id) override;
+            virtual void forward(RunId id) override;
+            virtual void backward(RunId id) override;
         };
 
         class DivSame :
@@ -96,7 +101,8 @@ namespace nn
         {
         public:
             using BinOpSame::BinOpSame;
-            virtual void eval(RunId id) override;
+            virtual void forward(RunId id) override;
+            virtual void backward(RunId id) override;
         };
 
         class BinOpScalar :
@@ -123,13 +129,15 @@ namespace nn
                 {
                     inp->opaque = new Edge();
                     // TODO: check to make sure it was allocated
-                    cudaMalloc(&((Edge*)inp->opaque)->data, sz * core::dtype_size(inp->dsc.dty));
+                    cudaMalloc(&((Edge*)inp->opaque)->forward_data, sz * core::dtype_size(inp->dsc.dty));
+                    cudaMalloc(&((Edge*)inp->opaque)->backward_data, sz * core::dtype_size(inp->dsc.dty));
                 }
                 if (!val->opaque)
                 {
                     val->opaque = new Edge();
                     // TODO: check to make sure it was allocated
-                    cudaMalloc(&((Edge*)val->opaque)->data, core::dtype_size(val->dsc.dty));
+                    cudaMalloc(&((Edge*)val->opaque)->forward_data, core::dtype_size(val->dsc.dty));
+                    cudaMalloc(&((Edge*)val->opaque)->backward_data, core::dtype_size(val->dsc.dty));
                 }
                 this->inp = (Edge*)inp->opaque;
                 this->val = (Edge*)val->opaque;
@@ -145,7 +153,8 @@ namespace nn
         {
         public:
             using BinOpScalar::BinOpScalar;
-            virtual void eval(RunId id) override;
+            virtual void forward(RunId id) override;
+            virtual void backward(RunId id) override;
         };
 
         class SubScalar :
@@ -153,7 +162,8 @@ namespace nn
         {
         public:
             using BinOpScalar::BinOpScalar;
-            virtual void eval(RunId id) override;
+            virtual void forward(RunId id) override;
+            virtual void backward(RunId id) override;
         };
 
         class MulScalar :
@@ -161,7 +171,8 @@ namespace nn
         {
         public:
             using BinOpScalar::BinOpScalar;
-            virtual void eval(RunId id) override;
+            virtual void forward(RunId id) override;
+            virtual void backward(RunId id) override;
         };
 
         class DivScalar :
@@ -169,7 +180,8 @@ namespace nn
         {
         public:
             using BinOpScalar::BinOpScalar;
-            virtual void eval(RunId id) override;
+            virtual void forward(RunId id) override;
+            virtual void backward(RunId id) override;
         };
 
         class MatMul :
@@ -196,12 +208,14 @@ namespace nn
                 if (!inp1->opaque)
                 {
                     inp1->opaque = new Edge{};
-                    cudaMalloc(&((Edge*)inp1->opaque)->data, m * s * fwidth_size(inp1->dsc.dty));
+                    cudaMalloc(&((Edge*)inp1->opaque)->forward_data, m * s * fwidth_size(inp1->dsc.dty));
+                    cudaMalloc(&((Edge*)inp1->opaque)->backward_data, m * s * fwidth_size(inp1->dsc.dty));
                 }
                 if (!inp2->opaque)
                 {
                     inp2->opaque = new Edge{};
-                    cudaMalloc(&((Edge*)inp2->opaque)->data, s * n * fwidth_size(inp2->dsc.dty));
+                    cudaMalloc(&((Edge*)inp2->opaque)->forward_data, s * n * fwidth_size(inp2->dsc.dty));
+                    cudaMalloc(&((Edge*)inp2->opaque)->backward_data, s * n * fwidth_size(inp2->dsc.dty));
                 }
                 this->inp1 = (Edge*)inp1->opaque;
                 this->inp2 = (Edge*)inp2->opaque;
@@ -211,7 +225,7 @@ namespace nn
                 out_dty = out->dsc.dty;
             }
 
-            virtual void eval(RunId id) override;
+            virtual void forward(RunId id) override;
         };
     }
 }

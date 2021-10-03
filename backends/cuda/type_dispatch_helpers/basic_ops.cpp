@@ -8,9 +8,9 @@ using namespace std;
 
 using Cases = vector<pair<string, vector<pair<string, string>>>>;
 
-void write_func_signature(ostream& ofs, const string& cls_name)
+void write_func_signature(ostream& ofs, const string& cls_name, const string& fn_name)
 {
-    ofs << endl << "void " << cls_name << "::eval(RunId id)" << endl << "{" << endl;
+    ofs << endl << "void " << cls_name << "::" << fn_name << "(RunId id)" << endl << "{" << endl;
 }
 
 void write_func_end(ostream& ofs)
@@ -18,17 +18,35 @@ void write_func_end(ostream& ofs)
     ofs << "}" << endl;
 }
 
-void write_pre_boilerplate(ostream& ofs, const vector<string>& vars)
+void write_pre_boilerplate_forward(ostream& ofs, const vector<string>& vars)
 {
+    for (auto& var : vars)
+        ofs << "    " << var << "->forward(id);" << endl;
     int i;
     for (i = 0; i < vars.size(); i++)
-        ofs << "    void* _" << i << " = " << vars[i] << "->get_data(id);" << endl;
-    ofs << "    void* _" << i << " = out->data;" << endl;
+        ofs << "    void* _" << i << " = " << vars[i] << "->forward_data;" << endl;
+    ofs << "    void* _" << i << " = out->forward_data;" << endl;
 }
 
-void write_post_boilerplate(ostream& ofs)
+void write_post_boilerplate_forward(ostream& ofs)
 {
-    ofs << "    out->id = id;" << endl;
+    ofs << "    out->forward_id = id;" << endl;
+}
+
+void write_pre_boilerplate_backward(ostream& ofs, const vector<string>& vars)
+{
+    for (auto& var : vars)
+        ofs << "    " << var << "->backward(id);" << endl;
+    int i;
+    for (i = 0; i < vars.size(); i++)
+        ofs << "    void* _" << i << " = " << vars[i] << "->backward_data;" << endl;
+    ofs << "    void* _" << i << " = out->backward_data;" << endl;
+}
+
+void write_post_boilerplate_backward(ostream& ofs, const vector<string>& vars)
+{
+    for (auto& var : vars)
+        ofs << "    " << var << "->backward_id = id;" << endl;
 }
 
 void write_call(ostream& ofs, const string& fn_name, const vector<string>& types)
@@ -66,15 +84,27 @@ void write_dispatch(ostream& ofs, const string& indent, const string& fn_name, v
     ofs << indent << "}" << endl;
 }
 
-void write_func(ostream& ofs, const string& cls_name, const string& fn_name, const vector<string>& inp_vars, const Cases& cases)
+void write_func_forward(ostream& ofs, const string& cls_name, const string& fn_name, const vector<string>& inp_vars, const Cases& cases)
 {
-    write_func_signature(ofs, cls_name);
-    write_pre_boilerplate(ofs, inp_vars);
+    write_func_signature(ofs, cls_name, "forward");
+    write_pre_boilerplate_forward(ofs, inp_vars);
 
     vector<string> curr_types;
     write_dispatch(ofs, "    ", fn_name, curr_types, cases);
 
-    write_post_boilerplate(ofs);
+    write_post_boilerplate_forward(ofs);
+    write_func_end(ofs);
+}
+
+void write_func_same_backward(ostream& ofs, const string& cls_name, const string& fn_name, const vector<string>& inp_vars, const Cases& cases)
+{
+    write_func_signature(ofs, cls_name, "backward");
+    write_pre_boilerplate_backward(ofs, inp_vars);
+
+    vector<string> curr_types;
+    write_dispatch(ofs, "    ", fn_name, curr_types, cases);
+
+    write_post_boilerplate_backward(ofs, inp_vars);
     write_func_end(ofs);
 }
 
@@ -96,16 +126,16 @@ int main()
         { "out_dty" , fw_map }
     };
 
-    vector<tuple<string, string, vector<string>, Cases>> pointwise_dispatchers =
+    vector<tuple<string, string, vector<string>, Cases>> pointwise_dispatchers_forward =
     {
-        { "AddSame", "add_pointwise", { "inp1", "inp2" }, pointwise_cases },
-        { "SubSame", "sub_pointwise", { "inp1", "inp2" }, pointwise_cases },
-        { "MulSame", "mul_pointwise", { "inp1", "inp2" }, pointwise_cases },
-        { "DivSame", "div_pointwise", { "inp1", "inp2" }, pointwise_cases }
+        { "AddSame", "add_pointwise_forward", { "inp1", "inp2" }, pointwise_cases },
+        { "SubSame", "sub_pointwise_forward", { "inp1", "inp2" }, pointwise_cases },
+        { "MulSame", "mul_pointwise_forward", { "inp1", "inp2" }, pointwise_cases },
+        { "DivSame", "div_pointwise_forward", { "inp1", "inp2" }, pointwise_cases }
     };
 
-    for (const auto& cfg : pointwise_dispatchers)
-        write_func(ofs, get<0>(cfg), get<1>(cfg), get<2>(cfg), get<3>(cfg));
+    for (const auto& cfg : pointwise_dispatchers_forward)
+        write_func_forward(ofs, get<0>(cfg), get<1>(cfg), get<2>(cfg), get<3>(cfg));
 
     Cases scalar_cases =
     {
@@ -116,14 +146,25 @@ int main()
 
     vector<tuple<string, string, vector<string>, Cases>> scalar_dispatchers =
     {
-        { "AddScalar", "add_scalar", { "inp", "val" }, scalar_cases },
-        { "SubScalar", "sub_scalar", { "inp", "val" }, scalar_cases },
-        { "MulScalar", "mul_scalar", { "inp", "val" }, scalar_cases },
-        { "DivScalar", "div_scalar", { "inp", "val" }, scalar_cases }
+        { "AddScalar", "add_scalar_forward", { "inp", "val" }, scalar_cases },
+        { "SubScalar", "sub_scalar_forward", { "inp", "val" }, scalar_cases },
+        { "MulScalar", "mul_scalar_forward", { "inp", "val" }, scalar_cases },
+        { "DivScalar", "div_scalar_forward", { "inp", "val" }, scalar_cases }
     };
 
     for (const auto& cfg : scalar_dispatchers)
-        write_func(ofs, get<0>(cfg), get<1>(cfg), get<2>(cfg), get<3>(cfg));
+        write_func_forward(ofs, get<0>(cfg), get<1>(cfg), get<2>(cfg), get<3>(cfg));
+
+    vector<tuple<string, string, vector<string>, Cases>> pointwise_dispatchers_backward =
+    {
+        { "AddSame", "add_pointwise_backward", { "inp1", "inp2" }, pointwise_cases },
+        { "SubSame", "sub_pointwise_backward", { "inp1", "inp2" }, pointwise_cases },
+        { "MulSame", "mul_pointwise_backward", { "inp1", "inp2" }, pointwise_cases },
+        { "DivSame", "div_pointwise_backward", { "inp1", "inp2" }, pointwise_cases }
+    };
+
+    for (const auto& cfg : pointwise_dispatchers_backward)
+        write_func_same_backward(ofs, get<0>(cfg), get<1>(cfg), get<2>(cfg), get<3>(cfg));
 
     ofs.close();
 }

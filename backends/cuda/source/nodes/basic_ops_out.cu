@@ -1,9 +1,11 @@
 
-void AddSame::eval(RunId id)
+void AddSame::forward(RunId id)
 {
-    void* _0 = inp1->get_data(id);
-    void* _1 = inp2->get_data(id);
-    void* _2 = out->data;
+    inp1->forward(id);
+    inp2->forward(id);
+    void* _0 = inp1->forward_data;
+    void* _1 = inp2->forward_data;
+    void* _2 = out->forward_data;
     switch (inp1_dty)
     {
     case core::tensor_dty::F32:
@@ -13,10 +15,10 @@ void AddSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                add_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
+                add_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                add_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
+                add_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -24,10 +26,10 @@ void AddSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                add_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
+                add_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                add_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
+                add_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -40,10 +42,10 @@ void AddSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                add_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
+                add_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                add_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
+                add_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -51,24 +53,26 @@ void AddSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                add_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
+                add_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                add_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
+                add_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
         }
         break;
     }
-    out->id = id;
+    out->forward_id = id;
 }
 
-void SubSame::eval(RunId id)
+void SubSame::forward(RunId id)
 {
-    void* _0 = inp1->get_data(id);
-    void* _1 = inp2->get_data(id);
-    void* _2 = out->data;
+    inp1->forward(id);
+    inp2->forward(id);
+    void* _0 = inp1->forward_data;
+    void* _1 = inp2->forward_data;
+    void* _2 = out->forward_data;
     switch (inp1_dty)
     {
     case core::tensor_dty::F32:
@@ -78,10 +82,10 @@ void SubSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                sub_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
+                sub_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                sub_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
+                sub_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -89,10 +93,10 @@ void SubSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                sub_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
+                sub_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                sub_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
+                sub_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -105,10 +109,10 @@ void SubSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                sub_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
+                sub_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                sub_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
+                sub_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -116,24 +120,26 @@ void SubSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                sub_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
+                sub_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                sub_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
+                sub_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
         }
         break;
     }
-    out->id = id;
+    out->forward_id = id;
 }
 
-void MulSame::eval(RunId id)
+void MulSame::forward(RunId id)
 {
-    void* _0 = inp1->get_data(id);
-    void* _1 = inp2->get_data(id);
-    void* _2 = out->data;
+    inp1->forward(id);
+    inp2->forward(id);
+    void* _0 = inp1->forward_data;
+    void* _1 = inp2->forward_data;
+    void* _2 = out->forward_data;
     switch (inp1_dty)
     {
     case core::tensor_dty::F32:
@@ -143,10 +149,10 @@ void MulSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                mul_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
+                mul_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                mul_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
+                mul_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -154,10 +160,10 @@ void MulSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                mul_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
+                mul_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                mul_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
+                mul_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -170,10 +176,10 @@ void MulSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                mul_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
+                mul_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                mul_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
+                mul_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -181,24 +187,26 @@ void MulSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                mul_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
+                mul_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                mul_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
+                mul_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
         }
         break;
     }
-    out->id = id;
+    out->forward_id = id;
 }
 
-void DivSame::eval(RunId id)
+void DivSame::forward(RunId id)
 {
-    void* _0 = inp1->get_data(id);
-    void* _1 = inp2->get_data(id);
-    void* _2 = out->data;
+    inp1->forward(id);
+    inp2->forward(id);
+    void* _0 = inp1->forward_data;
+    void* _1 = inp2->forward_data;
+    void* _2 = out->forward_data;
     switch (inp1_dty)
     {
     case core::tensor_dty::F32:
@@ -208,10 +216,10 @@ void DivSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                div_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
+                div_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                div_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
+                div_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -219,10 +227,10 @@ void DivSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                div_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
+                div_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                div_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
+                div_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -235,10 +243,10 @@ void DivSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                div_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
+                div_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                div_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
+                div_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -246,24 +254,26 @@ void DivSame::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                div_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
+                div_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                div_pointwise<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
+                div_pointwise_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
         }
         break;
     }
-    out->id = id;
+    out->forward_id = id;
 }
 
-void AddScalar::eval(RunId id)
+void AddScalar::forward(RunId id)
 {
-    void* _0 = inp->get_data(id);
-    void* _1 = val->get_data(id);
-    void* _2 = out->data;
+    inp->forward(id);
+    val->forward(id);
+    void* _0 = inp->forward_data;
+    void* _1 = val->forward_data;
+    void* _2 = out->forward_data;
     switch (inp_dty)
     {
     case core::tensor_dty::F32:
@@ -273,10 +283,10 @@ void AddScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                add_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
+                add_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                add_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
+                add_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -284,10 +294,10 @@ void AddScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                add_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
+                add_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                add_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
+                add_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -300,10 +310,10 @@ void AddScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                add_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
+                add_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                add_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
+                add_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -311,24 +321,26 @@ void AddScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                add_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
+                add_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                add_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
+                add_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
         }
         break;
     }
-    out->id = id;
+    out->forward_id = id;
 }
 
-void SubScalar::eval(RunId id)
+void SubScalar::forward(RunId id)
 {
-    void* _0 = inp->get_data(id);
-    void* _1 = val->get_data(id);
-    void* _2 = out->data;
+    inp->forward(id);
+    val->forward(id);
+    void* _0 = inp->forward_data;
+    void* _1 = val->forward_data;
+    void* _2 = out->forward_data;
     switch (inp_dty)
     {
     case core::tensor_dty::F32:
@@ -338,10 +350,10 @@ void SubScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                sub_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
+                sub_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                sub_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
+                sub_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -349,10 +361,10 @@ void SubScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                sub_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
+                sub_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                sub_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
+                sub_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -365,10 +377,10 @@ void SubScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                sub_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
+                sub_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                sub_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
+                sub_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -376,24 +388,26 @@ void SubScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                sub_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
+                sub_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                sub_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
+                sub_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
         }
         break;
     }
-    out->id = id;
+    out->forward_id = id;
 }
 
-void MulScalar::eval(RunId id)
+void MulScalar::forward(RunId id)
 {
-    void* _0 = inp->get_data(id);
-    void* _1 = val->get_data(id);
-    void* _2 = out->data;
+    inp->forward(id);
+    val->forward(id);
+    void* _0 = inp->forward_data;
+    void* _1 = val->forward_data;
+    void* _2 = out->forward_data;
     switch (inp_dty)
     {
     case core::tensor_dty::F32:
@@ -403,10 +417,10 @@ void MulScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                mul_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
+                mul_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                mul_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
+                mul_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -414,10 +428,10 @@ void MulScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                mul_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
+                mul_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                mul_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
+                mul_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -430,10 +444,10 @@ void MulScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                mul_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
+                mul_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                mul_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
+                mul_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -441,24 +455,26 @@ void MulScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                mul_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
+                mul_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                mul_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
+                mul_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
         }
         break;
     }
-    out->id = id;
+    out->forward_id = id;
 }
 
-void DivScalar::eval(RunId id)
+void DivScalar::forward(RunId id)
 {
-    void* _0 = inp->get_data(id);
-    void* _1 = val->get_data(id);
-    void* _2 = out->data;
+    inp->forward(id);
+    val->forward(id);
+    void* _0 = inp->forward_data;
+    void* _1 = val->forward_data;
+    void* _2 = out->forward_data;
     switch (inp_dty)
     {
     case core::tensor_dty::F32:
@@ -468,10 +484,10 @@ void DivScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                div_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
+                div_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                div_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
+                div_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -479,10 +495,10 @@ void DivScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                div_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
+                div_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                div_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
+                div_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -495,10 +511,10 @@ void DivScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                div_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
+                div_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                div_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
+                div_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
                 break;
             }
             break;
@@ -506,15 +522,287 @@ void DivScalar::eval(RunId id)
             switch (out_dty)
             {
             case core::tensor_dty::F32:
-                div_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
+                div_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
                 break;
             case core::tensor_dty::F64:
-                div_scalar<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
+                div_scalar_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
                 break;
             }
             break;
         }
         break;
     }
-    out->id = id;
+    out->forward_id = id;
+}
+
+void AddSame::backward(RunId id)
+{
+    inp1->backward(id);
+    inp2->backward(id);
+    void* _0 = inp1->backward_data;
+    void* _1 = inp2->backward_data;
+    void* _2 = out->backward_data;
+    switch (inp1_dty)
+    {
+    case core::tensor_dty::F32:
+        switch (inp2_dty)
+        {
+        case core::tensor_dty::F32:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                add_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                add_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        case core::tensor_dty::F64:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                add_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                add_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        }
+        break;
+    case core::tensor_dty::F64:
+        switch (inp2_dty)
+        {
+        case core::tensor_dty::F32:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                add_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                add_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        case core::tensor_dty::F64:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                add_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                add_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        }
+        break;
+    }
+    inp1->backward_id = id;
+    inp2->backward_id = id;
+}
+
+void SubSame::backward(RunId id)
+{
+    inp1->backward(id);
+    inp2->backward(id);
+    void* _0 = inp1->backward_data;
+    void* _1 = inp2->backward_data;
+    void* _2 = out->backward_data;
+    switch (inp1_dty)
+    {
+    case core::tensor_dty::F32:
+        switch (inp2_dty)
+        {
+        case core::tensor_dty::F32:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                sub_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                sub_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        case core::tensor_dty::F64:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                sub_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                sub_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        }
+        break;
+    case core::tensor_dty::F64:
+        switch (inp2_dty)
+        {
+        case core::tensor_dty::F32:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                sub_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                sub_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        case core::tensor_dty::F64:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                sub_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                sub_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        }
+        break;
+    }
+    inp1->backward_id = id;
+    inp2->backward_id = id;
+}
+
+void MulSame::backward(RunId id)
+{
+    inp1->backward(id);
+    inp2->backward(id);
+    void* _0 = inp1->backward_data;
+    void* _1 = inp2->backward_data;
+    void* _2 = out->backward_data;
+    switch (inp1_dty)
+    {
+    case core::tensor_dty::F32:
+        switch (inp2_dty)
+        {
+        case core::tensor_dty::F32:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                mul_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                mul_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        case core::tensor_dty::F64:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                mul_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                mul_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        }
+        break;
+    case core::tensor_dty::F64:
+        switch (inp2_dty)
+        {
+        case core::tensor_dty::F32:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                mul_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                mul_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        case core::tensor_dty::F64:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                mul_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                mul_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        }
+        break;
+    }
+    inp1->backward_id = id;
+    inp2->backward_id = id;
+}
+
+void DivSame::backward(RunId id)
+{
+    inp1->backward(id);
+    inp2->backward(id);
+    void* _0 = inp1->backward_data;
+    void* _1 = inp2->backward_data;
+    void* _2 = out->backward_data;
+    switch (inp1_dty)
+    {
+    case core::tensor_dty::F32:
+        switch (inp2_dty)
+        {
+        case core::tensor_dty::F32:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                div_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                div_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (float*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        case core::tensor_dty::F64:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                div_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                div_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)_0, (double*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        }
+        break;
+    case core::tensor_dty::F64:
+        switch (inp2_dty)
+        {
+        case core::tensor_dty::F32:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                div_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                div_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (float*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        case core::tensor_dty::F64:
+            switch (out_dty)
+            {
+            case core::tensor_dty::F32:
+                div_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (float*)_2, sz);
+                break;
+            case core::tensor_dty::F64:
+                div_pointwise_backward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)_0, (double*)_1, (double*)_2, sz);
+                break;
+            }
+            break;
+        }
+        break;
+    }
+    inp1->backward_id = id;
+    inp2->backward_id = id;
 }

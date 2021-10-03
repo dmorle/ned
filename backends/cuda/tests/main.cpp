@@ -12,7 +12,7 @@ int main()
     lang::lex_file(pf, tarr);
     fclose(pf);
     lang::AstModule* pmod = new lang::AstModule{ tarr };
-    lang::EvalCtx* pctx = pmod->eval("model", { lang::create_obj_int(1) });
+    lang::EvalCtx* pctx = pmod->eval("model", { lang::create_obj_int(2) });
     delete pmod;
     
     cuda::CuGraph* pgraph = new cuda::CuGraph(pctx->pgraph);
@@ -20,13 +20,17 @@ int main()
 
     cuda::RunId id = pgraph->generate_id();
 
-    float inp1[] = { 1 };
-    float inp2[] = { 2 };
+    float inp1[] = { 1, 2 };
+    float inp2[] = { 2, 3 };
     pgraph->assign_input("inp1", inp1, sizeof(inp1), id);
     pgraph->assign_input("inp2", inp2, sizeof(inp2), id);
-    pgraph->eval(id);
-    float out[1];
+    pgraph->forward(id);
+    float out[2];
     pgraph->get_output(0, out, sizeof(out));
+
+    for (float val : out)
+        std::cout << val << ", ";
+    std::cout << std::endl;
 
     delete pgraph;
 }

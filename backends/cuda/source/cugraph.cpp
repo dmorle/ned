@@ -21,7 +21,6 @@ constexpr size_t hash(const std::string& s)
     return hash(s.c_str());
 }
 
-
 namespace nn
 {
     namespace cuda
@@ -38,26 +37,38 @@ namespace nn
 
         Edge::Edge()
         {
-            data = nullptr;
-            id = RunId{};
+            forward_data = nullptr;
+            backward_data = nullptr;
+            forward_id = RunId{};
             dependancy = nullptr;
         }
 
         Edge::~Edge()
         {
-            if (data)
-                cudaFree(data);
+            if (forward_data)
+                cudaFree(forward_data);
+            if (backward_data)
+                cudaFree(backward_data);
         }
 
-        void* Edge::get_data(RunId id)
+        void Edge::forward(RunId id)
         {
-            if (data && this->id == id)
-                return data;
+            if (forward_data && this->forward_id == id)
+                return;
             assert(dependancy);
-            dependancy->eval(id);
-            assert(data);
-            assert(this->id == id);
-            return data;
+            dependancy->forward(id);
+            assert(forward_data);
+            assert(this->forward_id == id);
+        }
+
+        void Edge::backward(RunId id)
+        {
+            if (backward_data && this->backward_id == id)
+                return;
+            assert(dependancy);
+            dependancy->forward(id);
+            assert(backward_data);
+            assert(this->backward_id == id);
         }
 
         void translate_node(const core::Node* pnode)
@@ -217,7 +228,8 @@ namespace nn
                     sz *= e;
                 Edge* nout = new Edge();
                 // TODO: check for allocation failure
-                cudaMalloc(&nout->data, sz * core::dtype_size(out->dsc.dty));
+                cudaMalloc(&nout->forward_data, sz * core::dtype_size(out->dsc.dty));
+                cudaMalloc(&nout->backward_data, sz * core::dtype_size(out->dsc.dty));
                 out->opaque = nout;
 
                 // translating all edge dependancies
@@ -233,7 +245,7 @@ namespace nn
                 inputs[name] = (Edge*)inp->opaque;
 
             // Detaching the newly created graph from the given graph (setting all the opaque pointers to null)
-            // While detaching, all nodes and edges are added to a set for deletion without double freeing for non-trivial topologies
+            // While detaching, all nodes and edges are added to a set for deletion without double freeing in non-trivial topologies
             for (auto out : pgraph->outputs)
                 detach_edge(out, this->edge_set, this->node_set);
 
@@ -253,24 +265,30 @@ namespace nn
             return ++curr_eval;
         }
 
-        void CuGraph::assign_input(const std::string& name, void* data, size_t nbytes, RunId id)
+        void CuGraph::assign_input(const std::string& name, void* data, size_t nbytes, RunId forward_id)
         {
             // TODO: check for errors
-            cudaMemcpy(inputs[name]->data, data, nbytes, cudaMemcpyKind::cudaMemcpyHostToDevice);
-            inputs[name]->id = id;
+            cudaMemcpy(inputs[name]->forward_data, data, nbytes, cudaMemcpyKind::cudaMemcpyHostToDevice);
+            inputs[name]->forward_id = forward_id;
         }
 
-        void CuGraph::eval(RunId id)
+        void CuGraph::forward(RunId id)
         {
             // Evaluating each edge for the current run
             for (auto out : outputs)
-                out->get_data(id);
+                out->forward(id);
+        }
+
+        void CuGraph::backward(RunId id)
+        {
+            for (auto& [name, inp] : inputs)
+                inp->backward(id);
         }
 
         void CuGraph::get_output(size_t out_num, void* data, size_t nbytes)
         {
             // TODO: check for errors
-            cudaMemcpy(data, outputs[out_num]->data, nbytes, cudaMemcpyKind::cudaMemcpyDeviceToHost);
+            cudaMemcpy(data, outputs[out_num]->forward_data, nbytes, cudaMemcpyKind::cudaMemcpyDeviceToHost);
         }
     }
 }

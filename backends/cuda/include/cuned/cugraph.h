@@ -25,14 +25,17 @@ namespace nn
         class Edge
         {
         public:
-            void* data;
-            RunId id;
+            void* forward_data;
+            void* backward_data;
+            RunId forward_id;
+            RunId backward_id;
             Node* dependancy;
 
             Edge();
             ~Edge();
 
-            void* get_data(RunId id);
+            void forward(RunId id);
+            void backward(RunId id);
         };
 
         class Node
@@ -40,7 +43,8 @@ namespace nn
         public:
             virtual ~Node() {}
 
-            virtual void eval(RunId id) = 0;
+            virtual void forward(RunId id) = 0;
+            virtual void backward(RunId id) = 0;
         };
 
         class CuGraph
@@ -57,9 +61,12 @@ namespace nn
             ~CuGraph();
 
             RunId generate_id();
+            
             void assign_input(const std::string& name, void* data, size_t nbytes, RunId id);
-            void eval(RunId id);
             void get_output(size_t out_num, void* data, size_t nbytes);
+
+            void forward(RunId id);
+            void backward(RunId id);
         };
     }
 }
