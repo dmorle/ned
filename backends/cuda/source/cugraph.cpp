@@ -71,7 +71,7 @@ namespace nn
             assert(this->backward_id == id);
         }
 
-        void translate_node(const core::Node* pnode)
+        void translate_node(core::Node* pnode)
         {
             for (auto out : pnode->outputs)
                 assert(out->opaque);
@@ -159,15 +159,24 @@ namespace nn
             //        (Edge**)&pnode->inputs[0]->opaque,
             //        (Edge*)pnode->outputs[0]->opaque);
             //    break;
-            //case hash("sigmoid_intr"):
-            //    if (pnode->name != "sigmoid_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
-            //    break;
-            //case hash("tanh_intr"):
-            //    if (pnode->name != "tanh_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
-            //    break;
-            //case hash("relu_intr"):
-            //    if (pnode->name != "relu_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
-            //    break;
+            case hash("sigmoid_intr"):
+                if (pnode->name != "sigmoid_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
+                assert(pnode->inputs.size() == 1);
+                assert(pnode->outputs.size() == 1);
+                npnode = new Sigmoid(pnode->cargs, pnode->inputs[0], pnode->outputs[0]);
+                break;
+            case hash("tanh_intr"):
+                if (pnode->name != "tanh_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
+                assert(pnode->inputs.size() == 1);
+                assert(pnode->outputs.size() == 1);
+                npnode = new Tanh(pnode->cargs, pnode->inputs[0], pnode->outputs[0]);
+                break;
+            case hash("relu_intr"):
+                if (pnode->name != "relu_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
+                assert(pnode->inputs.size() == 1);
+                assert(pnode->outputs.size() == 1);
+                npnode = new ReLU(pnode->cargs, pnode->inputs[0], pnode->outputs[0]);
+                break;
             //case hash("leaky_relu_intr"):
             //    if (pnode->name != "leaky_relu_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
             //    break;
@@ -193,7 +202,7 @@ namespace nn
 
             // recursing over the graph
             for (auto inp : pnode->inputs)
-                if (!inp->opaque)
+                if (inp->input && !inp->input->opaque)  // Not an input edge, and the input node hasn't been translated yet
                     translate_node(inp->input);
         }
 

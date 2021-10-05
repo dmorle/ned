@@ -627,8 +627,12 @@ namespace nn
 
         std::shared_ptr<Obj> AstIf::eval(EvalCtx& ctx) const
         {
+            if (last_ret)
+                return create_obj_invalid();
+            if (pcond->eval(ctx)->bval())
+                seq.eval(ctx);
             // TODO: add in elif/else block
-            throw GenerationError("Not implemented");
+            return create_obj_invalid();
         }
 
         std::shared_ptr<Obj> AstWhile::eval(EvalCtx& ctx) const
@@ -648,8 +652,8 @@ namespace nn
         {
             if (last_ret)
                 return create_obj_invalid();
-            std::shared_ptr<Obj> idx = pexpr->eval(ctx);
-            for (auto e : it.eval(ctx)->iter(ctx))
+            std::shared_ptr<Obj> idx = it.eval(ctx);
+            for (auto e : pexpr->eval(ctx)->iter(ctx))
             {
                 idx->assign(e);
                 seq.eval(ctx);

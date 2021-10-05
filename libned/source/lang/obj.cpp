@@ -1447,6 +1447,11 @@ namespace nn
             // ensuring the variables in the scope are fully initialized
             for (auto e : ctx.scope())
                 check_init(std::get<1>(e));
+            // At this point, the scope contains only cargs and args, since the args are all tensors, I can copy out the cargs
+            std::map<std::string, std::shared_ptr<Obj>> node_cargs;
+            for (const auto& [name, val] : ctx.scope())
+                if (val->ty != ObjType::TENSOR)
+                    node_cargs[name] = val->copy();
             auto pret = data.pintr->get_body().eval(ctx);  // not actually the return value, that's in last_ret
             assert(pret->ty == ObjType::INVALID);
 
@@ -1459,8 +1464,7 @@ namespace nn
             // creating the new node based on the inputs and output from the intrinsic
             core::Node* pnode = new core::Node();
             pnode->name = data.pintr->get_name();
-            for (auto e : data.cargs)
-                pnode->cargs.push_back(e->copy());
+            pnode->cargs = node_cargs;
             // node input connections
             for (int i = 0; i < args.size(); i++)
             {

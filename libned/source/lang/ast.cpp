@@ -48,8 +48,8 @@ namespace nn
             case TokenType::CMP_NE:
             case TokenType::CMP_GE:
             case TokenType::CMP_LE:
-            case TokenType::ANGLE_C:  // less than
-            case TokenType::ANGLE_O:  // greater than
+            case TokenType::CMP_GT:
+            case TokenType::CMP_LT:
                 return 2;
             case TokenType::IADD:
             case TokenType::ISUB:
@@ -130,9 +130,9 @@ namespace nn
                 return new AstGe(left, right);
             case TokenType::CMP_LE:
                 return new AstLe(left, right);
-            case TokenType::ANGLE_C:
+            case TokenType::CMP_GT:
                 return new AstGt(left, right);
-            case TokenType::ANGLE_O:
+            case TokenType::CMP_LT:
                 return new AstLt(left, right);
             }
 
@@ -1318,7 +1318,9 @@ namespace nn
                         int colon_pos = tarr.search<TokenArray::is_same<TokenType::COLON>>(start);
                         if (colon_pos < 0 || tarr.size() - 1 == colon_pos)
                             throw SyntaxError(tarr[start], "Invalid if statement");
-                        end = tarr.search<TokenArray::block_end<0>>(colon_pos + 1);
+                        //end = tarr.search<TokenArray::block_end<0>>(colon_pos + 1); <- old buggy code
+                        BlockEnd be{ indent_level };
+                        end = tarr.search(&be, colon_pos + 1);
                         if (end < 0)
                             end = tarr.size();  // the rest of the tokens make up the seq
                         if (colon_pos + 1 == end)
@@ -1336,7 +1338,8 @@ namespace nn
                         int colon_pos = tarr.search<TokenArray::is_same<TokenType::COLON>>(start);
                         if (colon_pos < 0 || tarr.size() - 1 == colon_pos)
                             throw SyntaxError(tarr[start], "Invalid while loop");
-                        end = tarr.search<TokenArray::block_end<0>>(colon_pos + 1);
+                        BlockEnd be{ indent_level };
+                        end = tarr.search(&be, colon_pos + 1);
                         if (end < 0)
                             end = tarr.size();  // the rest of the tokens make up the seq
                         if (colon_pos + 1 == end)
@@ -1353,7 +1356,8 @@ namespace nn
                         int colon_pos = tarr.search<TokenArray::is_same<TokenType::COLON>>(start);
                         if (colon_pos < 0 || tarr.size() - 1 == colon_pos)
                             throw SyntaxError(tarr[start], "Invalid for loop");
-                        end = tarr.search<TokenArray::block_end<0>>(colon_pos + 1);
+                        BlockEnd be{ indent_level };
+                        end = tarr.search(&be, colon_pos + 1);
                         if (end < 0)
                             end = tarr.size();  // the rest of the tokens make up the seq
                         if (colon_pos + 1 == end)

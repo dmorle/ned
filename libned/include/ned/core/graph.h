@@ -35,7 +35,7 @@ namespace nn
         struct Node
         {
             std::string name;
-            std::vector<std::shared_ptr<lang::Obj>> cargs;
+            std::map<std::string, std::shared_ptr<lang::Obj>> cargs;
             std::vector<Edge*> inputs;
             std::vector<Edge*> outputs;
             mutable void* opaque = nullptr;

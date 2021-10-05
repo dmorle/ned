@@ -9,9 +9,31 @@ int main()
 {
     FILE* pf = fopen(TEST_DIR"test.nn", "rb");
     lang::TokenArray tarr{};
-    lang::lex_file(pf, tarr);
+    try
+    {
+        lang::lex_file(pf, tarr);
+    }
+    catch (lang::SyntaxError & err)
+    {
+        printf("%s\n", err.what());
+        fclose(pf);
+        exit(1);
+    }
+
     fclose(pf);
-    lang::AstModule* pmod = new lang::AstModule{ tarr };
+
+    lang::AstModule* pmod;
+    try
+    {
+        pmod = new lang::AstModule{ tarr };
+    }
+    catch (lang::SyntaxError& err)
+    {
+        printf("%s\n", err.what());
+        fclose(pf);
+        exit(1);
+    }
+
     lang::EvalCtx* pctx = pmod->eval("model", { lang::create_obj_int(2) });
     delete pmod;
     

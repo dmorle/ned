@@ -268,6 +268,8 @@ namespace nn
         SMALL_PUSH_BACK( CMP_NE   );
         SMALL_PUSH_BACK( CMP_GE   );
         SMALL_PUSH_BACK( CMP_LE   );
+        SMALL_PUSH_BACK( CMP_GT   );
+        SMALL_PUSH_BACK( CMP_LT   );
         SMALL_PUSH_BACK( INT      );
         SMALL_PUSH_BACK( FLOAT    );
         LARGE_PUSH_BACK( STRLIT   );
@@ -331,7 +333,11 @@ namespace nn
                         i += 2;
                         continue;
                     }
-                    tarr.push_back(TokenImp<TokenType::ANGLE_O>(line_num, i - line_start));
+                    // this is so scuffed
+                    if (i > 0 && buf[i - 1] == ' ')
+                        tarr.push_back(TokenImp<TokenType::CMP_LT>(line_num, i - line_start));
+                    else
+                        tarr.push_back(TokenImp<TokenType::ANGLE_O>(line_num, i - line_start));
                     break;
                 case '>':
                     use_indents = false;
@@ -341,7 +347,11 @@ namespace nn
                         i += 2;
                         continue;
                     }
-                    tarr.push_back(TokenImp<TokenType::ANGLE_C>(line_num, i - line_start));
+                    // I don't know how else to do it though
+                    if (i > 0 && buf[i - 1] == ' ')
+                        tarr.push_back(TokenImp<TokenType::CMP_GT>(line_num, i - line_start));
+                    else
+                        tarr.push_back(TokenImp<TokenType::ANGLE_C>(line_num, i - line_start));
                     break;
                 case '(':
                     use_indents = false;

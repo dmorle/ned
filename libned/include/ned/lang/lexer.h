@@ -8,7 +8,7 @@
 #else
 namespace std {
     template<class... Args>
-    string format(const string&, const Args&...) { return ""; }
+    string format(const string& fmt, const Args&...) { return fmt; }
 }
 #endif
 
@@ -41,12 +41,20 @@ namespace nn
             ASSIGN,
             CMP_EQ,
             CMP_NE,
+            CMP_GT,
+            CMP_LT,
             CMP_GE,
             CMP_LE,
             INT,
             FLOAT,
             STRLIT,
             IDN
+        };
+
+        class SearchCriteria
+        {
+        public:
+            virtual int stop(TokenType ty, int position) = 0;
         };
 
         enum class Keyword
@@ -503,6 +511,24 @@ namespace nn
                 return -1;
             }
 
+            int search(SearchCriteria* sc, int start = 0) const
+            {
+                // A bit better cache utilization than rfind
+                int ret;
+                int idx = start;
+                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
+                while (idx < size())
+                {
+                    ret = sc->stop(pstart->ty, idx);
+                    if (ret >= 0)
+                        return ret;
+                    idx++;
+                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
+                }
+
+                return -1;
+            }
+
             // less efficient than a forward search
             // returns -1 if token is not present in range
             // start/end arguments <0 offsets from the end of the token array
@@ -572,6 +598,45 @@ namespace nn
 
         void lex_buf(char* buf, size_t bufsz, TokenArray& tarr);
         void lex_file(FILE* pf, TokenArray& tarr);
+
+        class BlockEnd :
+            public SearchCriteria
+        {
+            int target_ilv;
+            int ilv = 0;
+            int last_endl = 0;
+            bool in_line = false;
+
+        public:
+            BlockEnd(int ilv) :
+                target_ilv(ilv)
+            {}
+
+            virtual int stop(TokenType ty, int position) override
+            {
+                if (ty == TokenType::ENDL)
+                {
+                    last_endl = position;
+                    ilv = 0;
+                    in_line = false;
+                    return -1;
+                }
+                if (in_line)
+                    return -1;
+                if (ty == TokenType::INDENT)
+                {
+                    ilv++;
+                    return -1;
+                }
+                if (ilv > target_ilv)
+                {
+                    in_line = true;
+                    return -1;
+                }
+
+                return last_endl;
+            }
+        };
     }
 }
 

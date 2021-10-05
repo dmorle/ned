@@ -1,6 +1,34 @@
 intr add_same_intr<fwidth ofw, fwidth lfw, fwidth rfw, int *shape>(tensor<lfw, *shape> left, tensor<rfw, *shape> right):
+    for int i in shape:
+        if i < 0:
+            raise "Tensor dimensions must be >= 0"
+
     tensor<ofw, *shape> out
     return out
 
+intr sigmoid_intr<fwidth fw, int *shape>(tensor<fw, *shape> inp):
+    for int i in shape:
+        if i < 0:
+            raise "Tensor dimensions must be >= 0"
+
+    tensor<fw, *shape> out
+    return out
+
+intr relu_intr<fwidth fw, int *shape>(tensor<fw, *shape> inp):
+    for int i in shape:
+        if i < 0:
+            raise "Tensor dimensions must be >= 0"
+
+    tensor<fw, *shape> out
+    return out
+
+intr tanh_intr<fwidth fw, int *shape>(tensor<fw, *shape> inp):
+    for int i in shape:
+        if i < 0:
+            raise "Tensor dimensions must be >= 0"
+
+    tensor<fw, *shape> out
+    return out
+
 def model<int N>(tensor<f32, N> inp1, tensor<f32, N> inp2):
-    return add_same_intr<f32>(inp1, inp2)
+    return sigmoid_intr(add_same_intr<f32>(inp1, inp2))
