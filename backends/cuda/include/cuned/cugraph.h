@@ -25,17 +25,20 @@ namespace nn
         class Edge
         {
         public:
+            size_t sz;
             void* forward_data;
             void* backward_data;
             RunId forward_id;
             RunId backward_id;
-            Node* dependancy;
+            Node* input;
+            std::vector<Node*> outputs;
 
             Edge();
             ~Edge();
 
             void forward(RunId id);
             void backward(RunId id);
+            void zero_grad();
         };
 
         class Node
@@ -64,6 +67,10 @@ namespace nn
             
             void assign_input(const std::string& name, void* data, size_t nbytes, RunId id);
             void get_output(size_t out_num, void* data, size_t nbytes);
+
+            void assign_grad(size_t out_num, void* data, size_t nbytes, RunId id);
+            void get_grad(const std::string& name, void* data, size_t nbytes);
+            void zero_grad();
 
             void forward(RunId id);
             void backward(RunId id);

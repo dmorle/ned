@@ -40,7 +40,9 @@ namespace nn
             forward_data = nullptr;
             backward_data = nullptr;
             forward_id = RunId{};
-            dependancy = nullptr;
+            backward_id = RunId{};
+            input = nullptr;
+            outputs = {};
         }
 
         Edge::~Edge()
@@ -55,8 +57,8 @@ namespace nn
         {
             if (forward_data && this->forward_id == id)
                 return;
-            assert(dependancy);
-            dependancy->forward(id);
+            assert(input);
+            input->forward(id);
             assert(forward_data);
             assert(this->forward_id == id);
         }
@@ -65,10 +67,18 @@ namespace nn
         {
             if (backward_data && this->backward_id == id)
                 return;
-            assert(dependancy);
-            dependancy->forward(id);
-            assert(backward_data);
+            for (auto out : outputs)
+            {
+                assert(out);
+                out->backward(id);
+            }
             assert(this->backward_id == id);
+        }
+
+        void Edge::zero_grad()
+        {
+            // 0 bits should correspond to 0.0 for all supported data types
+            cudaMemset(backward_data, 0, sz);
         }
 
         void translate_node(core::Node* pnode)
@@ -180,30 +190,34 @@ namespace nn
             //case hash("leaky_relu_intr"):
             //    if (pnode->name != "leaky_relu_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
             //    break;
-            //case hash("matmul_intr"):
-            //    if (pnode->name != "matmul_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
-            //    assert(pnode->inputs.size() == 2);
-            //    assert(pnode->outputs.size() == 1);
-            //    pret = new MatMul(pnode->cargs,
-            //        (Edge**)&pnode->inputs[1]->opaque,
-            //        (Edge**)&pnode->inputs[0]->opaque,
-            //        (Edge*)pnode->outputs[0]->opaque);
-            //    break;
+            case hash("matmul_intr"):
+                if (pnode->name != "matmul_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
+                assert(pnode->inputs.size() == 2);
+                assert(pnode->outputs.size() == 1);
+                npnode = new MatMul(pnode->cargs, pnode->inputs[0], pnode->inputs[1], pnode->outputs[0]);
+                break;
             default:
                 throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
             }
 
-            // assigning the edge dependancies
+            // assigning edge inputs
             for (auto out : pnode->outputs)
-                ((Edge*)out->opaque)->dependancy = npnode;
+                ((Edge*)out->opaque)->input = npnode;
 
             // marking the node as translated
             pnode->opaque = npnode;
 
             // recursing over the graph
             for (auto inp : pnode->inputs)
+            {
                 if (inp->input && !inp->input->opaque)  // Not an input edge, and the input node hasn't been translated yet
                     translate_node(inp->input);
+
+                // any non input edges should have been translated
+                assert(inp->opaque);
+                // assigning edge outputs
+                ((Edge*)inp->opaque)->outputs.push_back(npnode);
+            }
         }
 
         void detach_edge(const core::Edge* pEdge, std::unordered_set<Edge*>& edge_set, std::unordered_set<Node*>& node_set);
@@ -236,13 +250,14 @@ namespace nn
                 for (auto e : out->dsc.dims)
                     sz *= e;
                 Edge* nout = new Edge();
+                nout->sz = sz * core::dtype_size(out->dsc.dty);
                 // TODO: check for allocation failure
-                cudaMalloc(&nout->forward_data, sz * core::dtype_size(out->dsc.dty));
-                cudaMalloc(&nout->backward_data, sz * core::dtype_size(out->dsc.dty));
+                cudaMalloc(&nout->forward_data, nout->sz);
+                cudaMalloc(&nout->backward_data, nout->sz);
                 out->opaque = nout;
 
                 // translating all edge dependancies
-                if (!out->input->opaque)
+                if (out->input && !out->input->opaque)  // Not an input edge, and the input node hasn't been translated yet
                     translate_node(out->input);
             }
 
@@ -274,11 +289,34 @@ namespace nn
             return ++curr_eval;
         }
 
-        void CuGraph::assign_input(const std::string& name, void* data, size_t nbytes, RunId forward_id)
+        void CuGraph::assign_input(const std::string& name, void* data, size_t nbytes, RunId id)
         {
             // TODO: check for errors
             cudaMemcpy(inputs[name]->forward_data, data, nbytes, cudaMemcpyKind::cudaMemcpyHostToDevice);
-            inputs[name]->forward_id = forward_id;
+            inputs[name]->forward_id = id;
+        }
+
+        void CuGraph::get_output(size_t out_num, void* data, size_t nbytes)
+        {
+            // TODO: check for errors
+            cudaMemcpy(data, outputs[out_num]->forward_data, nbytes, cudaMemcpyKind::cudaMemcpyDeviceToHost);
+        }
+
+        void CuGraph::assign_grad(size_t out_num, void* data, size_t nbytes, RunId id)
+        {
+            cudaMemcpy(outputs[out_num]->backward_data, data, nbytes, cudaMemcpyKind::cudaMemcpyHostToDevice);
+            outputs[out_num]->backward_id = id;
+        }
+
+        void CuGraph::get_grad(const std::string& name, void* data, size_t nbytes)
+        {
+            cudaMemcpy(data, inputs[name]->backward_data, nbytes, cudaMemcpyKind::cudaMemcpyDeviceToHost);
+        }
+
+        void CuGraph::zero_grad()
+        {
+            for (auto edge : edge_set)
+                edge->zero_grad();
         }
 
         void CuGraph::forward(RunId id)
@@ -292,12 +330,6 @@ namespace nn
         {
             for (auto& [name, inp] : inputs)
                 inp->backward(id);
-        }
-
-        void CuGraph::get_output(size_t out_num, void* data, size_t nbytes)
-        {
-            // TODO: check for errors
-            cudaMemcpy(data, outputs[out_num]->forward_data, nbytes, cudaMemcpyKind::cudaMemcpyDeviceToHost);
         }
     }
 }

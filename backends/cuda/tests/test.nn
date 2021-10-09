@@ -1,3 +1,14 @@
+intr matmul_intr<fwidth ofw, fwidth ifw, int m, int s, int n>(tensor<ifw, m, s> left, tensor<ifw, s, n> right):
+    if m < 0:
+        raise "Tensor dimensions must be >= 0"
+    if s < 0:
+        raise "Tensor dimensions must be >= 0"
+    if n < 0:
+        raise "Tensor dimensions must be >= 0"
+    
+    tensor<ofw, m, n> out
+    return out
+
 intr add_same_intr<fwidth ofw, fwidth lfw, fwidth rfw, int *shape>(tensor<lfw, *shape> left, tensor<rfw, *shape> right):
     for int i in shape:
         if i < 0:
@@ -30,5 +41,8 @@ intr tanh_intr<fwidth fw, int *shape>(tensor<fw, *shape> inp):
     tensor<fw, *shape> out
     return out
 
-def model<int N>(tensor<f32, N> inp1, tensor<f32, N> inp2):
-    return sigmoid_intr(add_same_intr<f32>(inp1, inp2))
+def _model<int N>(tensor<f32, N> inp1, tensor<f32, N> inp2):
+    return add_same_intr<f32>(inp1, inp2)
+
+def model<int m, int s, int n>(tensor<f32, m, s> inp1, tensor<f32, s, n> inp2):
+    return matmul_intr<f32>(inp1, inp2)

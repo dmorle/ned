@@ -24,9 +24,10 @@ ActivationFn::ActivationFn(std::map<std::string, std::shared_ptr<lang::Obj>>& ca
     if (!inp->opaque)
     {
         inp->opaque = new Edge();
+        ((Edge*)inp->opaque)->sz = sz * core::dtype_size(inp->dsc.dty);
         // TODO: check to make sure it was allocated
-        cudaMalloc(&((Edge*)inp->opaque)->forward_data, sz * core::dtype_size(inp->dsc.dty));
-        cudaMalloc(&((Edge*)inp->opaque)->backward_data, sz * core::dtype_size(inp->dsc.dty));
+        cudaMalloc(&((Edge*)inp->opaque)->forward_data, ((Edge*)inp->opaque)->sz);
+        cudaMalloc(&((Edge*)inp->opaque)->backward_data, ((Edge*)inp->opaque)->sz);
     }
 
     this->inp = (Edge*)inp->opaque;
@@ -37,6 +38,22 @@ constexpr int bsz = 32;
 
 template<typename T>
 __global__ void sigmoid_forward(const T* a, T* dst, size_t sz);
+
+template<>
+__global__ void sigmoid_forward<float>(const float* a, float* dst, size_t sz)
+{
+    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < sz)
+        dst[i] = (tanhf(0.5 * a[i]) + 1) / 2;
+}
+
+template<>
+__global__ void sigmoid_forward<double>(const double* a, double* dst, size_t sz)
+{
+    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < sz)
+        dst[i] = (tanh(0.5 * a[i]) + 1) / 2;
+}
 
 template<typename T>
 __global__ void tanh_forward(const T* a, T* dst, size_t sz);
@@ -57,19 +74,57 @@ __global__ void tanh_forward<double>(const double* a, double* dst, size_t sz)
         dst[i] = tanh(a[i]);
 }
 
+template<typename T>
+__global__ void relu_forward(const T* a, T* dst, size_t sz)
+{
+    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < sz)
+        dst[i] = max(a[i], (T)0);
+}
+
 void Sigmoid::forward(RunId id)
 {
-    throw GraphError("Not Implemented");
+    inp->forward(id);
+    switch (dty)
+    {
+    case core::tensor_dty::F32:
+        sigmoid_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)inp->forward_data, (float*)out->forward_data, sz);
+        break;
+    case core::tensor_dty::F64:
+        sigmoid_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)inp->forward_data, (double*)out->forward_data, sz);
+        break;
+    }
+    out->forward_id = id;
 }
 
 void Tanh::forward(RunId id)
 {
-    throw GraphError("Not Implemented");
+    inp->forward(id);
+    switch (dty)
+    {
+    case core::tensor_dty::F32:
+        tanh_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)inp->forward_data, (float*)out->forward_data, sz);
+        break;
+    case core::tensor_dty::F64:
+        tanh_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)inp->forward_data, (double*)out->forward_data, sz);
+        break;
+    }
+    out->forward_id = id;
 }
 
 void ReLU::forward(RunId id)
 {
-    throw GraphError("Not Implemented");
+    inp->forward(id);
+    switch (dty)
+    {
+    case core::tensor_dty::F32:
+        relu_forward<<<(sz + bsz - 1) / bsz, bsz>>>((float*)inp->forward_data, (float*)out->forward_data, sz);
+        break;
+    case core::tensor_dty::F64:
+        relu_forward<<<(sz + bsz - 1) / bsz, bsz>>>((double*)inp->forward_data, (double*)out->forward_data, sz);
+        break;
+    }
+    out->forward_id = id;
 }
 
 void Sigmoid::backward(RunId id)

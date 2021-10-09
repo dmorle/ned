@@ -16,16 +16,18 @@ BinOpSame::BinOpSame(std::map<std::string, std::shared_ptr<lang::Obj>>& cargs, c
     if (!inp1->opaque)
     {
         inp1->opaque = new Edge();
+        ((Edge*)inp1->opaque)->sz = sz * core::dtype_size(inp1->dsc.dty);
         // TODO: check to make sure it was allocated
-        cudaMalloc(&((Edge*)inp1->opaque)->forward_data, sz * core::dtype_size(inp1->dsc.dty));
-        cudaMalloc(&((Edge*)inp1->opaque)->backward_data, sz * core::dtype_size(inp1->dsc.dty));
+        cudaMalloc(&((Edge*)inp1->opaque)->forward_data, ((Edge*)inp1->opaque)->sz);
+        cudaMalloc(&((Edge*)inp1->opaque)->backward_data, ((Edge*)inp1->opaque)->sz);
     }
     if (!inp2->opaque)
     {
         inp2->opaque = new Edge();
+        ((Edge*)inp2->opaque)->sz = sz * core::dtype_size(inp2->dsc.dty);
         // TODO: check to make sure it was allocated
-        cudaMalloc(&((Edge*)inp2->opaque)->forward_data, sz * core::dtype_size(inp2->dsc.dty));
-        cudaMalloc(&((Edge*)inp2->opaque)->backward_data, sz * core::dtype_size(inp2->dsc.dty));
+        cudaMalloc(&((Edge*)inp2->opaque)->forward_data, ((Edge*)inp2->opaque)->sz);
+        cudaMalloc(&((Edge*)inp2->opaque)->backward_data, ((Edge*)inp2->opaque)->sz);
     }
     this->inp1 = (Edge*)inp1->opaque;
     this->inp2 = (Edge*)inp2->opaque;
@@ -45,16 +47,18 @@ BinOpScalar::BinOpScalar(std::map<std::string, std::shared_ptr<lang::Obj>>& carg
     if (!inp->opaque)
     {
         inp->opaque = new Edge();
+        ((Edge*)inp->opaque)->sz = sz * core::dtype_size(inp->dsc.dty);
         // TODO: check to make sure it was allocated
-        cudaMalloc(&((Edge*)inp->opaque)->forward_data, sz * core::dtype_size(inp->dsc.dty));
-        cudaMalloc(&((Edge*)inp->opaque)->backward_data, sz * core::dtype_size(inp->dsc.dty));
+        cudaMalloc(&((Edge*)inp->opaque)->forward_data, ((Edge*)inp->opaque)->sz);
+        cudaMalloc(&((Edge*)inp->opaque)->backward_data, ((Edge*)inp->opaque)->sz);
     }
     if (!val->opaque)
     {
         val->opaque = new Edge();
+        ((Edge*)val->opaque)->sz = core::dtype_size(val->dsc.dty);
         // TODO: check to make sure it was allocated
-        cudaMalloc(&((Edge*)val->opaque)->forward_data, core::dtype_size(val->dsc.dty));
-        cudaMalloc(&((Edge*)val->opaque)->backward_data, core::dtype_size(val->dsc.dty));
+        cudaMalloc(&((Edge*)val->opaque)->forward_data, ((Edge*)val->opaque)->sz);
+        cudaMalloc(&((Edge*)val->opaque)->backward_data, ((Edge*)val->opaque)->sz);
     }
     this->inp = (Edge*)inp->opaque;
     this->val = (Edge*)val->opaque;
