@@ -47,7 +47,7 @@ int main()
         exit(1);
     }*/
 
-    lang::EvalCtx* pctx = pmod->eval("model", { lang::create_obj_int(1), lang::create_obj_int(4), lang::create_obj_int(1) });
+    lang::EvalCtx* pctx = pmod->eval("model", { lang::create_obj_int(2), lang::create_obj_int(3), lang::create_obj_int(1) });
     //lang::EvalCtx* pctx = pmod->eval("model", { lang::create_obj_int(2) });
     delete pmod;
     
@@ -57,21 +57,21 @@ int main()
     cuda::RunId id = pgraph->generate_id();
 
     // forward pass
-    float inp1[] = { 1, 2, 3, 4 };
-    float inp2[] = { 4, 3, 2, 1 };
+    float inp1[] = { 1, 2, 3, 2, 1, 0 };
+    float inp2[] = { 0, 1, 2 };
     pgraph->assign_input("inp1", inp1, sizeof(inp1), id);
     pgraph->assign_input("inp2", inp2, sizeof(inp2), id);
     pgraph->forward(id);
-    float out[1];
+    float out[2];
     pgraph->get_output(0, out, sizeof(out));
     std::cout << out << std::endl;
 
     // backward pass
-    float grad[] = { 1 };
+    float grad[] = { 1, 1 };
     pgraph->assign_grad(0, grad, sizeof(grad), id);
     pgraph->backward(id);
-    float inp1_grad[4];
-    float inp2_grad[4];
+    float inp1_grad[6];
+    float inp2_grad[3];
     pgraph->get_grad("inp1", inp1_grad, sizeof(inp1_grad));
     pgraph->get_grad("inp2", inp2_grad, sizeof(inp2_grad));
     std::cout << inp1_grad << std::endl;

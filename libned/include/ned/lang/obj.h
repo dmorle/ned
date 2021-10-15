@@ -56,7 +56,7 @@ namespace nn
             virtual void call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const = 0;
             virtual std::shared_ptr<Obj> get(const std::string& item) = 0;
             virtual std::shared_ptr<Obj> cargs(const std::vector<std::shared_ptr<Obj>>& args) = 0;
-            virtual std::vector<std::shared_ptr<Obj>> iter(EvalCtx& ctx) = 0;
+            virtual std::vector<std::shared_ptr<Obj>> iter() = 0;
             virtual std::shared_ptr<Obj> idx(const std::shared_ptr<Obj>& val) = 0;
             virtual std::shared_ptr<Obj> neg() const = 0;
 
@@ -137,7 +137,7 @@ namespace nn
                 throw GenerationError(obj_type_name(TY) + " type does not support the get operator"); }
             virtual std::shared_ptr<Obj> cargs(const std::vector<std::shared_ptr<Obj>>& args) override {
                 throw GenerationError(obj_type_name(TY) + " type does not support constant arguments"); }
-            virtual std::vector<std::shared_ptr<Obj>> iter(EvalCtx& ctx) override {
+            virtual std::vector<std::shared_ptr<Obj>> iter() override {
                 throw GenerationError(obj_type_name(TY) + " type does not support iteration"); }
             virtual std::shared_ptr<Obj> idx(const std::shared_ptr<Obj>& val) override {
                 throw GenerationError(obj_type_name(TY) + " type does not support the index operator"); }

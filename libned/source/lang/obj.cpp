@@ -893,7 +893,7 @@ namespace nn
         }
 
         template<>
-        std::vector<std::shared_ptr<Obj>> ObjStr::iter(EvalCtx& ctx)
+        std::vector<std::shared_ptr<Obj>> ObjStr::iter()
         {
             check_init(this);
 
@@ -1026,7 +1026,7 @@ namespace nn
         }
 
         template<>
-        std::vector<std::shared_ptr<Obj>> ObjArray::iter(EvalCtx& ctx)
+        std::vector<std::shared_ptr<Obj>> ObjArray::iter()
         {
             check_init(this);
             for (auto e : data.elems)
@@ -1145,7 +1145,7 @@ namespace nn
         }
 
         template<>
-        std::vector<std::shared_ptr<Obj>> ObjTuple::iter(EvalCtx& ctx)
+        std::vector<std::shared_ptr<Obj>> ObjTuple::iter()
         {
             check_init(this);
             for (auto e : data.elems)
@@ -1283,7 +1283,7 @@ namespace nn
         }
 
         template<>
-        std::vector<std::shared_ptr<Obj>> ObjTensor::iter(EvalCtx& ctx)
+        std::vector<std::shared_ptr<Obj>> ObjTensor::iter()
         {
             std::vector<std::shared_ptr<Obj>> iters;
             iters.push_back(create_obj_fwidth(data.dty));
@@ -1498,7 +1498,7 @@ namespace nn
             else
             {
                 // multiple outputs
-                const auto& outs = last_ret->iter(ctx);
+                const auto& outs = last_ret->iter();
                 for (int i = 0; i < outs.size(); i++)
                 {
                     check_type(ObjType::TENSOR, outs[i]);

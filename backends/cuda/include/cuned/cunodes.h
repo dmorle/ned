@@ -130,6 +130,20 @@ namespace nn
             virtual void backward(RunId id) override;
         };
 
+        class FullSum :
+            public Node
+        {
+            size_t sz;
+            core::tensor_dty dty;
+            Edge* inp;
+            Edge* out;
+
+        public:
+            FullSum(std::map<std::string, std::shared_ptr<lang::Obj>>& cargs, core::Edge* inp, core::Edge* out);
+            virtual void forward(RunId id) override;
+            virtual void backward(RunId id) override;
+        };
+
         class MatMul :
             public Node
         {
@@ -180,6 +194,15 @@ namespace nn
         };
 
         class ReLU :
+            public ActivationFn
+        {
+        public:
+            using ActivationFn::ActivationFn;
+            virtual void forward(RunId id) override;
+            virtual void backward(RunId id) override;
+        };
+
+        class NaturalLog :
             public ActivationFn
         {
         public:

@@ -65,7 +65,7 @@ namespace nn
 
         void AstPack::append_vec(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const
         {
-            std::vector<std::shared_ptr<Obj>> eval_result = std::move(eval(ctx)->iter(ctx));
+            std::vector<std::shared_ptr<Obj>> eval_result = std::move(eval(ctx)->iter());
             cargs.insert(
                 cargs.end(),
                 std::make_move_iterator(eval_result.begin()),
@@ -653,7 +653,7 @@ namespace nn
             if (last_ret)
                 return create_obj_invalid();
             std::shared_ptr<Obj> idx = it.eval(ctx);
-            for (auto e : pexpr->eval(ctx)->iter(ctx))
+            for (auto e : pexpr->eval(ctx)->iter())
             {
                 idx->assign(e);
                 seq.eval(ctx);
@@ -828,7 +828,7 @@ namespace nn
                 if (is_packed)
                 {
                     // concatenating the cargs with an iteration through ctx[var_name]
-                    auto vec = ctx.get(var_name)->iter(ctx);
+                    auto vec = ctx.get(var_name)->iter();
                     cargs.insert(cargs.end(), vec.begin(), vec.end());
                 }
                 else
@@ -855,7 +855,7 @@ namespace nn
                 throw GenerationError("type mismatch, expected " + type_name + ", recieved " + obj_type_name((*start)->ty));
             if (!has_cargs)
                 return std::next(start);
-            std::vector<std::shared_ptr<Obj>> elems = (*start)->iter(ctx);
+            std::vector<std::shared_ptr<Obj>> elems = (*start)->iter();
             auto e_start = elems.begin();
             auto e_end = elems.end();
 
@@ -1001,7 +1001,7 @@ namespace nn
             if (last_ret->ty == ObjType::TENSOR)
                 pctx->graph().outputs.push_back(static_cast<ObjTensor*>(last_ret.get())->data.pEdge);
             else
-                for (auto e : last_ret->iter(*pctx))
+                for (auto e : last_ret->iter())
                 {
                     if (e->ty != ObjType::TENSOR)
                         throw GenerationError("Invalid return type from top level def");

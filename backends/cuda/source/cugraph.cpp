@@ -169,6 +169,12 @@ namespace nn
             //        (Edge**)&pnode->inputs[0]->opaque,
             //        (Edge*)pnode->outputs[0]->opaque);
             //    break;
+            case hash("sum_intr"):
+                if (pnode->name != "sum_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
+                assert(pnode->inputs.size() == 1);
+                assert(pnode->outputs.size() == 1);
+                npnode = new FullSum(pnode->cargs, pnode->inputs[0], pnode->outputs[0]);
+                break;
             case hash("sigmoid_intr"):
                 if (pnode->name != "sigmoid_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
                 assert(pnode->inputs.size() == 1);
@@ -186,6 +192,12 @@ namespace nn
                 assert(pnode->inputs.size() == 1);
                 assert(pnode->outputs.size() == 1);
                 npnode = new ReLU(pnode->cargs, pnode->inputs[0], pnode->outputs[0]);
+                break;
+            case hash("ln_intr"):
+                if (pnode->name != "ln_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);
+                assert(pnode->inputs.size() == 1);
+                assert(pnode->outputs.size() == 1);
+                npnode = new NaturalLog(pnode->cargs, pnode->inputs[0], pnode->outputs[0]);
                 break;
             //case hash("leaky_relu_intr"):
             //    if (pnode->name != "leaky_relu_intr") throw GraphError("Unrecognized graph intrinsic name: " + pnode->name);

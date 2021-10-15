@@ -70,15 +70,6 @@ BinOpScalar::BinOpScalar(std::map<std::string, std::shared_ptr<lang::Obj>>& carg
 
 constexpr int bsz = 32;
 
-template<typename T>
-__device__ T sum_vec(const T* vec, size_t sz)
-{
-    size_t offset = sz / 2;
-    if (sz % 2)
-        return sum_vec(vec, offset) + sum_vec(vec + offset, offset) + vec[sz - 1];
-    return sum_vec(vec, offset) + sum_vec(vec + offset, offset);
-}
-
 template<typename INP1, typename INP2, typename OUT>
 __global__ void add_pointwise_forward(const INP1* a, const INP2* b, OUT* dst, size_t sz)
 {

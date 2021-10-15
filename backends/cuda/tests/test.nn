@@ -9,7 +9,19 @@ intr matmul_intr<fwidth ofw, fwidth ifw, int m, int s, int n>(tensor<ifw, m, s> 
     tensor<ofw, m, n> out
     return out
 
+intr sum_intr<fwidth fw, int *shape>(tensor<fw, *shape> inp):
+    tensor<fw> out
+    return out
+
 intr add_same_intr<fwidth ofw, fwidth lfw, fwidth rfw, int *shape>(tensor<lfw, *shape> left, tensor<rfw, *shape> right):
+    for int i in shape:
+        if i < 0:
+            raise "Tensor dimensions must be >= 0"
+
+    tensor<ofw, *shape> out
+    return out
+
+intr mul_name_intr<fwidth ofw, fwidth lfw, fwidth rfw, int* shape>(tensor<lfw, *shape> left, tensor<rfw, *shape> right):
     for int i in shape:
         if i < 0:
             raise "Tensor dimensions must be >= 0"
@@ -40,6 +52,18 @@ intr tanh_intr<fwidth fw, int *shape>(tensor<fw, *shape> inp):
 
     tensor<fw, *shape> out
     return out
+
+intr ln_intr<fwidth fw, int *shape>(tensor<fw, *shape> inp):
+    for int i in shape:
+        if i < 0:
+            raise "Tensor dimensions must be >= 0"
+
+    tensor<fw, *shape> out
+    return out
+
+def bce_loss<fwidth fw, int N>(tensor<fw, N> preds, tensor<fw, N> labels):
+    
+    return sum_intr()
 
 def _model<int N>(tensor<f32, N> inp1, tensor<f32, N> inp2):
     return add_same_intr<f32>(inp1, inp2)
