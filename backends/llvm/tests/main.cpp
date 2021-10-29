@@ -1,8 +1,32 @@
+#include <iostream>
+
+#include <ned/lang/obj.h>
 #include <nedvm/graphgen.h>
 
-#include <iostream>
+using namespace nn;
+
 
 int main()
 {
-    std::cout << "test" << std::endl;
+    FILE* pf = fopen(TEST_DIR"test.nn", "rb");
+    lang::TokenArray tarr{};
+    try
+    {
+        lang::lex_file(pf, tarr);
+    }
+    catch (lang::SyntaxError& err)
+    {
+        printf("%s\n", err.what());
+        fclose(pf);
+        exit(1);
+    }
+
+    fclose(pf);
+
+    lang::AstModule* pmod = new lang::AstModule{ tarr };
+    lang::EvalCtx* pctx = pmod->eval("model", { lang::create_obj_int(2) });
+    delete pmod;
+    nedvm::GraphCompiler* pcompiler = new nedvm::GraphCompiler(pctx->pgraph);
+    delete pctx;
+    delete pcompiler;
 }

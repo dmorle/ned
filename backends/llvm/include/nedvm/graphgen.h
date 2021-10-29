@@ -1,19 +1,24 @@
 #ifndef NEDVM_GRAPHGEN_H
 #define NEDVM_GRAPHGEN_H
 
-#include <llvm/IR/Function.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
-#include <llvm/IR/Type.h>
-#include <llvm/IR/Verifier.h>
-
+#include <nedvm/common.h>
 #include <ned/core/graph.h>
 
 namespace nn
 {
     namespace nedvm
     {
+        class GraphGenError :
+            public std::exception
+        {
+        public:
+            std::string errmsg;
+
+            GraphGenError(const std::string& errmsg);
+
+            const char* what() const override;
+        };
+
         struct EdgeData
         {
             llvm::Value* forward_val = nullptr;
@@ -22,16 +27,20 @@ namespace nn
 
         class GraphCompiler
         {
-            llvm::LLVMContext& ctx;
-            llvm::IRBuilder<>& builder;
-            llvm::Module mod;
+            llvm::LLVMContext* pctx;
+            llvm::IRBuilder<>* pbuilder;
+            llvm::Module* pmod;
             const core::Graph* pgraph;
 
-            void initEdgeOpaque(const core::Edge* pedge);
-            void delEdgeOpaque(const core::Edge* pedge);
+            void init_edge_opaque(const core::Edge* pedge);
+            void del_edge_opaque(const core::Edge* pedge);
 
         public:
             GraphCompiler(const core::Graph* pgraph);
+            GraphCompiler(const GraphCompiler&) = delete;
+            GraphCompiler(GraphCompiler&&) = delete;
+            GraphCompiler& operator=(const GraphCompiler&) = delete;
+            GraphCompiler& operator=(GraphCompiler&&) = delete;
             ~GraphCompiler();
 
             void generate_forward();
