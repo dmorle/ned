@@ -4,9 +4,14 @@ include_directories("include")
 
 add_library(
     libnedvm STATIC
+    "source/common.cpp"
     "source/graphgen.cpp"
+    "source/vmnodes.cpp"
+    "source/basic_ops.cpp"
+
     "include/nedvm/common.h"
     "include/nedvm/graphgen.h"
+    "include/nedvm/vmnodes.h"
 )
 
 target_include_directories(libnedvm PRIVATE "${CMAKE_SOURCE_DIR}/libned/include/")

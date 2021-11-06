@@ -8,32 +8,38 @@ namespace nn
 {
     namespace nedvm
     {
-        class GraphGenError :
-            public std::exception
+        struct EdgeData  // POD
         {
-        public:
-            std::string errmsg;
-
-            GraphGenError(const std::string& errmsg);
-
-            const char* what() const override;
+            llvm::GlobalVariable* forward_val = nullptr;
+            llvm::GlobalVariable* backward_val = nullptr;
         };
 
-        struct EdgeData
+        struct NodeData  // POD
         {
-            llvm::Value* forward_val = nullptr;
-            llvm::Value* backward_val = nullptr;
+            llvm::Function* forward_func = nullptr;
+            llvm::Function* backward_func = nullptr;
         };
+
+        using Builder = llvm::IRBuilder<>;
 
         class GraphCompiler
         {
             llvm::LLVMContext* pctx;
-            llvm::IRBuilder<>* pbuilder;
             llvm::Module* pmod;
+            Builder* pbuilder;
             const core::Graph* pgraph;
 
             void init_edge_opaque(const core::Edge* pedge);
+            void init_node_opaque(const core::Node* pnode);
+
             void del_edge_opaque(const core::Edge* pedge);
+            void del_node_opaque(const core::Node* pnode);
+
+            void generate_forward_edge(const core::Edge* pnode);
+            void generate_backward_edge(const core::Edge* pedge);
+
+            void generate_forward_node(const core::Node* pnode);
+            void generate_backward_node(const core::Node* pnode);
 
         public:
             GraphCompiler(const core::Graph* pgraph);
@@ -45,6 +51,8 @@ namespace nn
 
             void generate_forward();
             void generate_backward();
+
+            void print();
         };
     }
 }

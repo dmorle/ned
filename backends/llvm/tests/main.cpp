@@ -24,9 +24,11 @@ int main()
     fclose(pf);
 
     lang::AstModule* pmod = new lang::AstModule{ tarr };
-    lang::EvalCtx* pctx = pmod->eval("model", { lang::create_obj_int(2) });
+    lang::EvalCtx* pctx = pmod->eval("model", { lang::create_obj_int(5) });
     delete pmod;
     nedvm::GraphCompiler* pcompiler = new nedvm::GraphCompiler(pctx->pgraph);
+    pcompiler->generate_forward();
+    pcompiler->print();
     delete pctx;
     delete pcompiler;
 }
