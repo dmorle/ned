@@ -29,6 +29,7 @@ int main()
     nedvm::GraphCompiler* pcompiler = new nedvm::GraphCompiler(pctx->pgraph);
     pcompiler->generate_forward();
     pcompiler->print();
+    pcompiler->compile();
     delete pctx;
     delete pcompiler;
 }

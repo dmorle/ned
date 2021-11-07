@@ -6,5 +6,5 @@ intr add_same_intr<fwidth ofw, fwidth lfw, fwidth rfw, int *shape>(tensor<lfw, *
     tensor<ofw, *shape> out
     return out
 
-def model<int N>(tensor<f16, N> inp1, tensor<f32, N> inp2):
-    return add_same_intr<f16>(inp1, inp2)
+def model<int N>(tensor<f32, N> inp1, tensor<f64, N> inp2):
+    return add_same_intr<f32>(inp1, inp2)

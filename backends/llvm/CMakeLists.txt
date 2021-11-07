@@ -27,6 +27,8 @@ target_include_directories(libnedvm PUBLIC "C:/llvm-build/llvm/llvm/include/")
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 
+set(LLVM_BUILD_DIR "C:/llvm-build/build/")
+
 llvm_map_components_to_libnames(
     llvm_libs
     aggressiveinstcombine
@@ -45,6 +47,7 @@ llvm_map_components_to_libnames(
     coverage
     debuginfocodeview
     debuginfodwarf
+    debuginfogsym
     debuginfomsf
     debuginfopdb
     demangle
@@ -112,10 +115,19 @@ llvm_map_components_to_libnames(
 # manually specifying the full library path because cmake was being stupid
 foreach(llvm_lib ${llvm_libs})
     message(STATUS "Linking library: ${llvm_lib}")
-    target_link_libraries(libnedvm PRIVATE "C:/llvm-build/build/Release/lib/${llvm_lib}.lib")
+    target_link_libraries(libnedvm PRIVATE "${LLVM_BUILD_DIR}/Release/lib/${llvm_lib}.lib")
 endforeach()
 
+find_package(ZLIB REQUIRED)
+target_link_libraries(libnedvm PRIVATE ZLIB::ZLIB)
+
 add_compile_definitions(TEST_DIR="${CMAKE_SOURCE_DIR}/backends/llvm/tests/")
+
+set_property(TARGET libnedvm PROPERTY LINKER_LANGUAGE CXX)
+set_property(TARGET libnedvm PROPERTY CXX_STANDARD 20)
+
+add_custom_command(TARGET libnedvm POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy "${LLVM_BUILD_DIR}/Release/bin/llc.exe" "${CMAKE_CURRENT_BINARY_DIR}")
+add_custom_command(TARGET libnedvm POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy "${LLVM_BUILD_DIR}/Release/bin/lld-link.exe" "${CMAKE_CURRENT_BINARY_DIR}")
 
 add_executable(
     libnedvm_tests

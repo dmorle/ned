@@ -17,6 +17,7 @@
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/Bitcode/BitcodeWriter.h>
 
 #pragma warning( default : LLVM_WARNINGS )
 

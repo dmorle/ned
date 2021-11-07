@@ -889,6 +889,7 @@ namespace nn
 
             // creating a new edge
             pten->data.pEdge = new core::Edge();
+            pten->data.pEdge->dsc.dty = pten->data.dty;
             pten->data.pEdge->dsc.rk = pten->data.dims.size();
             for (auto e : pten->data.dims)
                 pten->data.pEdge->dsc.dims.push_back(e);

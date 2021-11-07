@@ -33,7 +33,8 @@ namespace nn
             default:
                 throw GraphGenError("Unrecognized graph intrinsic name: " + pnode->name);
             }
-            llvm::verifyFunction(*func);
+            if (llvm::verifyFunction(*func, &llvm::errs()))
+                throw GraphGenError("Code generation error");
         }
 
         void generate_node_backward_func(llvm::LLVMContext& ctx, llvm::Function* func, Builder* pbuilder, const core::Node* pnode)
@@ -47,7 +48,8 @@ namespace nn
             default:
                 throw GraphGenError("Unrecognized graph intrinsic name: " + pnode->name);
             }
-            llvm::verifyFunction(*func);
+            if (llvm::verifyFunction(*func, &llvm::errs()))
+                throw GraphGenError("Code generation error");
         }
     }
 }

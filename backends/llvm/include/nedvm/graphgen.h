@@ -29,6 +29,9 @@ namespace nn
             Builder* pbuilder;
             const core::Graph* pgraph;
 
+            bool has_forward = false;
+            bool has_backward = false;
+
             void init_edge_opaque(const core::Edge* pedge);
             void init_node_opaque(const core::Node* pnode);
 
@@ -53,6 +56,7 @@ namespace nn
             void generate_backward();
 
             void print();
+            void compile();
         };
     }
 }

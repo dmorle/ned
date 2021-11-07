@@ -39,8 +39,9 @@ namespace nn
             llvm::BasicBlock* entry = llvm::BasicBlock::Create(ctx, "entry", func);
             llvm::BasicBlock* loop = llvm::BasicBlock::Create(ctx, "loop", func);
             llvm::BasicBlock* end = llvm::BasicBlock::Create(ctx, "end", func);
-            llvm::IntegerType* int_ty = llvm::IntegerType::get(ctx, (unsigned int)(std::log2((double)sz) + 2));
-            llvm::Value* start_val = llvm::ConstantInt::get(int_ty, 0);
+            //llvm::IntegerType* int_ty = llvm::IntegerType::get(ctx, (unsigned int)(std::log2((double)sz) + 2));
+            llvm::IntegerType* int_ty = llvm::IntegerType::get(ctx, 32);
+            llvm::Value* zero_val = llvm::ConstantInt::get(int_ty, 0);
             llvm::Value* end_val = llvm::ConstantInt::get(int_ty, sz);
             llvm::Value* step_val = llvm::ConstantInt::get(int_ty, 1);
 
@@ -51,9 +52,10 @@ namespace nn
             llvm::PHINode* idx_val = pbuilder->CreatePHI(int_ty, 2, "idx");
 
             // start doing the vector addition
-            llvm::Value* lptr_val = pbuilder->CreateGEP(lty, lvec, idx_val, "lptr");
-            llvm::Value* rptr_val = pbuilder->CreateGEP(rty, rvec, idx_val, "rptr");
-            llvm::Value* optr_val = pbuilder->CreateGEP(oty, ovec, idx_val, "optr");
+            llvm::Value* lptr_val = pbuilder->CreateGEP(lvec, { zero_val, idx_val }, "lptr");
+            llvm::Value* rptr_val = pbuilder->CreateGEP(rvec, { zero_val, idx_val }, "rptr");
+            llvm::Value* optr_val = pbuilder->CreateGEP(ovec, { zero_val, idx_val }, "optr");
+            
             llvm::Value* lval_val = pbuilder->CreateLoad(lptr_val, "lval");
             llvm::Value* rval_val = pbuilder->CreateLoad(rptr_val, "rval");
             if (lfw != ofw)
@@ -68,7 +70,7 @@ namespace nn
             llvm::Value* done_val = pbuilder->CreateICmpEQ(next_val, end_val, "done");
             pbuilder->CreateCondBr(done_val, end, loop);
 
-            idx_val->addIncoming(start_val, entry);
+            idx_val->addIncoming(zero_val, entry);
             idx_val->addIncoming(next_val, loop);
 
             pbuilder->SetInsertPoint(end);
