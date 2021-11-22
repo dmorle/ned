@@ -12,6 +12,10 @@ namespace std {
 }
 #endif
 
+#define FNAME_SIZE 256
+#define IDN_SIZE   64
+#define STR_SIZE   1024
+
 namespace nn
 {
     namespace lang
@@ -45,47 +49,76 @@ namespace nn
             CMP_LT,
             CMP_GE,
             CMP_LE,
-            INT,
-            FLOAT,
-            STRLIT,
-            IDN
+            LIT_INT,
+            LIT_FLOAT,
+            LIT_STR,
+            IDN,
+            KW_STRUCT,
+            KW_DEF,
+            KW_INTR,
+            KW_FN,
+            KW_RETURN,
+            KW_IMPORT,
+            KW_WHILE,
+            KW_FOR,
+            KW_IN,
+            KW_BREAK,
+            KW_CONTINUE,
+            KW_IF,
+            KW_ELIF,
+            KW_ELSE,
+            KW_TYPE,
+            KW_VAR,
+            KW_FPTYPE,
+            KW_BOOL,
+            KW_INT,
+            KW_FLOAT,
+            KW_STR,
+            KW_ARRAY,
+            KW_TUPLE,
+            KW_TENSOR,
+            KW_TRUE,
+            KW_FALSE,
+            KW_RAISE,
+            KW_PRINT,
+            KW_EXPORT,
+            KW_F16,
+            KW_F32,
+            KW_F64
         };
 
-        class SearchCriteria
-        {
-        public:
-            virtual int stop(TokenType ty, int position) = 0;
-        };
-
-        enum class Keyword
-        {
-            DEF,
-            IF,
-            ELIF,
-            ELSE,
-            FOR,
-            IN,
-            WHILE,
-            VAR,
-            IMPORT,
-            RETURN
-        };
+        template<TokenType T>
+        class TokenImp;
 
         class Token
         {
         public:
             TokenType ty = TokenType::INVALID;
+            char fname[FNAME_SIZE];
             uint32_t sz;
             uint32_t line_num;
             uint32_t col_num;
 
-            Token(uint32_t sz, uint32_t line_num, uint32_t col_num) :
+            Token(const char* fname, uint32_t sz, uint32_t line_num, uint32_t col_num) :
                 sz(sz),
                 line_num(line_num),
                 col_num(col_num)
-            {}
+            {
+                strncpy(this->fname, fname, 256);
+            }
+
+            // useful utilities
+
+            bool is_whitespace() const { return ty == TokenType::INDENT || ty == TokenType::ENDL; }
+            template<TokenType TY> TokenImp<TY>& get() {
+                if (ty != TY) throw SyntaxError(this, "Expected {}, found {}", to_string(ty), to_string(TY));
+                return *reinterpret_cast<TokenImp<TY>*>(this); }
+            template<TokenType TY> const TokenImp<TY>& get() const {
+                if (ty != TY) throw SyntaxError(this, "Expected {}, found {}", to_string(ty), to_string(TY));
+                return *reinterpret_cast<const TokenImp<TY>*>(this); }
         };
 
+        constexpr std::string to_string(const TokenType ty);
         std::string to_string(const Token* ptk);
 
         class SyntaxError :
@@ -138,54 +171,54 @@ namespace nn
             public Token
         {
         public:
-            TokenImp(uint32_t line_num, uint32_t col_num) :
-                Token(sizeof(TokenImp<T>), line_num, col_num)
+            TokenImp(const char* fname, uint32_t line_num, uint32_t col_num) :
+                Token(fname, sizeof(TokenImp<T>), line_num, col_num)
             {
                 ty = T;
             }
         };
 
         template<>
-        class TokenImp<TokenType::INT> :
+        class TokenImp<TokenType::LIT_INT> :
             public Token
         {
         public:
             int64_t val;
 
-            TokenImp(uint32_t line_num, uint32_t col_num) :
-                Token(sizeof(TokenImp<TokenType::INT>), line_num, col_num)
+            TokenImp(const char* fname, uint32_t line_num, uint32_t col_num) :
+                Token(fname, sizeof(TokenImp<TokenType::LIT_INT>), line_num, col_num)
             {
-                ty = TokenType::INT;
+                ty = TokenType::LIT_INT;
                 val = 0;
             }
         };
 
         template<>
-        class TokenImp<TokenType::FLOAT> :
+        class TokenImp<TokenType::LIT_FLOAT> :
             public Token
         {
         public:
             double val;
 
-            TokenImp(uint32_t line_num, uint32_t col_num) :
-                Token(sizeof(TokenImp<TokenType::FLOAT>), line_num, col_num)
+            TokenImp(const char* fname, uint32_t line_num, uint32_t col_num) :
+                Token(fname, sizeof(TokenImp<TokenType::LIT_FLOAT>), line_num, col_num)
             {
-                ty = TokenType::FLOAT;
+                ty = TokenType::LIT_FLOAT;
                 val = 1.0;
             }
         };
 
         template<>
-        class TokenImp<TokenType::STRLIT> :
+        class TokenImp<TokenType::LIT_STR> :
             public Token
         {
         public:
-            char val[256];
+            char val[STR_SIZE];
 
-            TokenImp(uint32_t line_num, uint32_t col_num) :
-                Token(sizeof(TokenImp<TokenType::STRLIT>), line_num, col_num)
+            TokenImp(const char* fname, uint32_t line_num, uint32_t col_num) :
+                Token(fname, sizeof(TokenImp<TokenType::LIT_STR>), line_num, col_num)
             {
-                ty = TokenType::STRLIT;
+                ty = TokenType::LIT_STR;
                 val[0] = '\0';
             }
         };
@@ -195,14 +228,62 @@ namespace nn
             public Token
         {
         public:
-            char val[64];
+            char val[IDN_SIZE];
 
-            TokenImp(uint32_t line_num, uint32_t col_num) :
-                Token(sizeof(TokenImp<TokenType::IDN>), line_num, col_num)
+            TokenImp(const char* fname, uint32_t line_num, uint32_t col_num) :
+                Token(fname, sizeof(TokenImp<TokenType::IDN>), line_num, col_num)
             {
                 ty = TokenType::IDN;
                 val[0] = '\0';
             }
+        };
+
+        class TokenArrayIterator
+        {
+        public:
+            using iterator_category = std::forward_iterator_tag;
+            using difference_type   = std::ptrdiff_t;
+            using value_type        = Token;
+            using pointer           = value_type*;
+            using reference         = value_type&;
+
+            TokenArrayIterator(pointer ptr) : ptr(ptr) {}
+
+            reference operator*() const { return *ptr; }
+            pointer operator->() { return ptr; }
+
+            TokenArrayIterator& operator++() { ptr = (pointer)(((uint8_t*)ptr) + ptr->sz); return *this; }
+            TokenArrayIterator operator++(int) { TokenArrayIterator tmp = *this; ++(*this); return tmp; }
+
+            friend bool operator== (const TokenArrayIterator& a, const TokenArrayIterator& b) { return a.ptr == b.ptr; };
+            friend bool operator!= (const TokenArrayIterator& a, const TokenArrayIterator& b) { return a.ptr != b.ptr; };
+
+        private:
+            pointer ptr;
+        };
+
+        class TokenArrayConstIterator
+        {
+        public:
+            using iterator_category = std::forward_iterator_tag;
+            using difference_type = std::ptrdiff_t;
+            using value_type = Token;
+            using pointer = const value_type*;
+            using reference = const value_type&;
+
+            TokenArrayConstIterator(const pointer ptr) : ptr(ptr) {}
+
+            reference operator*() const { return *ptr; }
+            pointer operator->() { return ptr; }
+
+            TokenArrayConstIterator& operator++() { ptr = (pointer)(((uint8_t*)ptr) + ptr->sz); return *this; }
+            TokenArrayConstIterator operator++(int) { TokenArrayConstIterator tmp = *this; ++(*this); return tmp; }
+
+            friend bool operator== (const TokenArrayConstIterator& a, const TokenArrayConstIterator& b) { return a.ptr == b.ptr; };
+            friend bool operator!= (const TokenArrayConstIterator& a, const TokenArrayConstIterator& b) { return a.ptr != b.ptr; };
+
+        private:
+            pointer ptr;
         };
 
         class TokenArray
@@ -218,366 +299,76 @@ namespace nn
             TokenArray& operator=(TokenArray&&) noexcept;
             TokenArray& operator=(const TokenArray&) = delete;
             
+            TokenArrayIterator begin() { return TokenArrayIterator((Token*)pbuf); }
+            TokenArrayIterator end() { uint8_t* last = pbuf + offsets[off_len - 1];
+                return TokenArrayIterator(reinterpret_cast<Token*>(last + reinterpret_cast<Token*>(last)->sz)); }
+            TokenArrayConstIterator begin() const { return TokenArrayConstIterator((Token*)pbuf); }
+            TokenArrayConstIterator end() const { const uint8_t* last = pbuf + offsets[off_len - 1];
+                return TokenArrayConstIterator(reinterpret_cast<const Token*>(last + reinterpret_cast<const Token*>(last)->sz)); }
             const Token* operator[](size_t idx) const noexcept;
-            template<TokenType T> void push_back(const TokenImp<T>& tk);
             size_t size() const;
+
+            template<TokenType T>
+            void push_back(const TokenImp<T>& tk)
+            {
+                constexpr size_t nsz = sizeof(TokenImp<T>);
+                if (is_slice)
+                    throw std::runtime_error("TokenArray slices are immutable");
+                void* tmp;
+                while (rawlen + nsz >= mem_sz)
+                {
+                    mem_sz += mem_sz;
+                    tmp = std::realloc(pbuf, mem_sz);
+                    if (!tmp)
+                        throw std::bad_alloc();
+                    pbuf = (uint8_t*)tmp;
+                }
+                off_len++;
+                if (off_len == off_cap)
+                {
+                    off_cap += off_cap;
+                    tmp = std::realloc(offsets, sizeof(size_t) * off_cap);
+                    if (!tmp)
+                        throw std::bad_alloc();
+                    offsets = (size_t*)tmp;
+                }
+                offsets[off_len - 1] = rawlen;
+                std::memcpy(pbuf + rawlen, &tk, nsz);
+                rawlen += nsz;
+            }
 
 #ifdef _DEBUG
             void print() const;
 #endif
 
-            template<TokenType Ty>
-            static bool is_same(const TokenType ty)
+            // returns -1 if token is not present in range
+            template<class SearchCriteria>
+            int search(SearchCriteria&& sc, int start = 0) const
             {
-                return ty == Ty;
-            }
-
-            template<TokenType Ty>
-            static bool is_same_brac(const TokenType ty)
-            {
-                static int rbrac = 0;
-                static int sbrac = 0;
-                static int abrac = 0;
-
-                switch (ty)
+                // A bit better cache utilization than rfind
+                int idx = start;
+                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
+                while (idx < size())
                 {
-                case TokenType::ROUND_O:
-                    rbrac++;
-                    return false;
-                case TokenType::ROUND_C:
-                    rbrac--;
-                    return false;
-                case TokenType::SQUARE_O:
-                    sbrac++;
-                    return false;
-                case TokenType::SQUARE_C:
-                    sbrac--;
-                    return false;
-                case TokenType::ANGLE_O:
-                    abrac++;
-                    return false;
-                case TokenType::ANGLE_C:
-                    abrac--;
-                    return false;
-                case Ty:
-                    return !(rbrac || sbrac || abrac);
-                default:
-                    return false;
-                }
-            }
-
-            template<Keyword kw>
-            static bool is_keyword(const Token* tk);
-            template<> static bool is_keyword<Keyword::DEF>(const Token* tk)
-            { return tk->ty == TokenType::IDN && std::string("def") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
-            template<> static bool is_keyword<Keyword::IF>(const Token* tk)
-            { return tk->ty == TokenType::IDN && std::string("if") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
-            template<> static bool is_keyword<Keyword::ELIF>(const Token* tk)
-            { return tk->ty == TokenType::IDN && std::string("elif") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
-            template<> static bool is_keyword<Keyword::ELSE>(const Token* tk)
-            { return tk->ty == TokenType::IDN && std::string("else") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
-            template<> static bool is_keyword<Keyword::FOR>(const Token* tk)
-            { return tk->ty == TokenType::IDN && std::string("for") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
-            template<> static bool is_keyword<Keyword::IN>(const Token* tk)
-            { return tk->ty == TokenType::IDN && std::string("in") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
-            template<> static bool is_keyword<Keyword::WHILE>(const Token* tk)
-            { return tk->ty == TokenType::IDN && std::string("while") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
-            template<> static bool is_keyword<Keyword::VAR>(const Token* tk)
-            { return tk->ty == TokenType::IDN && std::string("var") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
-            template<> static bool is_keyword<Keyword::IMPORT>(const Token* tk)
-            { return tk->ty == TokenType::IDN && std::string("import") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
-            template<> static bool is_keyword<Keyword::RETURN>(const Token* tk)
-            { return tk->ty == TokenType::IDN && std::string("return") == static_cast<const TokenImp<TokenType::IDN>*>(tk)->val; }
-
-            template<int ILV>
-            static int block_end(const TokenType ty, int position)
-            {
-                static int ilv = 0;
-                static int last_endl = 0;
-                static int in_line = false;
-
-                if (ty == TokenType::ENDL)
-                {
-                    last_endl = position;
-                    ilv = 0;
-                    in_line = false;
-                    return -1;
-                }
-                if (in_line)
-                    return -1;
-                if (ty == TokenType::INDENT)
-                {
-                    ilv++;
-                    return -1;
-                }
-                if (ilv >= ILV)
-                    return -1;
-
-                int ret = last_endl + 1;
-                ilv = 0;
-                last_endl = 0;
-                return ret;
-            }
-
-            template<TokenType OPEN, TokenType CLOSE>
-            static bool brac_end(const TokenType ty)
-            {
-                static int lvl = 0;
-
-                if (ty == CLOSE)
-                {
-                    if (lvl == 0)
-                        return true;
-                    lvl--;
-                    return false;
-                }
-                if (ty ==  OPEN)
-                    lvl++;
-                return false;
-            }
-
-            template<TokenType OPEN, TokenType CLOSE>
-            static bool args_elem(const TokenType ty)
-            {
-                static int lvl = 0;
-
-                if (ty == CLOSE)
-                {
-                    if (lvl == 0)
-                        return true;
-                    lvl--;
-                    return false;
-                }
-                if (ty == OPEN)
-                {
-                    lvl++;
-                    return false;
+                    int ret = sc.accept(pstart, idx);
+                    if (ret >= 0)
+                        return ret;
+                    idx++;
+                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
                 }
 
-                return ty == TokenType::COMMA && lvl == 0;
+                return -1;
             }
 
             // returns -1 if token is not present in range
-            // start/end arguments <0 offsets from the end of the token array
-            template<bool(*F)(TokenType)>
-            int search(int start = 0) const
-            {
-                // A bit better cache utilization than rfind
-                int result = start;
-                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
-                while (result < size())
-                {
-                    if (F(pstart->ty))
-                        return result;
-                    result++;
-                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
-                }
-
-                return -1;
-            }
-
-            template<bool(*F)(TokenType)>
-            int search(int start, int end) const
-            {
-                end %= this->off_len;
-
-                // A bit better cache utilization than rfind
-                int result = start;
-                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
-                while (result < end)
-                {
-                    if (F(pstart->ty))
-                        return result;
-                    result++;
-                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
-                }
-
-                return -1;
-            }
-
-            template<bool(*F)(const Token*)>
-            int search(int start = 0) const
-            {
-                // A bit better cache utilization than rfind
-                int result = start;
-                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
-                while (result < size())
-                {
-                    if (F(pstart))
-                        return result;
-                    result++;
-                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
-                }
-
-                return -1;
-            }
-
-            template<bool(*F)(const Token*)>
-            int search(int start, int end) const
-            {
-                end %= this->off_len;
-
-                // A bit better cache utilization than rfind
-                int result = start;
-                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
-                while (result < end)
-                {
-                    if (F(pstart))
-                        return result;
-                    result++;
-                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
-                }
-
-                return -1;
-            }
-
-            template<int(*F)(TokenType, int)>
-            int search(int start = 0) const
-            {
-                // A bit better cache utilization than rfind
-                int ret;
-                int idx = start;
-                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
-                while (idx < size())
-                {
-                    ret = F(pstart->ty, idx);
-                    if (ret >= 0)
-                        return ret;
-                    idx++;
-                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
-                }
-
-                return -1;
-            }
-
-            template<int(*F)(TokenType, int)>
-            int search(int start, int end) const
-            {
-                end %= this->off_len;
-
-                // A bit better cache utilization than rfind
-                int ret;
-                int idx = start;
-                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
-                while (idx < end)
-                {
-                    ret = F(pstart->ty, idx);
-                    if (ret >= 0)
-                        return ret;
-                    idx++;
-                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
-                }
-
-                return -1;
-            }
-
-            template<int(*F)(const Token*, int)>
-            int search(int start = 0) const
-            {
-                // A bit better cache utilization than rfind
-                int ret;
-                int idx = start;
-                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
-                while (idx < size())
-                {
-                    ret = F(pstart, idx);
-                    if (ret >= 0)
-                        return ret;
-                    idx++;
-                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
-                }
-
-                return -1;
-            }
-
-            template<int(*F)(const Token*, int)>
-            int search(int start, int end) const
-            {
-                end %= this->off_len;
-
-                // A bit better cache utilization than rfind
-                int ret;
-                int idx = start;
-                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
-                while (idx < end)
-                {
-                    ret = F(pstart, idx);
-                    if (ret >= 0)
-                        return ret;
-                    idx++;
-                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
-                }
-
-                return -1;
-            }
-
-            int search(SearchCriteria* sc, int start = 0) const
-            {
-                // A bit better cache utilization than rfind
-                int ret;
-                int idx = start;
-                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
-                while (idx < size())
-                {
-                    ret = sc->stop(pstart->ty, idx);
-                    if (ret >= 0)
-                        return ret;
-                    idx++;
-                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
-                }
-
-                return -1;
-            }
-
             // less efficient than a forward search
-            // returns -1 if token is not present in range
-            // start/end arguments <0 offsets from the end of the token array
-            template<bool(*F)(TokenType)>
-            int rsearch(int start = -1, int end = 0) const
+            // start argument < 0 offsets from the end of the token array
+            template<class SearchCriteria>
+            int rsearch(SearchCriteria&& sc, int start = -1, int end = 0) const
             {
-                end %= this->off_len;
-
-                for (int i = start % this->off_len; i >= end; i--)
-                    if (F(reinterpret_cast<const Token*>(this->pbuf + this->offsets[i])->ty))
-                        return i;
-                return -1;
-            }
-
-            template<bool(*F)(const Token*)>
-            int rsearch(int start = -1, int end = 0) const
-            {
-                end %= this->off_len;
-
-                for (int i = start % this->off_len; i >= end; i--)
-                    if (F(reinterpret_cast<const Token*>(this->pbuf + this->offsets[i])))
-                        return i;
-                return -1;
-            }
-
-            template<int(*F)(TokenType, int)>
-            int rsearch(int start = -1, int end = 0) const
-            {
-                start %= this->off_len;
-
-                int ret;
                 for (int i = start % this->off_len; i >= end; i--)
                 {
-                    ret = F(reinterpret_cast<const Token*>(this->pbuf + this->offsets[i])->ty, i);
-                    if (ret >= 0)
-                        return ret;
-                }
-                return -1;
-            }
-
-            template<int(*F)(const Token*, int)>
-            int rsearch(int start = -1, int end = 0) const
-            {
-                start %= this->off_len;
-
-                int ret;
-                for (int i = start % this->off_len; i >= end; i--)
-                {
-                    ret = F(reinterpret_cast<const Token*>(this->pbuf + this->offsets[i]), i);
+                    int ret = sc.accept(reinterpret_cast<const Token*>(this->pbuf + this->offsets[i]), i);
                     if (ret >= 0)
                         return ret;
                 }
@@ -596,46 +387,108 @@ namespace nn
             size_t* offsets = nullptr;
         };
 
-        void lex_buf(char* buf, size_t bufsz, TokenArray& tarr);
-        void lex_file(FILE* pf, TokenArray& tarr);
+        void lex_buf(const char* fname, char* buf, size_t bufsz, TokenArray& tarr);
+        void lex_file(const char* fname, FILE* pf, TokenArray& tarr);
 
-        class BlockEnd :
-            public SearchCriteria
+        class BracketCounter
+        {
+        protected:
+            size_t rbrac = 0;  // Round  brackets ()
+            size_t sbrac = 0;  // Square brackets []
+            size_t abrac = 0;  // Angled brackets <>
+
+            void count_token(const Token* ptk);  // Returns
+            bool in_bracket() const;
+        };
+
+        class IsSameCriteria
+        {
+            TokenType ty;
+        public:
+            IsSameCriteria(TokenType ty);
+            int accept(const Token* ptk, int idx);
+        };
+
+        class CargEndCriteria :
+            public BracketCounter
+        {
+        public:
+            int accept(const Token* ptk, int idx);
+        };
+
+        /*
+        * Finds the position of the line end after a colon which indicates the start of a block
+        * 
+        * Ex.
+        *   def add<>():
+        *       return
+        * Given the TokenArray as follows:
+        *   def
+        *   add
+        *   <
+        *   >
+        *   (
+        *   )
+        *   :
+        *   endl  <- The criteria will return the position of this token
+        *   tab
+        *   return
+        *   endl
+        */
+        class BlockStartCriteria :
+            public BracketCounter
+        {
+        public:
+            int accept(const Token* ptk, int idx);
+        };
+
+        /*
+        * Finds the position of the line end after the last non-whitespace token in the line
+        * 
+        * Ex1.
+        *   x = x
+        * Given the TokenArray as follows:
+        *   x
+        *   =
+        *   x
+        *   endl  <- The criteria will return the position of this token
+        * 
+        * Ex2.
+        *       if (
+        *           true):
+        *           print "true"
+        *       return
+        * Given the TokenArray as follows:
+        *   tab
+        *   if
+        *   (
+        *   endl
+        *   tab
+        *   tab
+        *   true
+        *   )
+        *   :
+        *   endl
+        *   tab
+        *   tab
+        *   print
+        *   "true"
+        *   endl        <- The criteria will return the position of this token
+        *   tab
+        *   return
+        *   endl
+        */
+        class LineEndCriteria :
+            public BracketCounter
         {
             int target_ilv;
-            int ilv = 0;
-            int last_endl = 0;
-            bool in_line = false;
+            int current_ilv = 0;
+            int last_endl = -1;
 
         public:
-            BlockEnd(int ilv) :
-                target_ilv(ilv)
-            {}
+            LineEndCriteria(int indent_level);
 
-            virtual int stop(TokenType ty, int position) override
-            {
-                if (ty == TokenType::ENDL)
-                {
-                    last_endl = position;
-                    ilv = 0;
-                    in_line = false;
-                    return -1;
-                }
-                if (in_line)
-                    return -1;
-                if (ty == TokenType::INDENT)
-                {
-                    ilv++;
-                    return -1;
-                }
-                if (ilv > target_ilv)
-                {
-                    in_line = true;
-                    return -1;
-                }
-
-                return last_endl;
-            }
+            int accept(const Token* ptk, int idx);
         };
     }
 }

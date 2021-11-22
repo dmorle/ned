@@ -1,686 +1,123 @@
-#ifndef NED_PARSER_H
-#define NED_PARSER_H
+#ifndef NED_AST_H
+#define NED_AST_H
 
-#include <string>
 #include <vector>
-#include <tuple>
-#include <unordered_map>
+#include <string>
 
-#include <ned/core/graph.h>
-#include <ned/lang/eval.h>
 #include <ned/lang/lexer.h>
 
 namespace nn
 {
     namespace lang
     {
-        class AstSeq;
-        class AstDef;
-        class AstIntr;
-        class AstModule;
-
-        class AstBlock
+        enum class LineType
         {
-        public:
-            std::string file_name;
-            uint32_t line_num = 0;
-            uint32_t col_num = 0;
-
-            virtual ~AstBlock() {}
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const = 0;
+            INVALID,
+            IF,
+            ELIF,
+            ELSE,
+            RAISE,
+            PRINT,
+            EXPORT,
+            WHILE,
+            FOR,
+            BREAK,
+            CONTINUE,
+            DECL,
+            EXPR
         };
 
-        class AstExpr :
-            public AstBlock
+        // Generic base class for all types of lines of code
+        struct AstLine
         {
-        public:
-            virtual ~AstExpr() {}
-            
-            virtual void append_vec(EvalCtx&, std::vector<std::shared_ptr<Obj>>&) const;
+            LineType ty;
         };
 
-        class AstBinOp :
-            public AstExpr
+        // Declarations in a struct or fn sequence
+        struct AstRegDecl
         {
-        protected:
-            AstExpr* pleft = nullptr;
-            AstExpr* pright = nullptr;
 
-        public:
-            virtual ~AstBinOp();
         };
 
-        class AstBool :
-            public AstExpr
+        // Carg parameters allowed in a AstArgDecl 
+        struct AstArgExpr
         {
-            bool val;
 
-        public:
-            AstBool(const Token* ptk, bool val);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
-        class AstInt :
-            public AstExpr
+        // Standard argument declaration - function varg or any carg
+        // Not allowed to have any tensor declarations
+        // Packing is allowed
+        struct AstArgDecl
         {
-            int64_t val;
 
-        public:
-            AstInt(const Token* ptk);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
-        class AstFloat :
-            public AstExpr
+        // Special argument declarations - def/intr varg
+        // Only tensor declarations are allowed
+        // Packing is allowed
+        struct AstVargDecl
         {
-            double val;
 
-        public:
-            AstFloat(const Token* ptk);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
         };
 
-        class AstStr :
-            public AstExpr
+        // Top level function definition
+        struct AstFn
         {
-            std::string val;
-
-        public:
-            AstStr(const Token* ptk);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstIdn :
-            public AstExpr
-        {
-            std::string idn;
-            
-        public:
-            AstIdn();
-            AstIdn(const Token* ptk);
-            AstIdn(const std::string& str);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstTuple :
-            public AstExpr
-        {
-            std::vector<AstExpr*> elems;
-
-        public:
-            AstTuple(const TokenArray& tarr);
-            virtual ~AstTuple();
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstCall :
-            public AstExpr
-        {
-            AstExpr* pleft;
-            std::vector<AstExpr*> args;
-
-        public:
-            AstCall(AstExpr* pleft, const TokenArray& tarr);
-            virtual ~AstCall();
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstCargs :
-            public AstExpr
-        {
-            AstExpr* pleft;
-            std::vector<AstExpr*> args;
-
-        public:
-            AstCargs(AstExpr* pleft, const TokenArray& tarr);
-            virtual ~AstCargs();
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstIdx :
-            public AstExpr
-        {
-            AstExpr* pleft;
-            AstExpr* pidx;
-            //std::vector<std::vector<AstExpr*>> indicies;
-
-        public:
-            AstIdx(AstExpr* pleft, const TokenArray& tarr);
-            virtual ~AstIdx();
-            //void parseSlice(const TokenArray& tarr);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstDot :
-            public AstExpr
-        {
-            AstExpr* pleft;
-            std::string member;
-
-        public:
-            AstDot(AstExpr* pleft, const Token* ptk);
-            virtual ~AstDot();
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstNeg :
-            public AstExpr
-        {
-            AstExpr* pexpr;
-
-        public:
-            AstNeg(const TokenArray& tarr);
-            virtual ~AstNeg();
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstPack :
-            public AstExpr
-        {
-            AstExpr* pexpr;
-
-        public:
-            AstPack(const TokenArray& tarr);
-            virtual ~AstPack();
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-            virtual void append_vec(EvalCtx&, std::vector<std::shared_ptr<Obj>>&) const;
-        };
-
-        class AstAdd :
-            public AstBinOp
-        {
-        public:
-            AstAdd(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-        
-        class AstSub :
-            public AstBinOp
-        {
-        public:
-            AstSub(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-        
-        class AstMul :
-            public AstBinOp
-        {
-        public:
-            AstMul(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-        
-        class AstDiv :
-            public AstBinOp
-        {
-        public:
-            AstDiv(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstEq :
-            public AstBinOp
-        {
-        public:
-            AstEq(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstNe :
-            public AstBinOp
-        {
-        public:
-            AstNe(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstGe :
-            public AstBinOp
-        {
-        public:
-            AstGe(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstLe :
-            public AstBinOp
-        {
-        public:
-            AstLe(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstGt :
-            public AstBinOp
-        {
-        public:
-            AstGt(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstLt :
-            public AstBinOp
-        {
-        public:
-            AstLt(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstAnd :
-            public AstBinOp
-        {
-        public:
-            AstAnd(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstOr :
-            public AstBinOp
-        {
-        public:
-            AstOr(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstIAdd :
-            public AstBinOp
-        {
-        public:
-            AstIAdd(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstISub :
-            public AstBinOp
-        {
-        public:
-            AstISub(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstIMul :
-            public AstBinOp
-        {
-        public:
-            AstIMul(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstIDiv :
-            public AstBinOp
-        {
-        public:
-            AstIDiv(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstAssign :
-            public AstBinOp
-        {
-            bool decl_assign;
-
-        public:
-            AstAssign(const TokenArray& left, const TokenArray& right);
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        // end of expression nodes
-        // block nodes
-
-        // simple variable delarations found in sequences
-        class AstDecl :
-            public AstExpr
-        {
-            friend class AstModule;
-
-            bool is_static;
-            std::string var_name;
-            AstIdn type_idn;
-            std::vector<AstExpr*> cargs;
-            bool has_cargs;
-
-        public:
-            AstDecl();
-            AstDecl(const TokenArray& tarr);
-            virtual ~AstDecl();
-
-            //  constructs a new object with the given cargs
-            //  adds the new object's name to the scope
-            //  if state is DEFSEQ and type is tensor: 
-            //      add the tensor as a graph input edge
-            //
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const override;  // returns null
-        };
-
-        class AstPrint :
-            public AstBlock
-        {
-            AstExpr* val;
-
-        public:
-            AstPrint(const TokenArray& tarr);
-            virtual ~AstPrint();
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstReturn :
-            public AstBlock
-        {
-            AstExpr* ret;
-
-        public:
-            AstReturn(const TokenArray& tarr);
-            virtual ~AstReturn();
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstRaise :
-            public AstBlock
-        {
-            AstExpr* val;
-
-        public:
-            AstRaise(const TokenArray& tarr);
-            virtual ~AstRaise();
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstSeq
-        {
-            uint32_t line_num;
-            uint32_t col_num;
-
-            std::vector<AstBlock*> blocks;
-
-        public:
-            AstSeq(const TokenArray& tarr, int indent_level);
-            AstSeq(const AstSeq&) = delete;
-            AstSeq(AstSeq&&) noexcept;
-            ~AstSeq();
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstIf :
-            public AstBlock
-        {
-            AstExpr* pcond;
-            AstSeq seq;
-
-        public:
-            AstIf(const TokenArray& if_sig, const TokenArray& if_seq, int indent_level);
-            virtual ~AstIf();
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstWhile :
-            public AstBlock
-        {
-            AstExpr* pcond;
-            AstSeq seq;
-
-        public:
-            AstWhile(const TokenArray& while_sig, const TokenArray& whlie_seq, int indent_level);
-            virtual ~AstWhile();
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstFor :
-            public AstBlock
-        {
-            AstDecl it;
-            AstExpr* pexpr;
-            AstSeq seq;
-
-        public:
-            AstFor(const TokenArray& for_sig, const TokenArray& for_seq, int indent_level);
-            virtual ~AstFor();
-
-            virtual std::shared_ptr<Obj> eval(EvalCtx& ctx) const;
-        };
-
-        class AstCargSig
-        {
-        public:
-            virtual ~AstCargSig() {}
-
-            virtual std::vector<std::shared_ptr<Obj>>::iterator match_args(
-                EvalCtx& ctx,
-                std::vector<std::shared_ptr<Obj>>::iterator start,
-                std::vector<std::shared_ptr<Obj>>::iterator end) const = 0;
-        };
-
-        class AstCargDecl :
-            public AstCargSig
-        {
-            uint32_t line_num;
-            uint32_t col_num;
-
-            bool is_packed;
-            std::string var_name;
-            AstIdn type_idn;
-            std::vector<AstExpr*> cargs;
-            bool has_cargs;
-
-        public:
-            AstCargDecl(const TokenArray& tarr);
-            virtual ~AstCargDecl();
-
-            virtual std::vector<std::shared_ptr<Obj>>::iterator match_args(
-                EvalCtx& ctx,
-                std::vector<std::shared_ptr<Obj>>::iterator start,
-                std::vector<std::shared_ptr<Obj>>::iterator end) const override;
-        };
-
-        class AstCargTuple :
-            public AstCargSig
-        {
-            std::vector<AstCargSig*> elems;
-
-        public:
-            AstCargTuple(const TokenArray& tarr);
-            virtual ~AstCargTuple();
-
-            virtual std::vector<std::shared_ptr<Obj>>::iterator match_args(
-                EvalCtx& ctx,
-                std::vector<std::shared_ptr<Obj>>::iterator start,
-                std::vector<std::shared_ptr<Obj>>::iterator end) const override;
-        };
-
-        class AstArgSig
-        {
-        public:
-            virtual ~AstArgSig() {}
-
-            using Iter = std::vector<std::shared_ptr<Obj>>::iterator;
-            virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const = 0;
-            virtual void eval(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const = 0;
-        };
-
-        // Immediate arg carg parameter (any expression)
-        class AstArgImm :
-            public AstArgSig
-        {
-            AstExpr* pimm;
-
-        public:
-            AstArgImm(const TokenArray& tarr);
-            virtual ~AstArgImm();
-
-            virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const override;
-            virtual void eval(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const;
-        };
-
-        class AstArgVar :
-            public AstArgSig
-        {
-            bool is_packed;
-            std::string var_name;
-            mutable bool pseudo_imm;
-
-        public:
-            AstArgVar(const TokenArray& tarr);
-
-            virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const override;
-            virtual void eval(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const;
-        };
-
-        class AstArgDecl :
-            public AstArgSig
-        {
-            std::string type_name;
-            std::vector<AstArgSig*> cargs;
-            bool has_cargs;
-            
-        public:
-            AstArgDecl(const TokenArray& tarr);
-            AstArgDecl(const AstArgDecl&) = delete;
-            AstArgDecl(AstArgDecl&&) noexcept;
-            virtual ~AstArgDecl();
-
-            virtual Iter carg_deduction(EvalCtx& ctx, const Iter& start, const Iter& end) const override;
-            virtual void eval(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const;
-            // Used for generating the top level def arguments
-            virtual std::shared_ptr<Obj> auto_gen(EvalCtx& ctx, const std::string& name) const;
-        };
-
-        // root node
-        class AstDef
-        {
-            uint32_t line_num;
-            uint32_t col_num;
-
-            AstSeq block;
             std::string name;
 
-            AstCargTuple* cargs;
-            std::vector<std::pair<AstArgDecl, std::string>> vargs;
-
-        public:
-            AstDef(const TokenArray& def_sig, const TokenArray& def_block);
-            AstDef(const AstDef&) = delete;
-            AstDef(AstDef&&) noexcept;
-            ~AstDef();
-
-            void eval(EvalCtx& ctx) const;
-            void apply_cargs(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const;
-            void carg_deduction(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& args) const;
-            
-            const std::string& get_name() const;
-            const AstSeq& get_body() const;
-            const decltype(vargs)& get_vargs() const;
         };
 
-        class AstIntr
+        // Top level block definition
+        struct AstDef
         {
-            uint32_t line_num;
-            uint32_t col_num;
-            
-            AstSeq block;
+
+        };
+
+        // Top level intrinsic definition
+        struct AstIntr
+        {
             std::string name;
-
-            AstCargTuple* cargs;
-            std::vector<std::pair<AstArgDecl, std::string>> vargs;
-
-        public:
-            AstIntr(const TokenArray& intr_sig, const TokenArray& intr_block);
-            AstIntr(const AstIntr&) = delete;
-            AstIntr(AstIntr&&) noexcept;
-            ~AstIntr();
-
-            void eval(EvalCtx& ctx) const;
-            void apply_cargs(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& cargs) const;
-            void carg_deduction(EvalCtx& ctx, std::vector<std::shared_ptr<Obj>>& args) const;
-
-            const std::string& get_name() const;
-            const AstSeq& get_body() const;
+            std::vector<AstArgDecl> cargs;
+            std::vector<AstVargDecl> vargs;
+            std::vector<AstLine*> lines;
         };
 
-        class AstFn
+        // Top level structure definition
+        struct AstStruct
         {
-            uint32_t line_num;
-            uint32_t col_num;
-
-            AstSeq block;
             std::string name;
-
-            // fn args behave the same as def/intr cargs
-            AstCargTuple* args;
-
-        public:
-            AstFn(const TokenArray& fn_sig, const TokenArray& fn_block);
-            AstFn(const AstFn&) = delete;
-            AstFn(AstFn&&) noexcept;
-            ~AstFn();
-
-            void eval(EvalCtx& ctx) const;
-
-            const std::string& get_name() const;
-            const AstSeq& get_body() const;
+            std::vector<AstArgDecl> cargs;
+            std::vector<AstRegDecl> decls;
         };
 
-        class AstModImp
+        struct AstImport
         {
-            friend class AstModule;
-
-            uint32_t line_num;
-            uint32_t col_num;
-
             std::vector<std::string> imp;
-
-        public:
-            AstModImp(const TokenArray& tarr);
-
-            void eval(EvalCtx& ctx) const;
         };
 
-        class AstModule
+        struct AstModule
         {
-        public:
-            std::vector<AstModImp> imps;
+            std::string fname;
+            std::vector<AstImport> imports;
+            std::vector<AstStruct> structs;
+            std::vector<AstFn> funcs;
             std::vector<AstDef> defs;
-            std::vector<AstFn> fns;
             std::vector<AstIntr> intrs;
-
-            AstModule(const TokenArray& tarr);
-
-            EvalCtx* eval(const std::string& entry_point, const std::vector<std::shared_ptr<Obj>>& cargs);
         };
+
+        AstRegDecl  parse_reg_decl  (const TokenArray& tarr);
+        AstLine*    parse_line      (const TokenArray& tarr);
+
+        AstArgDecl  parse_arg_decl  (const TokenArray& tarr);
+        AstVargDecl parse_varg_decl (const TokenArray& tarr);
+
+        AstFn       parse_fn        (const TokenArray& tarr);
+        AstDef      parse_def       (const TokenArray& tarr);
+        AstIntr     parse_intr      (const TokenArray& tarr);
+        AstStruct   parse_struct    (const TokenArray& tarr);
+        AstImport   parse_import    (const TokenArray& tarr);
+        AstModule   parse_module    (const TokenArray& tarr);
     }
 }
 

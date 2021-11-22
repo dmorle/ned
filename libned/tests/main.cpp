@@ -15,7 +15,7 @@ int main()
     {
         FILE* pf = fopen(TESTS_DIR"test.nn", "rb");
         TokenArray tarr{};
-        lex_file(pf, tarr);
+        lex_file(TESTS_DIR"test.nn", pf, tarr);
         fclose(pf);
         AstModule* pmod = new AstModule{ tarr };
         EvalCtx* pctx = pmod->eval("model", { create_obj_int(10) });

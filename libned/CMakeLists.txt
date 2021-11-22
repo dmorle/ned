@@ -10,7 +10,7 @@ add_library(
 
     "source/lang/eval.cpp"
     "source/lang/obj.cpp"
-    "source/lang/ast.cpp"
+    
     "source/lang/lexer.cpp"
 
     "include/ned/core/tensor.h"
@@ -20,6 +20,7 @@ add_library(
     "include/ned/lang/obj.h"
     "include/ned/lang/ast.h"
     "include/ned/lang/lexer.h"
+    
 )
 
 set_property(TARGET libned PROPERTY LINKER_LANGUAGE CXX)

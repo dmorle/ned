@@ -6,35 +6,54 @@ fn range(int n):
         i += 1
     return result
 
-
-fn zip(array head, array* tail):
-    for array arr in tail:
-        if head.length != arr.length:
-            raise "Array length mismatch for zip"
-    array<type, tail.length + 1> dtype_data
-    dtype_data[0] = head.dtype
-    for int i in range(tail.length):
-        dtype_data[i + 1] = tail[i].dtype
-    
-    array<dtype_data, head.length> result;
-    for int i in range(head.length):
-        result[i][0] = head[i]
-        for int j in range(tail.length):
-            result[i][j + 1] = tail[j][i]
+fn zip<type T, type U, int N>(array<T, N> arr1, array<T, N> arr2):
+    array<tuple<T, U>, N> result
+    for int i in range(N):
+        result[i][0] = arr1[i]
+        result[i][1] = arr2[i]
     return result
 
+fn enumerate<type T, int N>(array<T, N> data):
+    return zip(range(N), data)
 
-fn enumerate(array data):
-    array<tuple<int, data.dtype>, data.length> result
-    for int i in range(data.length):
-        result[i][0] = i
-        result[i][1] = data[i]
+struct node<type T>:
+    T val
+    bool has_val
+    node<T> next
+
+struct list<type T>:
+    node<T> root
+    node<T> end
+    int size
+
+fn create<type T>():
+    list<T> list
+    list.end = list.root
+    list.size = 0
+    return list
+
+fn append<type T>(list<T> self, T val):
+    self.end.has_val = true
+    self.end.val = val
+    node<T> new_end
+    self.end.next = new_end
+    self.end = new_end
+    self.size += 1
+
+fn to_array<type T>(list<T> self):
+    array<T, self.size> result
+    node<T> nd = self.root
+    for i in range(nd.size):
+        result[i] = nd.val
+        nd = nd.next
     return result
-
 
 fn format(string fmt, string *params):
     raise "Not implemented"
 
+intr add_same_intr<fptype fout, fptype f1, fptype f2, int *shape>(tensor<f1, *shape> left, tensor<f2, *shape> right):
+    tensor<fout, *shape> out
+    return out
 
 intr const<float val>():
     tensor<1> out

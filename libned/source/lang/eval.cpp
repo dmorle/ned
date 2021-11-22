@@ -534,7 +534,7 @@ namespace nn
             return create_obj_invalid();
         }
 
-        std::shared_ptr<Obj> AstDecl::eval(EvalCtx& ctx) const
+        std::shared_ptr<Obj> AstSeqDecl::eval(EvalCtx& ctx) const
         {
             std::shared_ptr<Obj> dtype = type_idn.eval(ctx);
             if (has_cargs)

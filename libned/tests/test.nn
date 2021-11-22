@@ -1,3 +1,24 @@
+struct sub_data<struct T, int N>:
+    T m_data
+    array<str, N> str_list
+
+struct data:
+    int x
+    def y
+    intr z
+    fn w
+    bool has_data
+    data sub_data
+
+fn func():
+    data d
+    d.x = 0
+    d.y = xavier
+    d.z = add
+    d.w = func
+    d.has_data = false
+    d.data
+
 intr add<fwidth fw, int *shape>(tensor<fw, *shape> t1, tensor<fw, *shape> t2):
     tensor<fw, *shape> out
     return out
