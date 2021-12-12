@@ -14,19 +14,19 @@ namespace nn
     {
         enum class ObjType
         {
-            TYPE,     // Type object
             INVALID,  // Invalid object type
-            VAR,      // Generic object which destroys itself as soon as it gets the chance
-            FWIDTH,   // Float widths for tensors, ie f16, f32, f64
+            TYPE,     // Type object
             BOOL,     // Boolean
+            FWIDTH,   // Float widths for tensors, ie f16, f32, f64
             INT,      // Integer
             FLOAT,    // Floating point
             STR,      // String
             ARRAY,    // Array - Fixed length
             TUPLE,    // Tuple - mainly for cargs
             TENSOR,   // Tensor - Graph edge
-            DEF,      // Non-intrinsic block
+            STRUCT,   // Structure
             FN,       // Generation time helper function
+            DEF,      // Non-intrinsic block
             INTR,     // Intrinsic block
             MODULE,   // *.nn file
             PACKAGE,  // File folder (presumably with *.nn files in it)

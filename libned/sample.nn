@@ -1,20 +1,31 @@
-fn range(int n):
-    array<int, n> result
+fn min<type T>(T left, T right) -> T:
+    if left < right:
+        return left
+    return right
+
+fn max<type T>(T left, T right) -> T:
+    if left > right:
+        return left
+    return right
+
+fn range(int n) -> array<int>:
+    array<int> result
     int i = 0
     while i < n:
-        result[i] = i
+        result += [i]
         i += 1
     return result
 
-fn zip<type T, type U, int N>(array<T, N> arr1, array<T, N> arr2):
-    array<tuple<T, U>, N> result
-    for int i in range(N):
-        result[i][0] = arr1[i]
-        result[i][1] = arr2[i]
+fn zip<type T, type U>(array<T> arr1, array<U> arr2) -> array<tuple<T, U>>:
+    array<tuple<T, U>> result
+    for int i in range(min(len(arr1), len(arr2))):
+        result += (arr1[i], arr2[i])
     return result
 
-fn enumerate<type T, int N>(array<T, N> data):
-    return zip(range(N), data)
+fn map<type T, type U>
+
+fn enumerate<type T>(array<T> data):
+    return zip(range(len(data)), data)
 
 struct node<type T>:
     T val
@@ -23,13 +34,13 @@ struct node<type T>:
 
 struct list<type T>:
     node<T> root
-    node<T> end
     int size
 
 fn create<type T>():
-    list<T> list
-    list.end = list.root
-    list.size = 0
+    list<T> arr
+    node<T> head
+    arr.root = head
+    arr.size = 0
     return list
 
 fn append<type T>(list<T> self, T val):
@@ -58,7 +69,6 @@ intr add_same_intr<fptype fout, fptype f1, fptype f2, int *shape>(tensor<f1, *sh
 intr const<float val>():
     tensor<1> out
     return out
-
 
 intr reshape<int *out_shape, <int *inp_shape>>(tensor<*inp_shape> inp):
     int inp_size = 1

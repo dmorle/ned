@@ -8,19 +8,22 @@ add_library(
     "source/core/tensor.cpp"
     "source/core/graph.cpp"
 
+    "source/lang/ast.cpp"
+    "source/lang/bytecode.cpp"
+    "source/lang/errors.cpp"
     "source/lang/eval.cpp"
-    "source/lang/obj.cpp"
-    
     "source/lang/lexer.cpp"
+    "source/lang/obj.cpp"
 
     "include/ned/core/tensor.h"
     "include/ned/core/graph.h"
     
-    "include/ned/lang/eval.h"
-    "include/ned/lang/obj.h"
     "include/ned/lang/ast.h"
+    "include/ned/lang/bytecode.h"
+    "include/ned/lang/errors.h"
+    "include/ned/lang/eval.h"
     "include/ned/lang/lexer.h"
-    
+    "include/ned/lang/obj.h"
 )
 
 set_property(TARGET libned PROPERTY LINKER_LANGUAGE CXX)

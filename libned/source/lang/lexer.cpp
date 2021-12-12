@@ -79,6 +79,8 @@ namespace nn
                 return "star operator '*'";
             case TokenType::DIV:
                 return "division operator '/'";
+            case TokenType::MOD:
+                return "division operator '%'";
             case TokenType::IADD:
                 return "assignment addition operator '+='";
             case TokenType::ISUB:
@@ -87,6 +89,8 @@ namespace nn
                 return "assingment multiplication operator'*='";
             case TokenType::IDIV:
                 return "assignment division operator '/='";
+            case TokenType::IMOD:
+                return "assignment division operator '%='";
             case TokenType::ASSIGN:
                 return "assignment operator '='";
             case TokenType::CMP_EQ:
@@ -159,16 +163,26 @@ namespace nn
                 return "keyword false";
             case TokenType::KW_RAISE:
                 return "keyword raise";
-            case TokenType::KW_PRINT:
-                return "keyword print";
             case TokenType::KW_EXPORT:
                 return "keyword export";
+            case TokenType::KW_EXTERN:
+                return "keyword extern";
             case TokenType::KW_F16:
                 return "keyword f16";
             case TokenType::KW_F32:
                 return "keyword f32";
             case TokenType::KW_F64:
                 return "keyword f64";
+            case TokenType::KW_PRINT:
+                return "keyword print";
+            case TokenType::KW_INSTOF:
+                return "keyword instof";
+            case TokenType::KW_TYPEOF:
+                return "keyword typeof";
+            case TokenType::KW_AND:
+                return "keyword and";
+            case TokenType::KW_OR:
+                return "or";
             default:
                 return "UNKNOWN TOKEN - PARSER BUG";
             }
@@ -210,6 +224,8 @@ namespace nn
                 return " * ";
             case TokenType::DIV:
                 return " / ";
+            case TokenType::MOD:
+                return " % ";
             case TokenType::IADD:
                 return " += ";
             case TokenType::ISUB:
@@ -218,6 +234,8 @@ namespace nn
                 return " *= ";
             case TokenType::IDIV:
                 return " /= ";
+            case TokenType::IMOD:
+                return " %= ";
             case TokenType::ASSIGN:
                 return " = ";
             case TokenType::CMP_EQ:
@@ -290,16 +308,26 @@ namespace nn
                 return "false";
             case TokenType::KW_RAISE:
                 return "raise";
-            case TokenType::KW_PRINT:
-                return "print";
             case TokenType::KW_EXPORT:
                 return "export";
+            case TokenType::KW_EXTERN:
+                return "extern";
             case TokenType::KW_F16:
                 return "f16";
             case TokenType::KW_F32:
                 return "f32";
             case TokenType::KW_F64:
                 return "f64";
+            case TokenType::KW_PRINT:
+                return "print";
+            case TokenType::KW_INSTOF:
+                return "instof";
+            case TokenType::KW_TYPEOF:
+                return "typeof";
+            case TokenType::KW_AND:
+                return " and ";
+            case TokenType::KW_OR:
+                return " or ";
             default:
                 return "unknown";
             }
@@ -546,6 +574,17 @@ namespace nn
                     }
                     tarr.push_back(TokenImp<TokenType::DIV>(fname, line_num, i - line_start));
                     break;
+                case '%':
+                    use_indents = false;
+
+                    if (bufsz - i >= 2 && buf[i + 1] == '=')
+                    {
+                        tarr.push_back(TokenImp<TokenType::IMOD>(fname, line_num, i - line_start));
+                        i += 2;
+                        continue;
+                    }
+                    tarr.push_back(TokenImp<TokenType::MOD>(fname, line_num, i - line_start));
+                    break;
                 case '!':
                     use_indents = false;
 
@@ -782,11 +821,11 @@ namespace nn
                     case hash("raise"):
                         tarr.push_back(TokenImp<TokenType::KW_RAISE>(fname, line_num, col_num));
                         continue;
-                    case hash("print"):
-                        tarr.push_back(TokenImp<TokenType::KW_PRINT>(fname, line_num, col_num));
-                        continue;
                     case hash("export"):
                         tarr.push_back(TokenImp<TokenType::KW_EXPORT>(fname, line_num, col_num));
+                        continue;
+                    case hash("extern"):
+                        tarr.push_back(TokenImp<TokenType::KW_EXTERN>(fname, line_num, col_num));
                         continue;
                     case hash("f16"):
                         tarr.push_back(TokenImp<TokenType::KW_F16>(fname, line_num, col_num));
@@ -796,6 +835,21 @@ namespace nn
                         continue;
                     case hash("f64"):
                         tarr.push_back(TokenImp<TokenType::KW_F64>(fname, line_num, col_num));
+                        continue;
+                    case hash("print"):
+                        tarr.push_back(TokenImp<TokenType::KW_PRINT>(fname, line_num, col_num));
+                        continue;
+                    case hash("instof"):
+                        tarr.push_back(TokenImp<TokenType::KW_INSTOF>(fname, line_num, col_num));
+                        continue;
+                    case hash("typeof"):
+                        tarr.push_back(TokenImp<TokenType::KW_TYPEOF>(fname, line_num, col_num));
+                        continue;
+                    case hash("and"):
+                        tarr.push_back(TokenImp<TokenType::KW_AND>(fname, line_num, col_num));
+                        continue;
+                    case hash("or"):
+                        tarr.push_back(TokenImp<TokenType::KW_OR>(fname, line_num, col_num));
                         continue;
                     }
                     
@@ -864,12 +918,24 @@ namespace nn
 
         IsSameCriteria::IsSameCriteria(TokenType ty) : ty(ty) {}
 
-        int IsSameCriteria::accept(const Token* ptk, int idx) { return (idx + 1) * (ptk->ty == ty) - 1; }
+        int IsSameCriteria::accept(const Token* ptk, int idx)
+        {
+            count_token(ptk);
+            return (idx + 1) * (!in_bracket() && ptk->ty == ty) - 1;
+        }
 
         int CargEndCriteria::accept(const Token* ptk, int idx)
         {
             count_token(ptk);
             if (!in_bracket() && (ptk->ty == TokenType::ANGLE_C || ptk->ty == TokenType::COMMA))
+                return idx;
+            return -1;
+        }
+
+        int VargEndCriteria::accept(const Token* ptk, int idx)
+        {
+            count_token(ptk);
+            if (!in_bracket() && (ptk->ty == TokenType::ROUND_C || ptk->ty == TokenType::COMMA))
                 return idx;
             return -1;
         }

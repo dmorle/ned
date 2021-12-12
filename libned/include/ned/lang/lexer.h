@@ -38,10 +38,12 @@ namespace nn
             SUB,
             STAR,
             DIV,
+            MOD,
             IADD,
             ISUB,
             IMUL,
             IDIV,
+            IMOD,
             ASSIGN,
             CMP_EQ,
             CMP_NE,
@@ -80,11 +82,16 @@ namespace nn
             KW_TRUE,
             KW_FALSE,
             KW_RAISE,
-            KW_PRINT,
             KW_EXPORT,
+            KW_EXTERN,
             KW_F16,
             KW_F32,
-            KW_F64
+            KW_F64,
+            KW_PRINT,
+            KW_INSTOF,
+            KW_TYPEOF,
+            KW_AND,
+            KW_OR
         };
 
         template<TokenType T>
@@ -401,7 +408,8 @@ namespace nn
             bool in_bracket() const;
         };
 
-        class IsSameCriteria
+        class IsSameCriteria :
+            public BracketCounter
         {
             TokenType ty;
         public:
@@ -410,6 +418,13 @@ namespace nn
         };
 
         class CargEndCriteria :
+            public BracketCounter
+        {
+        public:
+            int accept(const Token* ptk, int idx);
+        };
+
+        class VargEndCriteria :
             public BracketCounter
         {
         public:

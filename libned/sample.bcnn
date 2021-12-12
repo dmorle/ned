@@ -1,0 +1,155 @@
+.fn min<type T>(T, T)
+    ; if left < right:
+    dup   1
+    dup   1
+    lt
+    brf   end
+    ; return left
+    pop   0
+    ret   1
+
+:end
+    ; return right
+    pop   1
+    ret   1
+
+.fn max<type T>(T, T)
+    ; if left > right:
+    dup   1
+    dup   1
+    gt
+    brf   end
+    ; return left
+    pop   0
+    ret   1
+
+:end
+    ; return right
+    pop   1
+    ret   1
+
+.fn range<>(int)
+    ; array<int> result
+    new   type int    ; Empty integer type
+    new   type array  ; Empty array type
+    carg  1           ; Creating array<int>
+    inst              ; Instantiating array<int>
+
+    ; int i = 0
+    new   type int    ; Creating the i variable
+    inst
+    new   int 0       ; Pushing 0 onto the stack
+    set               ; Setting i = 0
+
+    ; while i < n:
+:loop
+    dup   0           ; Duplicating i
+    dup   2           ; Duplicating n
+    lt                ; Checking the less than condition
+    brf   end         ; While loop condition
+
+    ; result += [i]
+    dup   1           ; Duplicating result (assignment)
+    dup   2           ; Duplicating result (addition)
+    dup   2           ; Duplicating i
+    arr   1           ; Creating [i]
+    add               ; Computing result + [i]
+    set               ; Setting result = result + [i]
+    pop   0           ; Removing the result of set from the stack
+
+    ; i += 1
+    dup   0           ; Duplicating i (assignment)
+    dup   0           ; Duplicating i (addition)
+    new   int 1       ; Pushing 1 onto the stack
+    add               ; Computing i + 1
+    set               ; Setting i = i + 1
+    pop   0           ; Removing the result of set from the stack
+
+    jmp   loop        ; Looping
+
+:end
+    ; return result
+    pop   0           ; Removing i from the stack
+    ret   1           ; Returning the array
+
+.fn zip<type T, type U>(array<T>, array<U>)
+    ; array<tuple<T, U>> result
+    dup   3
+    dup   3
+    new   type tuple
+    carg  2
+    new   type array
+    carg  1
+    inst
+
+    ; for int i in range(min(len(arr1), len(arr2))):
+    dup   2           ; range(min(len(arr1), len(arr2)))
+    len
+    dup   2
+    len
+    new   fn min
+    call
+    new   fn range
+    call
+    dup   0           ; Finding the length of the iterable
+    len
+    new   int 0       ; Creating a variable to iterate through the iterable
+    new   type int    ; int i
+    inst
+:loop
+    dup   2           ; Exit condition
+    dup   2
+    eq
+    brt   end
+    dup   3           ; Getting the element from the iterable
+    dup   2
+    idx
+    set               ; Setting it to the declared iterator (Top of stack)
+
+
+:end
+
+.struct node<type T>
+    ; T val
+    dup   0
+    inst
+
+    ; bool has_val
+    new   type bool
+    inst
+
+    ; node<T> next
+    dup   2
+    new   struct node
+    carg  1
+    inst
+
+    tup   3
+    ret   1
+
+.struct list
+    ; node<T> root
+    dup   0
+    new   struct node
+    carg  1
+    inst
+
+    ; int size
+    new   type int
+    inst
+
+    tup   2
+    ret   1
+
+.fn create
+    ; list<T> arr
+    dup   0
+    new   struct list
+    carg  1
+    call
+
+    ; node<T> head
+    dup   1
+    new   struct node
+    carg  1
+    call
