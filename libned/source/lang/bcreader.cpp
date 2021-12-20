@@ -101,7 +101,14 @@ namespace nn
             while (*buf && is_whitespace(*buf)) buf++;
             if (*buf != '.')
                 throw SyntaxError(line_num, col_num, "Invalid start of bytecode block");
+            
+            if (!*++buf)
+                throw SyntaxError(line_num, col_num, "Invalid start of bytecode block");
+            char type_name[128];
 
+            char* end = buf;
+            TokenArray tarr;
+            lex_buf("bytecode module", buf, end - buf, tarr, line_num, col_num);
             // TODO: parse block signatures
         }
 

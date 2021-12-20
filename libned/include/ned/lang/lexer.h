@@ -1,16 +1,11 @@
 #ifndef NED_LEXER_H
 #define NED_LEXER_H
 
+#include <ned/lang/errors.h>
+
 #include <vector>
 #include <string>
-#if __cplusplus >= 202002L
-#include <format>
-#else
-namespace std {
-    template<class... Args>
-    string format(const string& fmt, const Args&...) { return fmt; }
-}
-#endif
+#include <cassert>
 
 #define FNAME_SIZE 256
 #define IDN_SIZE   64
@@ -91,7 +86,8 @@ namespace nn
             KW_INSTOF,
             KW_TYPEOF,
             KW_AND,
-            KW_OR
+            KW_OR,
+            KW_NOT,
         };
 
         template<TokenType T>
@@ -99,6 +95,8 @@ namespace nn
 
         class Token
         {
+            friend class TokenArray;
+
         public:
             TokenType ty = TokenType::INVALID;
             char fname[FNAME_SIZE];
@@ -107,71 +105,20 @@ namespace nn
             uint32_t col_num;
 
             Token(const char* fname, uint32_t sz, uint32_t line_num, uint32_t col_num) :
-                sz(sz),
-                line_num(line_num),
-                col_num(col_num)
-            {
-                strncpy(this->fname, fname, 256);
-            }
+                sz(sz), line_num(line_num), col_num(col_num) { strncpy(this->fname, fname, 256); }
 
             // useful utilities
 
             bool is_whitespace() const { return ty == TokenType::INDENT || ty == TokenType::ENDL; }
-            template<TokenType TY> TokenImp<TY>& get() {
-                if (ty != TY) throw SyntaxError(this, "Expected {}, found {}", to_string(ty), to_string(TY));
-                return *reinterpret_cast<TokenImp<TY>*>(this); }
-            template<TokenType TY> const TokenImp<TY>& get() const {
-                if (ty != TY) throw SyntaxError(this, "Expected {}, found {}", to_string(ty), to_string(TY));
-                return *reinterpret_cast<const TokenImp<TY>*>(this); }
+            template<TokenType TY> TokenImp<TY>& get() { assert(ty != TY); return *reinterpret_cast<TokenImp<TY>*>(this); }
+            template<TokenType TY> const TokenImp<TY>& get() const { assert(ty != TY); return *reinterpret_cast<const TokenImp<TY>*>(this); }
+            template<TokenType TY> bool expect(ParsingErrors& errs) const {
+                if (ty == TY) return false; return errs.add(*this, "Expected {}, found {}", to_string(TY), to_string(ty)); }
         };
 
+        template<TokenType TY> constexpr const TokenImp<TY>& create_default(Token* ptk);
         constexpr std::string to_string(const TokenType ty);
         std::string to_string(const Token* ptk);
-
-        class SyntaxError :
-            public std::exception
-        {
-        public:
-            std::string errmsg;
-            size_t line_num;
-            size_t col_num;
-
-            SyntaxError(size_t line_num, size_t col_num, const std::string& fmt)
-            {
-                this->line_num = line_num;
-                this->col_num = col_num;
-                this->errmsg = fmt;
-            }
-
-            template<typename... Args>
-            SyntaxError(size_t line_num, size_t col_num, const std::string& fmt, const Args&... args)
-            {
-                this->line_num = line_num;
-                this->col_num = col_num;
-                this->errmsg = std::format(fmt, args...);
-            }
-
-            template<typename... Args>
-            SyntaxError(const Token* ptoken, const std::string& fmt, const Args&... args)
-            {
-                this->line_num = ptoken->line_num;
-                this->col_num = ptoken->col_num;
-                this->errmsg = std::format(fmt, args...);
-            }
-
-            template<typename... Args>
-            SyntaxError(const Token& token, const std::string& fmt, const Args&... args)
-            {
-                this->line_num = token.line_num;
-                this->col_num = token.col_num;
-                this->errmsg = std::format(fmt, args...);
-            }
-
-            virtual char const* what() const
-            {
-                return errmsg.c_str();
-            }
-        };
 
         template<TokenType T>
         class TokenImp :
@@ -318,6 +265,7 @@ namespace nn
             template<TokenType T>
             void push_back(const TokenImp<T>& tk)
             {
+                sizeof(Token);
                 constexpr size_t nsz = sizeof(TokenImp<T>);
                 if (is_slice)
                     throw std::runtime_error("TokenArray slices are immutable");
@@ -394,7 +342,7 @@ namespace nn
             size_t* offsets = nullptr;
         };
 
-        void lex_buf(const char* fname, char* buf, size_t bufsz, TokenArray& tarr);
+        void lex_buf(const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num=1, uint32_t line_start=0);
         void lex_file(const char* fname, FILE* pf, TokenArray& tarr);
 
         class BracketCounter
@@ -414,6 +362,15 @@ namespace nn
             TokenType ty;
         public:
             IsSameCriteria(TokenType ty);
+            int accept(const Token* ptk, int idx);
+        };
+
+        class IsInCriteria :
+            public BracketCounter
+        {
+            std::vector<TokenType> tys;
+        public:
+            IsInCriteria(std::vector<TokenType> tys);
             int accept(const Token* ptk, int idx);
         };
 

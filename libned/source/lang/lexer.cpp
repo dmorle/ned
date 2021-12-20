@@ -183,6 +183,8 @@ namespace nn
                 return "keyword and";
             case TokenType::KW_OR:
                 return "or";
+            case TokenType::KW_NOT:
+                return "not";
             default:
                 return "UNKNOWN TOKEN - PARSER BUG";
             }
@@ -328,6 +330,8 @@ namespace nn
                 return " and ";
             case TokenType::KW_OR:
                 return " or ";
+            case TokenType::KW_NOT:
+                return " not ";
             default:
                 return "unknown";
             }
@@ -413,7 +417,7 @@ namespace nn
             offsets = std::move(tarr.offsets);
             tarr.pbuf = nullptr;
         }
-
+        
         TokenArray& TokenArray::operator=(TokenArray&& tarr) noexcept
         {
             if (this == &tarr)
@@ -448,10 +452,8 @@ namespace nn
         }
 #endif
 
-        void lex_buf(const char* fname, char* buf, size_t bufsz, TokenArray& tarr)
+        void lex_buf(const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num, uint32_t line_start)
         {
-            uint32_t line_num = 1;
-            uint32_t line_start = 0;
             bool use_indents = true;
 
             for (uint32_t i = 0; i < bufsz;)
@@ -851,6 +853,9 @@ namespace nn
                     case hash("or"):
                         tarr.push_back(TokenImp<TokenType::KW_OR>(fname, line_num, col_num));
                         continue;
+                    case hash("not"):
+                        tarr.push_back(TokenImp<TokenType::KW_NOT>(fname, line_num, col_num));
+                        continue;
                     }
                     
                     TokenImp<TokenType::IDN> tk(fname, line_num, col_num);
@@ -922,6 +927,14 @@ namespace nn
         {
             count_token(ptk);
             return (idx + 1) * (!in_bracket() && ptk->ty == ty) - 1;
+        }
+
+        IsInCriteria::IsInCriteria(std::vector<TokenType> tys) : tys(tys) {}
+
+        int IsInCriteria::accept(const Token* ptk, int idx)
+        {
+            count_token(ptk);
+            return (idx + 1) * (!in_bracket() && std::find(tys.begin(), tys.end(), ptk->ty) != tys.end());
         }
 
         int CargEndCriteria::accept(const Token* ptk, int idx)
