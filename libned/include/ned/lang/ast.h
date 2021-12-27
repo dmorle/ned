@@ -44,21 +44,76 @@ namespace nn
             BINARY_CMP_LT,
             BINARY_CMP_GE,
             BINARY_CMP_LE,
+            BINARY_IDX,
             DOT,
+            VAR_DECL,
             CARGS_CALL,
             VARGS_CALL,
-            DECL
+            FN_DECL,
+            DEF_DECL,
+            KW,
+            VAR
+        };
+
+        // Code Block signatures
+
+        struct AstArgDecl
+        {
+            bool is_packed = false;
+            AstExpr type_expr;  // The expression that was used to define the pased type
+            std::string var_name;
+        };
+
+        // Top level structure definition (struct)
+        struct AstStructSig
+        {
+            std::string name;
+            std::vector<AstArgDecl> cargs;
+        };
+
+        // Top level function definition (fn)
+        struct AstFnSig
+        {
+            std::string name;
+            std::vector<AstArgDecl> cargs;
+            std::vector<AstArgDecl> vargs;
+            std::vector<AstExpr> rets;
+        };
+
+        // Top level block / intrinsic definition (def/intr)
+        struct AstBlockSig
+        {
+            std::string name;
+            std::vector<AstArgDecl> cargs;
+            std::vector<AstArgDecl> vargs;
+            std::vector<std::string> rets;
+        };
+
+        enum class ExprKW
+        {
+            TYPE,
+            VAR,
+            FP,
+            BOOL,
+            INT,
+            FLOAT,
+            STR,
+            ARRAY,
+            TUPLE,
+            F16,
+            F32,
+            F64
         };
 
         // Linear aggregate types (array, tuple)
         struct AstExprAggLit
         {
-            std::vector<AstExpr> elems;
+            std::vector<AstExpr> elems = {};
         };
 
         struct AstExprUnaryOp
         {
-            AstExpr* expr;
+            AstExpr* expr = nullptr;
 
             ~AstExprUnaryOp();
         };
@@ -71,29 +126,20 @@ namespace nn
             ~AstExprBinaryOp();
         };
 
-        struct AstExprDot
+        struct AstExprName
         {
-            AstExpr* expr;
-            std::string val;
+            AstExpr* expr = nullptr;
+            std::string val = "";
 
-            ~AstExprDot();
+            ~AstExprName();
         };
 
         struct AstExprCall
         {
-            AstExpr* callee;
-            std::vector<AstExpr> args;
+            AstExpr* callee = nullptr;
+            std::vector<AstExpr> args = {};
 
             ~AstExprCall();
-        };
-
-        struct AstExprDecl
-        {
-            AstExpr* type;
-            std::vector<AstExpr> cargs;
-            std::string name;
-
-            ~AstExprDecl();
         };
 
         struct AstExpr
@@ -102,15 +148,17 @@ namespace nn
             union
             {
                 bool expr_bool;
+                ExprKW expr_kw;
                 int64_t expr_int;
                 double expr_float;
                 std::string expr_string;
                 AstExprAggLit expr_agg;
                 AstExprUnaryOp expr_unary;
                 AstExprBinaryOp expr_binary;
-                AstExprDot expr_dot;
+                AstExprName expr_name;
                 AstExprCall expr_call;
-                AstExprDecl expr_decl;
+                AstFnSig expr_fn_decl;
+                AstBlockSig expr_def_decl;
             };
 
             AstExpr() {}
@@ -132,7 +180,6 @@ namespace nn
             ELSE,
             WHILE,
             FOR,
-            DECL,
             EXPR
         };
 
@@ -190,34 +237,27 @@ namespace nn
                 AstLineExpr       line_expr;
             };
 
+            AstLine() {}
             ~AstLine();
         };
 
-        // Argument declaration - varg or carg
-        // Packing is allowed
-        struct AstArgDecl
+        template<typename T>
+        concept CodeBlockSig =
+            std::is_same<T, AstStructSig>::value ||
+            std::is_same<T, AstFnSig>    ::value ||
+            std::is_same<T, AstBlockSig> ::value ;
+
+        // Top level block of code - contains a signature and body
+        template<CodeBlockSig SIG>
+        struct AstCodeBlock
         {
-            bool is_packed = false;
-            AstExpr type_expr;  // The expression that was used to define the pased type
-            std::string var_name;
+            SIG signature;
+            std::vector<AstLine> body;
         };
 
-        // Top level function / block / intrinsic definition
-        struct AstCallable
-        {
-            std::string name;
-            std::vector<AstArgDecl> cargs;
-            std::vector<AstArgDecl> vargs;
-            std::vector<AstLine> lines;
-        };
-
-        // Top level structure definition
-        struct AstStruct
-        {
-            std::string name;
-            std::vector<AstArgDecl> cargs;
-            std::vector<AstLine> decls;
-        };
+        using AstStruct = AstCodeBlock<AstStructSig>;
+        using AstFn     = AstCodeBlock<AstFnSig    >;
+        using AstBlock  = AstCodeBlock<AstBlockSig >;
 
         struct AstImport
         {
@@ -229,9 +269,9 @@ namespace nn
             std::string fname;
             std::vector<AstImport> imports;
             std::vector<AstStruct> structs;
-            std::vector<AstCallable> funcs;
-            std::vector<AstCallable> defs;
-            std::vector<AstCallable> intrs;
+            std::vector<AstFn>     funcs;
+            std::vector<AstBlock>  defs;
+            std::vector<AstBlock>  intrs;
         };
 
         // parse_* functions return true on failure, false on success
@@ -242,8 +282,11 @@ namespace nn
 
         bool parse_arg_decl   (ParsingErrors& errs, const TokenArray& tarr, AstArgDecl&);
 
-        bool parse_callable   (ParsingErrors& errs, const TokenArray& tarr, AstCallable&);
-        bool parse_struct     (ParsingErrors& errs, const TokenArray& tarr, AstStruct&);
+        bool parse_struct_sig (ParsingErrors& errs, const TokenArray& tarr, AstStructSig&);
+
+        template<CodeBlockSig SIG> bool parse_signature  (ParsingErrors& errs, const TokenArray& tarr, SIG& sig);
+        template<CodeBlockSig SIG> bool parse_code_block (ParsingErrors& errs, const TokenArray& tarr, AstCodeBlock<SIG>&);
+
         bool parse_import     (ParsingErrors& errs, const TokenArray& tarr, AstImport&);
         bool parse_module     (ParsingErrors& errs, const TokenArray& tarr, AstModule&);
     }

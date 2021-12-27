@@ -27,6 +27,7 @@ namespace nn
             SQUARE_O,
             SQUARE_C,
             DOT,
+            ARROW,  // ->
             COLON,
             COMMA,
             ADD,
@@ -66,14 +67,13 @@ namespace nn
             KW_ELSE,
             KW_TYPE,
             KW_VAR,
-            KW_FPTYPE,
+            KW_FP,
             KW_BOOL,
             KW_INT,
             KW_FLOAT,
             KW_STR,
             KW_ARRAY,
             KW_TUPLE,
-            KW_TENSOR,
             KW_TRUE,
             KW_FALSE,
             KW_RAISE,
@@ -83,8 +83,6 @@ namespace nn
             KW_F32,
             KW_F64,
             KW_PRINT,
-            KW_INSTOF,
-            KW_TYPEOF,
             KW_AND,
             KW_OR,
             KW_NOT,
@@ -342,8 +340,8 @@ namespace nn
             size_t* offsets = nullptr;
         };
 
-        void lex_buf(const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num=1, uint32_t line_start=0);
-        void lex_file(const char* fname, FILE* pf, TokenArray& tarr);
+        bool lex_buf(ParsingErrors& errs, const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num=1, uint32_t line_start=0);
+        bool lex_file(ParsingErrors& errs, const char* fname, FILE* pf, TokenArray& tarr);
 
         class BracketCounter
         {

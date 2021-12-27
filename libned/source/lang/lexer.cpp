@@ -67,6 +67,8 @@ namespace nn
                 return "closed square bracket ']'";
             case TokenType::DOT:
                 return "dot operator '.'";
+            case TokenType::ARROW:
+                return "arrow token '->'";
             case TokenType::COLON:
                 return "colon character ':'";
             case TokenType::COMMA:
@@ -141,8 +143,8 @@ namespace nn
                 return "keyword type";
             case TokenType::KW_VAR:
                 return "keyword var";
-            case TokenType::KW_FPTYPE:
-                return "keyword fptype";
+            case TokenType::KW_FP:
+                return "keyword fp";
             case TokenType::KW_BOOL:
                 return "keyword bool";
             case TokenType::KW_INT:
@@ -155,8 +157,6 @@ namespace nn
                 return "keyword array";
             case TokenType::KW_TUPLE:
                 return "keyword tuple";
-            case TokenType::KW_TENSOR:
-                return "keyword tensor";
             case TokenType::KW_TRUE:
                 return "keyword true";
             case TokenType::KW_FALSE:
@@ -175,10 +175,6 @@ namespace nn
                 return "keyword f64";
             case TokenType::KW_PRINT:
                 return "keyword print";
-            case TokenType::KW_INSTOF:
-                return "keyword instof";
-            case TokenType::KW_TYPEOF:
-                return "keyword typeof";
             case TokenType::KW_AND:
                 return "keyword and";
             case TokenType::KW_OR:
@@ -214,6 +210,8 @@ namespace nn
                 return "]";
             case TokenType::DOT:
                 return ".";
+            case TokenType::ARROW:
+                return " -> ";
             case TokenType::COLON:
                 return ":";
             case TokenType::COMMA:
@@ -288,8 +286,8 @@ namespace nn
                 return "type";
             case TokenType::KW_VAR:
                 return "var";
-            case TokenType::KW_FPTYPE:
-                return "fptype";
+            case TokenType::KW_FP:
+                return "fp";
             case TokenType::KW_BOOL:
                 return "bool";
             case TokenType::KW_INT:
@@ -302,8 +300,6 @@ namespace nn
                 return "array";
             case TokenType::KW_TUPLE:
                 return "tuple";
-            case TokenType::KW_TENSOR:
-                return "tensor";
             case TokenType::KW_TRUE:
                 return "true";
             case TokenType::KW_FALSE:
@@ -322,10 +318,6 @@ namespace nn
                 return "f64";
             case TokenType::KW_PRINT:
                 return "print";
-            case TokenType::KW_INSTOF:
-                return "instof";
-            case TokenType::KW_TYPEOF:
-                return "typeof";
             case TokenType::KW_AND:
                 return " and ";
             case TokenType::KW_OR:
@@ -452,7 +444,7 @@ namespace nn
         }
 #endif
 
-        void lex_buf(const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num, uint32_t line_start)
+        bool lex_buf(ParsingErrors& errs, const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num, uint32_t line_start)
         {
             bool use_indents = true;
 
@@ -596,7 +588,7 @@ namespace nn
                         i += 2;
                         continue;
                     }
-                    throw SyntaxError(line_num, i - line_start, "Expected '=' after '!'");
+                    return errs.add(line_num, i - line_start, "Expected '=' after '!'");
                 case '=':
                     use_indents = false;
 
@@ -617,7 +609,7 @@ namespace nn
                     for (i += 1; i < bufsz && sidx < 256 && buf[i] != '"'; i++, sidx++)
                         tk.val[sidx] = buf[i];
                     if (i >= bufsz)
-                        throw SyntaxError(tk.line_num, tk.col_num, "Missing closing '\"' for string literal");
+                        return errs.add(tk, "Missing closing '\"' for string literal");
                     if (sidx == 256)
                         throw std::overflow_error("buffer overflow for string literal during lexing");
                     assert(buf[i] == '"');
@@ -635,11 +627,20 @@ namespace nn
                     bool use_float = false;
                     if (buf[i] == '-')
                     {
-                        if (bufsz - i >= 2 && buf[i + 1] == '=')
+                        if (bufsz - i >= 2)
                         {
-                            tarr.push_back(TokenImp<TokenType::ISUB>(fname, line_num, col_num));
-                            i += 2;
-                            continue;
+                            if (buf[i + 1] == '=')
+                            {
+                                tarr.push_back(TokenImp<TokenType::ISUB>(fname, line_num, col_num));
+                                i += 2;
+                                continue;
+                            }
+                            else if (buf[i + 1] == '>')
+                            {
+                                tarr.push_back(TokenImp<TokenType::ARROW>(fname, line_num, col_num));
+                                i += 2;
+                                continue;
+                            }
                         }
                         i += 1;
                         if (bufsz == i || (!is_numeric(buf[i]) && buf[i] != '.'))  // not a number
@@ -655,7 +656,7 @@ namespace nn
                         }
                     }
                     if (i >= bufsz)
-                        throw SyntaxError(line_num, col_num, "Unexpected EOF while lexing integral type");
+                        return errs.add(line_num, col_num, "Unexpected EOF while lexing integral type");
                     if (is_numeric(buf[i]))
                     {
                         int64_t ival = 0;
@@ -729,7 +730,7 @@ namespace nn
 
                     // Only indentifiers and keywords are left
                     if (!is_idnstart(buf[i]))
-                        throw SyntaxError(line_num, col_num, "Unexpected characted '{}'", buf[i]);
+                        return errs.add(line_num, col_num, "Unexpected characted '{}'", buf[i]);
                     
                     char idn_buf[64];
                     int iidx = 0;
@@ -790,8 +791,8 @@ namespace nn
                     case hash("var"):
                         tarr.push_back(TokenImp<TokenType::KW_VAR>(fname, line_num, col_num));
                         continue;
-                    case hash("fptype"):
-                        tarr.push_back(TokenImp<TokenType::KW_FPTYPE>(fname, line_num, col_num));
+                    case hash("fp"):
+                        tarr.push_back(TokenImp<TokenType::KW_FP>(fname, line_num, col_num));
                         continue;
                     case hash("bool"):
                         tarr.push_back(TokenImp<TokenType::KW_BOOL>(fname, line_num, col_num));
@@ -810,9 +811,6 @@ namespace nn
                         continue;
                     case hash("tuple"):
                         tarr.push_back(TokenImp<TokenType::KW_TUPLE>(fname, line_num, col_num));
-                        continue;
-                    case hash("tensor"):
-                        tarr.push_back(TokenImp<TokenType::KW_TENSOR>(fname, line_num, col_num));
                         continue;
                     case hash("true"):
                         tarr.push_back(TokenImp<TokenType::KW_TRUE>(fname, line_num, col_num));
@@ -841,12 +839,6 @@ namespace nn
                     case hash("print"):
                         tarr.push_back(TokenImp<TokenType::KW_PRINT>(fname, line_num, col_num));
                         continue;
-                    case hash("instof"):
-                        tarr.push_back(TokenImp<TokenType::KW_INSTOF>(fname, line_num, col_num));
-                        continue;
-                    case hash("typeof"):
-                        tarr.push_back(TokenImp<TokenType::KW_TYPEOF>(fname, line_num, col_num));
-                        continue;
                     case hash("and"):
                         tarr.push_back(TokenImp<TokenType::KW_AND>(fname, line_num, col_num));
                         continue;
@@ -867,9 +859,11 @@ namespace nn
 
                 i++;
             }
+            
+            return false;
         }
 
-        void lex_file(const char* fname, FILE* pf, TokenArray& tarr)
+        bool lex_file(ParsingErrors& errs, const char* fname, FILE* pf, TokenArray& tarr)
         {
             // temp, bad implmentation
             fseek(pf, 0, SEEK_END);
@@ -880,11 +874,13 @@ namespace nn
             if (result != fsz)
             {
                 delete[] pbuf;
-                throw std::runtime_error("fread failed");
+                errs.add(0, 0, "Unable to read file");
+                return true;
             }
             pbuf[fsz] = '\0';
-            lex_buf(fname, pbuf, fsz, tarr);
+            bool ret = lex_buf(errs, fname, pbuf, fsz, tarr);
             delete[] pbuf;
+            return ret;
         }
 
         /*

@@ -16,15 +16,26 @@ fn range(int n) -> array<int>:
         i += 1
     return result
 
-fn zip<type T, type U>(array<T> arr1, array<U> arr2) -> array<tuple<T, U>>:
-    array<tuple<T, U>> result
-    for int i in range(min(len(arr1), len(arr2))):
-        result += (arr1[i], arr2[i])
+fn map<type T, type U>(array<T> data, fn f(T) -> U) -> array<U>:
+    array<U> out
+    for var e : data:
+        out += [f(e)]
+    return out
+
+fn zip<type *T>(array<T> *arrs) -> array<tuple<*T>>:
+    int min_len = 0
+    for var i in range(len(arrs)):
+        min_len = min(min_len, len(arrs[i]))
+
+    array<tuple<*T>> result
+    for var i in range(min_len):
+        tuple<*T> elem
+        for var j in range(len(arrs)):
+            elem[j] = arrs[j][i]
+        result += [elem]
     return result
 
-fn map<type T, type U>
-
-fn enumerate<type T>(array<T> data):
+fn enumerate<type T>(array<T> data) -> array<tuple<int, T>>:
     return zip(range(len(data)), data)
 
 struct node<type T>:
@@ -36,12 +47,12 @@ struct list<type T>:
     node<T> root
     int size
 
-fn create<type T>():
+fn create<type T>() -> list<T>:
     list<T> arr
     node<T> head
     arr.root = head
     arr.size = 0
-    return list
+    return arr
 
 fn append<type T>(list<T> self, T val):
     self.end.has_val = true
@@ -51,7 +62,7 @@ fn append<type T>(list<T> self, T val):
     self.end = new_end
     self.size += 1
 
-fn to_array<type T>(list<T> self):
+fn to_array<type T>(list<T> self) -> array<T>:
     array<T, self.size> result
     node<T> nd = self.root
     for i in range(nd.size):
@@ -62,17 +73,18 @@ fn to_array<type T>(list<T> self):
 fn format(string fmt, string *params):
     raise "Not implemented"
 
-intr add_same_intr<fptype fout, fptype f1, fptype f2, int *shape>(tensor<f1, *shape> left, tensor<f2, *shape> right):
-    tensor<fout, *shape> out
-    return out
+intr add_same_intr<fp fout, fp *fin, int *shape>(fin<*shape> *inp) -> out:
+    return fout<*shape>
 
-intr const<float val>():
-    tensor<1> out
-    return out
+intr add_same_intr<fp fout, fp f1, fp f2, int *shape>(f1<*shape> left, f2<*shape> right) -> out:
+    return fout<*shape>
 
-intr reshape<int *out_shape, <int *inp_shape>>(tensor<*inp_shape> inp):
-    int inp_size = 1
-    for int dim_size in inp_shape:
+intr const_intr<fp fout, float val>() -> out:
+    return fout<>
+
+intr reshape<int *out_shape, fp fty, int *inp_shape>(fty<*inp_shape> inp) -> out:
+    var inp_size = 1
+    for var dim_size in inp_shape:
         inp_size *= dim_size
 
     int out_size = 1
@@ -91,8 +103,7 @@ intr reshape<int *out_shape, <int *inp_shape>>(tensor<*inp_shape> inp):
 
     if out_size != inp_size:
         raise format("Unable to transform tensor with size {} to size {}", inp_size, out_size)
-    tensor<*out_shape> out
-    return out
+    return fp<fty>
 
 
 intr concat<int dim, <int *t1_shape>, <int *t2_shape>>(tensor<*t1_shape> t1, tensor<*t2_shape> t2):

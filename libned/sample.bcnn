@@ -1,4 +1,4 @@
-.fn min<type T>(T, T)
+.fn min<type T>(T, T) -> T
     ; if left < right:
     dup   1
     dup   1
@@ -13,7 +13,7 @@
     pop   1
     ret   1
 
-.fn max<type T>(T, T)
+.fn max<type T>(T, T) -> T
     ; if left > right:
     dup   1
     dup   1
@@ -28,7 +28,7 @@
     pop   1
     ret   1
 
-.fn range<>(int)
+.fn range<>(int) -> array<int>
     ; array<int> result
     new   type int    ; Empty integer type
     new   type array  ; Empty array type
@@ -72,7 +72,7 @@
     pop   0           ; Removing i from the stack
     ret   1           ; Returning the array
 
-.fn zip<type T, type U>(array<T>, array<U>)
+.fn zip<type T, type U>(array<T>, array<U>) -> array<tuple<T, U>>:
     ; array<tuple<T, U>> result
     dup   3
     dup   3
