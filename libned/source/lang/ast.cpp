@@ -539,6 +539,13 @@ namespace nn
     {
         bool parse_expr(ParsingErrors& errs, const TokenArray& tarr, AstExpr& ast_expr)
         {
+            assert(tarr.size() > 0);
+            ast_expr.fname = tarr[0]->fname;
+            ast_expr.line_start = tarr[0]->line_num;
+            ast_expr.line_end = tarr[tarr.size() - 1]->line_num;
+            ast_expr.col_start = tarr[0]->col_num;
+            ast_expr.col_end = tarr[tarr.size() - 1]->col_num;
+            
             int i = 0;
             for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
             if (i == tarr.size())
@@ -551,6 +558,12 @@ namespace nn
         bool parse_line(ParsingErrors& errs, const TokenArray& tarr, AstLine& ast_line, int indent_level)
         {
             assert(tarr.size() > 0);
+            ast_line.fname = tarr[0]->fname;
+            ast_line.line_start = tarr[0]->line_num;
+            ast_line.line_end = tarr[tarr.size() - 1]->line_num;
+            ast_line.col_start = tarr[0]->col_num;
+            ast_line.col_end = tarr[tarr.size() - 1]->col_num;
+
             int i = 0;
             for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
             if (i == tarr.size())

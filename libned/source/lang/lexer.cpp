@@ -452,6 +452,12 @@ namespace nn
             {
                 switch (buf[i])
                 {
+                case '#':
+                    do { i++; } while (i < bufsz && buf[i] != '\n');
+                    use_indents = true;
+                    line_start = i;
+                    line_num++;
+                    break;
                 case ' ':
                     if (use_indents
                         && bufsz - i >= 4
@@ -745,108 +751,143 @@ namespace nn
                     {
                     case hash("struct"):
                         tarr.push_back(TokenImp<TokenType::KW_STRUCT>(fname, line_num, col_num));
+                        i += 6;
                         continue;
                     case hash("def"):
                         tarr.push_back(TokenImp<TokenType::KW_DEF>(fname, line_num, col_num));
+                        i += 3;
                         continue;
                     case hash("intr"):
                         tarr.push_back(TokenImp<TokenType::KW_INTR>(fname, line_num, col_num));
+                        i += 4;
                         continue;
                     case hash("fn"):
                         tarr.push_back(TokenImp<TokenType::KW_FN>(fname, line_num, col_num));
+                        i += 2;
                         continue;
                     case hash("return"):
                         tarr.push_back(TokenImp<TokenType::KW_RETURN>(fname, line_num, col_num));
+                        i += 6;
                         continue;
                     case hash("import"):
                         tarr.push_back(TokenImp<TokenType::KW_IMPORT>(fname, line_num, col_num));
+                        i += 6;
                         continue;
                     case hash("while"):
                         tarr.push_back(TokenImp<TokenType::KW_WHILE>(fname, line_num, col_num));
+                        i += 5;
                         continue;
                     case hash("for"):
                         tarr.push_back(TokenImp<TokenType::KW_FOR>(fname, line_num, col_num));
+                        i += 3;
                         continue;
                     case hash("in"):
                         tarr.push_back(TokenImp<TokenType::KW_IN>(fname, line_num, col_num));
+                        i += 2;
                         continue;
                     case hash("break"):
                         tarr.push_back(TokenImp<TokenType::KW_BREAK>(fname, line_num, col_num));
+                        i += 5;
                         continue;
                     case hash("continue"):
                         tarr.push_back(TokenImp<TokenType::KW_CONTINUE>(fname, line_num, col_num));
+                        i += 8;
                         continue;
                     case hash("if"):
                         tarr.push_back(TokenImp<TokenType::KW_IF>(fname, line_num, col_num));
+                        i += 2;
                         continue;
                     case hash("elif"):
                         tarr.push_back(TokenImp<TokenType::KW_ELIF>(fname, line_num, col_num));
+                        i += 4;
                         continue;
                     case hash("else"):
                         tarr.push_back(TokenImp<TokenType::KW_ELSE>(fname, line_num, col_num));
+                        i += 4;
                         continue;
                     case hash("type"):
                         tarr.push_back(TokenImp<TokenType::KW_TYPE>(fname, line_num, col_num));
+                        i += 4;
                         continue;
                     case hash("var"):
                         tarr.push_back(TokenImp<TokenType::KW_VAR>(fname, line_num, col_num));
+                        i += 3;
                         continue;
                     case hash("fp"):
                         tarr.push_back(TokenImp<TokenType::KW_FP>(fname, line_num, col_num));
+                        i += 2;
                         continue;
                     case hash("bool"):
                         tarr.push_back(TokenImp<TokenType::KW_BOOL>(fname, line_num, col_num));
+                        i += 4;
                         continue;
                     case hash("int"):
                         tarr.push_back(TokenImp<TokenType::KW_INT>(fname, line_num, col_num));
+                        i += 3;
                         continue;
                     case hash("float"):
                         tarr.push_back(TokenImp<TokenType::KW_FLOAT>(fname, line_num, col_num));
+                        i += 5;
                         continue;
                     case hash("str"):
                         tarr.push_back(TokenImp<TokenType::KW_STR>(fname, line_num, col_num));
+                        i += 3;
                         continue;
                     case hash("array"):
                         tarr.push_back(TokenImp<TokenType::KW_ARRAY>(fname, line_num, col_num));
+                        i += 5;
                         continue;
                     case hash("tuple"):
                         tarr.push_back(TokenImp<TokenType::KW_TUPLE>(fname, line_num, col_num));
+                        i += 5;
                         continue;
                     case hash("true"):
                         tarr.push_back(TokenImp<TokenType::KW_TRUE>(fname, line_num, col_num));
+                        i += 4;
                         continue;
                     case hash("false"):
                         tarr.push_back(TokenImp<TokenType::KW_FALSE>(fname, line_num, col_num));
+                        i += 5;
                         continue;
                     case hash("raise"):
                         tarr.push_back(TokenImp<TokenType::KW_RAISE>(fname, line_num, col_num));
+                        i += 5;
                         continue;
                     case hash("export"):
                         tarr.push_back(TokenImp<TokenType::KW_EXPORT>(fname, line_num, col_num));
+                        i += 6;
                         continue;
                     case hash("extern"):
                         tarr.push_back(TokenImp<TokenType::KW_EXTERN>(fname, line_num, col_num));
+                        i += 6;
                         continue;
                     case hash("f16"):
                         tarr.push_back(TokenImp<TokenType::KW_F16>(fname, line_num, col_num));
+                        i += 3;
                         continue;
                     case hash("f32"):
                         tarr.push_back(TokenImp<TokenType::KW_F32>(fname, line_num, col_num));
+                        i += 3;
                         continue;
                     case hash("f64"):
                         tarr.push_back(TokenImp<TokenType::KW_F64>(fname, line_num, col_num));
+                        i += 3;
                         continue;
                     case hash("print"):
                         tarr.push_back(TokenImp<TokenType::KW_PRINT>(fname, line_num, col_num));
+                        i += 5;
                         continue;
                     case hash("and"):
                         tarr.push_back(TokenImp<TokenType::KW_AND>(fname, line_num, col_num));
+                        i += 3;
                         continue;
                     case hash("or"):
                         tarr.push_back(TokenImp<TokenType::KW_OR>(fname, line_num, col_num));
+                        i += 2;
                         continue;
                     case hash("not"):
                         tarr.push_back(TokenImp<TokenType::KW_NOT>(fname, line_num, col_num));
+                        i += 3;
                         continue;
                     }
                     

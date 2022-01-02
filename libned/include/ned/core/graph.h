@@ -11,7 +11,7 @@
 
 namespace nn
 {
-    namespace lang { class Obj; }
+    namespace lang { union Obj; }
 
     namespace core
     {

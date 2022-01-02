@@ -5,8 +5,9 @@
 #include <vector>
 #include <memory>
 #include <map>
+#include <type_traits>
 
-#include <ned/lang/obj.h>
+#include <ned/lang/ast.h>
 
 namespace nn
 {
@@ -21,15 +22,22 @@ namespace nn
             virtual void set_labels(const std::map<std::string, size_t>& label_map) = 0;
         };
 
+        template<typename T>
+        concept InstructionType =
+            std::is_base_of<Instruction, T>::value &&
+            std::is_copy_constructible<T>::value;
+
         class StaticRef {};
+        class Module;
 
         class StaticsBuilder
         {
         public:
             StaticRef get(std::string ty, std::string val);
+            void apply_module(const Module& mod);
         };
 
-        class CodeBlock
+        class CodeBody
         {
             std::string name;
             std::vector<std::unique_ptr<Instruction>> instructions;
@@ -44,9 +52,9 @@ namespace nn
             void set_var_name(const std::string& var);
             void add_label(const std::string& var);
 
-            template<typename T> void add_instruction(const T& inst)
+            void add_instruction(const InstructionType auto& inst)
             {
-                constexpr int n = CodeBlock::get_stack_change<T>();
+                constexpr int n = CodeBody::get_stack_change<decltype(inst)>();
                 std::vector<const std::string&> popped_vars;
                 if (n != 0)  // Hopefully this will get optimized away when the template gets expanded
                     for (auto& [key, val] : var_map)
@@ -56,6 +64,26 @@ namespace nn
                         var_map.erase(e);
                 instructions.push_back(std::make_unique(inst));
             }
+        };
+
+        enum class CodeBlockType
+        {
+            STRUCT,
+            FN,
+            DEF,
+            INTR
+        };
+
+        struct CodeBlock
+        {
+            CodeBlockType ty;
+            std::string name;
+            CodeBody body;
+        };
+
+        struct Module
+        {
+            std::vector<CodeBlock> blocks;
         };
 
         enum class InstructionTypes : uint8_t
@@ -383,48 +411,73 @@ namespace nn
 }
 
 /*
-jmp <label>  Unconditional Jump
-brt <label>  Branch if true with pop
-brf <label>  Branch if false with pop
-pop <int>    Pops element <int> off the stack
-
-new <addr>   Adds an object from static memory onto the stack
-arr <int>    Creates a new array from <int> elements on the stack
-tup <int>    Creates a new tuple from <int> elements on the stack
-
-inst         Creates an instance from the element on the top of the stack, and pops the type
-type         Creates a type from the element on the top of the stack, and pops the inst
-dup <int>    Duplicates an object on the stack
-
-Applies the top <int> elements on the stack as cargs to the next object on the stack
-carg <int>
-
-Applies the top <int> elements on the stack as vargs to the next object on the stack
-Relies on the object to push the cargs and vargs onto the stack
-An element is pushed onto the call stack which contains the program counter and a reference to the caller
-call
-
-Retrieves the program counter and a reference to the caller from the call stack
-Relies on the caller to cleanup the stack from the call, and updates the program counter
-ret
-
-Binary Operations; Pops the top two elements off the stack, does the op, pushes the result
-
-add  Adds two objects
-sub  Subtracts two objects
-mul  Multiplies two objects
-div  Divides two objects
-mod  Calculates the modulus between two objects
-
-eq   Checks if two objects are equal
-ne   Checks if two objects are not equal
-ge   Checks if the left is greater than or equal to the right
-le   Checks if the left if less than or equal to the right
-gt   Checks if the left is greater than the right
-lt   Checks if the left is less than the right
-
-idx  Retrieves the left at the index of the right
-
+* Language Instructions
+* 
+* jmp <label>  Unconditional Jump
+* brt <label>  Branch if true with pop
+* brf <label>  Branch if false with pop
+* pop <int>    Pops element <int> off the stack
+* 
+* nul          Pushes a null pointer onto the stack
+* new <addr>   Adds an object from static memory onto the stack
+* agg <int>    Creates a new aggregate object from the top <int> elements on the stack
+* aty <int>    Creates a new aggregate type from the top <int> elements on the stack
+* 
+* inst         Creates an instance from the element on the top of the stack, and pops the type
+* dup <int>    Duplicates an object on the stack
+* 
+* Considers the top element on the stack to be a pointer into the code segment
+* Pops the tos, pushes the current pc onto the stack and sets a new pc
+* call
+* 
+* Returns <int> elements from a code block
+* Retrieves the program counter and a reference to the caller from the call stack
+* Relies on the caller to cleanup the stack from the call, and updates the program counter
+* ret  <int>
+* 
+* Binary Operations; Pops the top two elements off the stack, does the op, pushes the result
+* 
+* set          Assigns the obj at tos-1 to tos
+* iadd         Add and assigns
+* isub         Subtract and assign
+* imul         Multiply and assign
+* idiv         Divide and assign
+* imod         Modulus and assign
+* add          Adds two objects
+* sub          Subtracts two objects
+* mul          Multiplies two objects
+* div          Divides two objects
+* mod          Calculates the modulus between two objects
+* 
+* eq           Checks if two objects are equal
+* ne           Checks if two objects are not equal
+* ge           Checks if the left is greater than or equal to the right
+* le           Checks if the left if less than or equal to the right
+* gt           Checks if the left is greater than the right
+* lt           Checks if the left is less than the right
+* 
+* idx          Retrieves the left at the index of the right (does not need type info)
+* 
+* xstr         Converts any object to a string object
+* xflt         Converts any object to a float object
+* xint         Converts any object to an int object
+* 
+* 
+* Deep learning instructions
+* 
+* ten <int>    Creates a new tensor with rank <int>
+* 
+* blke         Enable deep learning instructions
+* blkd         Disable deep learning instructions
+* 
+* cblk         Creates a new counpound block context with a name
+* iblk         Creates a new intrinsic block context with a name
+* binp         Marks a tensor as a block input with a name
+* bout         Marks a tensor as a block output with a name
+* 
+* ext          Marks a tensor as a model weight
+* exp          Exports a tensor with a name
+* 
 */
 
 #endif

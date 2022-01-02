@@ -17,9 +17,9 @@ namespace nn
     {
         class ParsingError
         {
-            std::string errmsg;
             size_t line_num;
             size_t col_num;
+            std::string errmsg;
 
         public:
             template<typename... Args>
@@ -47,16 +47,23 @@ namespace nn
             }
         };
 
-        class ParsingErrors
+        class RuntimeError
         {
-            std::vector<ParsingError> errs;
+            // TODO: figure out runtime errors
+        };
+
+        template<class T>
+        class ErrorList
+        {
+            std::vector<T> errs;
 
         public:
-            ParsingErrors() {}
-
             template<typename... Args>
-            bool add(const Args&... args) { errs.push_back(ParsingError(args...)); return true; }
+            bool add(const Args&... args) { errs.push_back(T(args...)); return true; }
         };
+
+        using ParsingErrors = ErrorList<ParsingError>;
+        using RuntimeErrors = ErrorList<RuntimeError>;
     }
 }
 

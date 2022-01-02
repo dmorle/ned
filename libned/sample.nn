@@ -18,7 +18,7 @@ fn range(int n) -> array<int>:
 
 fn map<type T, type U>(array<T> data, fn f(T) -> U) -> array<U>:
     array<U> out
-    for var e : data:
+    for var e in data:
         out += [f(e)]
     return out
 
@@ -103,26 +103,27 @@ intr reshape<int *out_shape, fp fty, int *inp_shape>(fty<*inp_shape> inp) -> out
 
     if out_size != inp_size:
         raise format("Unable to transform tensor with size {} to size {}", inp_size, out_size)
-    return fp<fty>
+    fp<fty> out
+    return out
 
 
-intr concat<int dim, <int *t1_shape>, <int *t2_shape>>(tensor<*t1_shape> t1, tensor<*t2_shape> t2):
-    if t1_shape.length != t2_shape.length:
+intr concat<int dim, fp fty, int *t1_shape, int *t2_shape>(fty<*t1_shape> t1, fty<*t2_shape> t2) -> out:
+    if len(t1_shape) != len(t2_shape):
         raise "Mismatching tensor ranks"
-    if t1_shape.length <= dim:
+    if len(t1_shape) <= dim:
         raise "Invalid concatenation dimension"
     
-    for int i in range(t1_shape.length):
+    for int dim1, int dim2 in range(len(t1_shape)):
         if i != dim and t1_shape[i] != t2_shape[i]:
             raise "Mismatching tensor shapes"
 
     t1_shape[dim] += t2_shape[dim]
-    tensor<*t1_shape> out
+    fty<*t1_shape> out
     return out
 
 
-intr relu<int *shape>(tensor<*shape> t1):
-    tensor<*shape> out
+intr relu<fp fty, int *shape>(fty<*shape> t1) -> out:
+    fty<*shape> out
     return out
 
 

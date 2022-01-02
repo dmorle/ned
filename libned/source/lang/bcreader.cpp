@@ -1,11 +1,11 @@
 #include <ned/lang/bytecode.h>
 #include <ned/lang/lexer.h>
 
-#include <cstdio>
 #include <vector>
 #include <string>
 #include <tuple>
 #include <iterator>
+#include <cstdio>
 
 #define FNV_PRIME 0x00000100000001B3ULL
 #define FNV_OFFSET_BASIS 0XCBF29CE484222325ULL
@@ -23,203 +23,142 @@ constexpr size_t hash(const std::string& s)
     return hash(s.c_str());
 }
 
-size_t line_num = 1;
-size_t col_num = 0;
-inline bool is_whitespace(char c)
-{
-    col_num++;
-    if (c == '\n')
-    {
-        line_num++;
-        col_num = 1;
-        return true;
-    }
-    return
-        c == ' ' ||
-        c == '\t' ||
-        c == '\r' ||
-        c == '\v' ||
-        c == '\f';
-}
-
-char* read_word(char* buf, char* word)
-{
-    if (*buf == ';')
-    {
-        while (*buf && *buf != '\n') buf++;
-        line_num++;
-        col_num = 1;
-    }
-    if (!*buf)
-    {
-        *word = '\0';
-        return buf;
-    }
-    char* pw = word;
-    while (*buf && !is_whitespace(*buf))
-    {
-        *pw = *buf;
-        pw++;
-        buf++;
-    }
-    *pw = '\0';
-    return buf;
-}
-
-struct WordInfo
-{
-    size_t line;
-    size_t col;
-    std::string word;
-};
-
-std::vector<WordInfo> read_words(char* start, char* end)
-{
-    while (start != end && is_whitespace(*start)) start++;
-    std::vector<WordInfo> result;
-    if (start >= end)
-        return result;
-    char word[128];
-    while (1)
-    {
-        size_t line = line_num;
-        size_t col = col_num;
-        while (start < end && is_whitespace(*start)) start++;
-        start = read_word(start, word);
-        if (start >= end)
-            return result;
-        result.push_back({ line, col, word });
-    }
-}
-
 namespace nn
 {
     namespace lang
     {
-        void* parse_signature(char* buf)
-        {
-            while (*buf && is_whitespace(*buf)) buf++;
-            if (*buf != '.')
-                throw SyntaxError(line_num, col_num, "Invalid start of bytecode block");
-            
-            if (!*++buf)
-                throw SyntaxError(line_num, col_num, "Invalid start of bytecode block");
-            char type_name[128];
-
-            char* end = buf;
-            TokenArray tarr;
-            lex_buf("bytecode module", buf, end - buf, tarr, line_num, col_num);
-            // TODO: parse block signatures
-        }
-
         std::vector<WordInfo>::const_iterator parse_instruction(
-            CodeBlock& block, StaticsBuilder& statics,
-            std::vector<WordInfo>::const_iterator it,
-            std::vector<WordInfo>::const_iterator end)
+            ParsingErrors& errs, StaticsBuilder& statics, CodeBlock& block,
+            std::vector<WordInfo>::const_iterator& it,
+            const std::vector<WordInfo>::const_iterator& end)
         {
             switch (hash(it->word))
             {
             case hash("jmp"):
                 if (std::distance(it, end) < 2)  // Should be O(1) for vector
-                    throw SyntaxError(it->line, it->col, "Invalid 'jmp' instruction");
+                    return errs.add(it->line, it->col, "Invalid 'jmp' instruction");
                 block.add_instruction(instruction::Jmp((it + 1)->word));
-                return it + 2;
+                it += 2;
+                return false;
             case hash("brt"):
                 if (std::distance(it, end) < 2)
-                    throw SyntaxError(it->line, it->col, "Invalid 'brt' instruction");
+                    return errs.add(it->line, it->col, "Invalid 'brt' instruction");
                 block.add_instruction(instruction::Brt((it + 1)->word));
-                return it + 2;
+                it += 2;
+                return false;
             case hash("brf"):
                 if (std::distance(it, end) < 2)
-                    throw SyntaxError(it->line, it->col, "Invalid 'brf' instruction");
+                    return errs.add(it->line, it->col, "Invalid 'brf' instruction");
                 block.add_instruction(instruction::Brf((it + 1)->word));
-                return it + 2;
+                it += 2;
+                return false;
             case hash("pop"):
                 if (std::distance(it, end) < 2)
-                    throw SyntaxError(it->line, it->col, "Invalid 'brt' instruction");
+                    return errs.add(it->line, it->col, "Invalid 'brt' instruction");
                 block.add_instruction(instruction::Pop(std::stoi((it - 1)->word)));
-                return it + 2;
+                it += 2;
+                return false;
             case hash("new"):
                 if (std::distance(it, end) < 3)
-                    throw SyntaxError(it->line, it->col, "Invalid 'new' instruction");
+                    return errs.add(it->line, it->col, "Invalid 'new' instruction");
                 block.add_instruction(instruction::New(statics.get((it + 1)->word, (it + 2)->word)));
-                return it + 3;
+                it += 3;
+                return false;
             case hash("arr"):
                 if (std::distance(it, end) < 2)
-                    throw SyntaxError(it->line, it->col, "Invalid 'arr' instruction");
+                    return errs.add(it->line, it->col, "Invalid 'arr' instruction");
                 block.add_instruction(instruction::Arr(std::stoi((it + 1)->word)));
-                return it + 2;
+                it += 2;
+                return false;
             case hash("tup"):
                 if (std::distance(it, end) < 2)
-                    throw SyntaxError(it->line, it->col, "Invalid 'tup' instruction");
+                    return errs.add(it->line, it->col, "Invalid 'tup' instruction");
                 block.add_instruction(instruction::Tup(std::stoi((it + 1)->word)));
-                return it + 2;
+                it += 2;
+                return false;
             case hash("inst"):
                 block.add_instruction(instruction::Inst());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("type"):
                 block.add_instruction(instruction::Type());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("dup"):
                 if (std::distance(it, end) < 2)
-                    throw SyntaxError(it->line, it->col, "Invalid 'dup' instruction");
+                    return errs.add(it->line, it->col, "Invalid 'dup' instruction");
                 block.add_instruction(instruction::Dup(std::stoi((it + 1)->word)));
-                return it + 2;
+                it += 2;
+                return false;
             case hash("carg"):
                 if (std::distance(it, end) < 2)
-                    throw SyntaxError(it->line, it->col, "Invalid 'carg' instruction");
+                    return errs.add(it->line, it->col, "Invalid 'carg' instruction");
                 block.add_instruction(instruction::Carg(std::stoi((it + 1)->word)));
-                return it + 2;
+                it += 2;
+                return false;
             case hash("call"):
                 block.add_instruction(instruction::Call());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("ret"):
                 block.add_instruction(instruction::Ret());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("add"):
                 block.add_instruction(instruction::Add());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("sub"):
                 block.add_instruction(instruction::Sub());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("mul"):
                 block.add_instruction(instruction::Mul());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("div"):
                 block.add_instruction(instruction::Div());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("mod"):
                 block.add_instruction(instruction::Mod());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("eq"):
                 block.add_instruction(instruction::Eq());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("ne"):
                 block.add_instruction(instruction::Ne());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("ge"):
                 block.add_instruction(instruction::Ge());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("le"):
                 block.add_instruction(instruction::Le());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("gt"):
                 block.add_instruction(instruction::Gt());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("lt"):
                 block.add_instruction(instruction::Lt());
-                return it + 1;
+                it += 1;
+                return false;
             case hash("idx"):
                 block.add_instruction(instruction::Idx());
-                return it + 1;
+                it += 1;
+                return false;
             default:
-                throw SyntaxError(it->line, it->col, "Unrecognized opcode: {}", it->word);
+                return errs.add(it->line, it->col, "Unrecognized opcode: {}", it->word);
             }
         }
 
-        CodeBlock parse_block(StaticsBuilder& statics, char* start, char* end)
+        bool parsebc_block(ParsingErrors& errs, const TokenArray& tarr, StaticsBuilder& statics, CodeBlock& block)
         {
-            CodeBlock block{};
             auto words = read_words(start, end);
             for (auto it = words.begin(); it != words.end(); it++)
             {
@@ -233,20 +172,57 @@ namespace nn
             }
         }
 
-        void parse_module(char* buf)
+        bool parsebc_module(ParsingErrors& errs, const char* fname, char* buf, size_t bufsz, StaticsBuilder& statics, Module& mod)
         {
+            TokenArray tarr;
+            if (lex_buf(errs, fname, buf, bufsz, tarr))
+                return true;
+
+            // Initialization for the 
+            int i = 0;
+            for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            while (i < tarr.size())
+            {
+                if (tarr[i]->expect<TokenType::DOT>(errs))
+                    return true;
+                int end = tarr.search(IsSameCriteria(TokenType::COLON), i);
+                if (end == -1)
+                    return errs.add(tarr[i], "Missing ':' in code block signature");
+                if (end <= i + 2)  // Needs at least a code block type (struct/fn/def) and a name
+                    return errs.add(tarr[i], "Empty signatures are not allowed");
+                
+                if (parsebc_signature(errs, { tarr, i + 1, end }))
+                    return true;
+
+                i = end + 1;
+                end = tarr.search(IsSameCriteria(TokenType::DOT), i);
+
+            }
+            return false;
+
             StaticsBuilder statics{};
-            char* start;
+            char* start = 0;
             char* end = buf;
             do
             {
-                end = start = parse_signature(end);
+                while (buf[start] && is_whitespace(buf[start])) start++;
+                if (buf[start] != '.')
+                    return errs.add(line_num, col_num, "Invalid start of bytecode block");
+                end = start;
+                while (buf[end] && buf[end] != ':') end++;
+                if (buf[end] != ':')
+                    return errs.add(line_num, col)
+                TokenArray tarr;
+                lex_buf(errs, fname, buf, end - buf, tarr, line_num, col_num);
+
                 while (*end && *end != '.') end++;
-                parse_block(statics, start, end);
+                if (parsebc_block(errs, statics, start, end))
+                    return true;
             } while (*end);
+            return false;
         }
 
-        void read_bcfile(FILE* pf)
+        bool read_bcfile(ParsingErrors& errs, const char* fname, FILE* pf)
         {
             fseek(pf, 0, SEEK_END);
             size_t fsz = ftell(pf);
@@ -259,8 +235,9 @@ namespace nn
                 throw std::runtime_error("fread failed");
             }
             pbuf[fsz] = '\0';
-            parse_module(pbuf);
+            bool ret = parsebc_module(errs, fname, pbuf);
             delete[] pbuf;
+            return ret;
         }
     }
 }

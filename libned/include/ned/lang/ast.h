@@ -144,6 +144,12 @@ namespace nn
 
         struct AstExpr
         {
+            std::string fname;
+            uint32_t line_start;
+            uint32_t line_end;
+            uint32_t col_start;
+            uint32_t col_end;
+
             ExprType ty = ExprType::INVALID;
             union
             {
@@ -225,6 +231,12 @@ namespace nn
         // Generic base class for all types of lines of code
         struct AstLine
         {
+            std::string fname;
+            uint32_t line_start;
+            uint32_t line_end;
+            uint32_t col_start;
+            uint32_t col_end;
+
             // This thing's value will determine which union element will be accessed
             LineType ty = LineType::INVALID;
             union
