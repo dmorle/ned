@@ -51,16 +51,15 @@
     dup   1           # Duplicating result
     dup   1           # Duplicating i
     agg   1           # Creating [i]
-    aty   0
+    new   type int
+    arr
     iadd              # Computing result += [i]
-    pop   0           # Removing the result of iadd from the stack
 
     # i += 1
     dup   0           # Duplicating i
     new   int 1       # Pushing 1 onto the stack
     new   type int
     iadd              # Computing i + 1
-    pop   0           # Removing the result of iadd from the stack
 
     jmp   loop        # Looping
 
@@ -106,6 +105,29 @@
 #
 #:end
 
+struct node2<type T>:
+    node1<T> nd
+
+struct node1<type T>:
+    node2<T> nd
+
+fn map<type T>(T val) -> T:
+    node1<T> t
+    return map(t)
+
+    dup   2
+    call  node1
+
+    aty   0  # t.nd
+    aty   1  # t
+    dup   1
+    set
+
+
+fn test():
+    int i
+    map(i)
+
 .proc node  # struct node<type T>
     # T val
     dup   1
@@ -146,22 +168,24 @@
     pop   1
 
     # arr.root = head
-    new   int 0
     dup   1
+    new   int 0
     idx
     dup   1
+    # building the type for struct node<T>
+    dup   5
+    new   type bool
     aty   0
+    aty   3
     set
-    pop   0
 
     # arr.size = 0
-    new   int 1       # Size is the first element of the list struct
     dup   1
+    new   int 1       # Size is the first element of the list struct
     idx
     new   int 0
     new   type int
     set
-    pop   0
 
     # return arr
     # Some of these instruction are redundant, but this is what it will compile to

@@ -17,5 +17,22 @@ namespace nn
             }
             return -1;
         }
+
+        bool dtype_str(tensor_dty dty, std::string& str)
+        {
+            switch (dty)
+            {
+            case tensor_dty::F16:
+                str = "f16";
+                return false;
+            case tensor_dty::F32:
+                str = "f32";
+                return false;
+            case tensor_dty::F64:
+                str = "f64";
+                return false;;
+            }
+            return true;
+        }
     }
 }

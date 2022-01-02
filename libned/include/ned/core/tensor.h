@@ -2,6 +2,7 @@
 #define NED_TENSOR_H
 
 #include <vector>
+#include <string>
 
 namespace nn
 {
@@ -15,6 +16,7 @@ namespace nn
         };
 
         size_t dtype_size(tensor_dty dty);
+        bool dtype_str(tensor_dty dty, std::string& str);
 
         struct tensor_dsc
         {

@@ -1,4 +1,7 @@
 #include <ned/lang/obj.h>
+#include <ned/lang/interp.h>
+#include <ned/core/tensor.h>
+#include <ned/core/graph.h>
 
 #include <string>
 #include <cassert>
@@ -7,1839 +10,777 @@ namespace nn
 {
     namespace lang
     {
-        void check_init(const Obj* pobj)
+        bool ProgramHeap::create_type_bool(RuntimeErrors& errs, Obj& obj)
         {
-            if (!pobj->init)
-                throw GenerationError("Uninitialized variable");
+            return true;
         }
 
-        void check_init(const std::shared_ptr<Obj>& pobj)
+        bool ProgramHeap::create_type_fwidth(RuntimeErrors& errs, Obj& obj)
         {
-            if (!pobj->init)
-                throw GenerationError("Uninitialized variable");
+            return true;
         }
 
-        void check_type(ObjType expected, const std::shared_ptr<Obj>& pobj)
+        bool ProgramHeap::create_type_int(RuntimeErrors& errs, Obj& obj)
         {
-            if (pobj->ty != expected)
-                throw GenerationError("Expected " + obj_type_name(expected) + ", recieved " + obj_type_name(pobj->ty));
+            return true;
         }
 
-        void check_type(ObjType expected, const Obj* pobj)
+        bool ProgramHeap::create_type_float(RuntimeErrors& errs, Obj& obj)
         {
-            if (pobj->ty != expected)
-                throw GenerationError("Expected " + obj_type_name(expected) + ", recieved " + obj_type_name(pobj->ty));
+            return true;
         }
 
-        constexpr std::string obj_type_name(ObjType ty)
+        bool ProgramHeap::create_type_str(RuntimeErrors& errs, Obj& obj)
         {
-            switch (ty)
-            {
-            case ObjType::TYPE:
-                return "type";
-            case ObjType::INVALID:
-                return "invalid";
-            case ObjType::VAR:
-                return "var";
-            case ObjType::FWIDTH:
-                return "fwidth";
-            case ObjType::BOOL:
-                return "bool";
-            case ObjType::INT:
-                return "int";
-            case ObjType::FLOAT:
-                return "float";
-            case ObjType::STR:
-                return "string";
-            case ObjType::ARRAY:
-                return "array";
-            case ObjType::TUPLE:
-                return "tuple";
-            case ObjType::TENSOR:
-                return "tensor";
-            case ObjType::INTR:
-                return "intrinsic";
-            case ObjType::DEF:
-                return "def";
-            case ObjType::MODULE:
-                return "module";
-            case ObjType::PACKAGE:
-                return "package";
-            }
+            return true;
+        }
 
-            throw GenerationError("Unknown type");
+        bool ProgramHeap::create_type_arr(RuntimeErrors& errs, Obj& obj, TypeObj* ty)
+        {
+            return true;
+        }
+
+        bool ProgramHeap::create_type_agg(RuntimeErrors& errs, Obj& obj, std::vector<TypeObj*> tys)
+        {
+            return true;
+        }
+
+        bool ProgramHeap::create_obj_bool(RuntimeErrors& errs, Obj& obj, BoolObj val)
+        {
+            return true;
+        }
+
+        bool ProgramHeap::create_obj_fwidth(RuntimeErrors& errs, Obj& obj, FWidthObj val)
+        {
+            return true;
+        }
+
+        bool ProgramHeap::create_obj_int(RuntimeErrors& errs, Obj& obj, IntObj val)
+        {
+            return true;
+        }
+
+        bool ProgramHeap::create_obj_float(RuntimeErrors& errs, Obj& obj, FloatObj val)
+        {
+            return true;
+        }
+
+        bool ProgramHeap::create_obj_str(RuntimeErrors& errs, Obj& obj, const StrObj& val)
+        {
+            return true;
+        }
+
+        bool ProgramHeap::create_obj_agg(RuntimeErrors& errs, Obj& obj, const AggObj& val)
+        {
+            return true;
+        }
+
+        bool ProgramHeap::create_obj_tensor(RuntimeErrors& errs, Obj& obj, FWidthObj dty, const std::vector<IntObj>& dims)
+        {
+            return true;
+        }
+
+        bool TypeObj::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return true;
+        }
+
+        bool TypeObj::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
+        {
+            return true;
+        }
+
+        bool TypeObj::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::iadd(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::isub(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::imul(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::idiv(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::imod(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::add(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::sub(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::mul(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::div(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::mod(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::ge(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::le(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::gt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::lt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::land(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::lor(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::idx(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return true;
+        }
+
+        bool TypeObj::xflt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return true;
+        }
+
+        bool TypeObj::xint(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return true;
+        }
+
+        bool BoolType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_bool(errs, dst, *src.bool_obj);
+        }
+
+        bool BoolType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
+        {
+            return heap.create_obj_bool(errs, dst, false);
+        }
+
+        bool BoolType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            *dst.bool_obj = *src.bool_obj;
+            return false;
+        }
+
+        bool BoolType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_bool(errs, dst, *lhs.bool_obj == *rhs.bool_obj);
+        }
+
+        bool BoolType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_bool(errs, dst, *lhs.bool_obj != *rhs.bool_obj);
+        }
+
+        bool BoolType::land(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_bool(errs, dst, *lhs.bool_obj && *rhs.bool_obj);
+        }
+
+        bool BoolType::lor(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_bool(errs, dst, *lhs.bool_obj || *rhs.bool_obj);
+        }
+
+        bool BoolType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_str(errs, dst, *src.bool_obj ? "true" : "false");
+        }
+
+        bool FWidthType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_fwidth(errs, dst, *src.fwidth_obj);
+        }
+
+        bool FWidthType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
+        {
+            return heap.create_obj_fwidth(errs, dst, core::tensor_dty::F32);
+        }
+
+        bool FWidthType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            *dst.fwidth_obj = *src.fwidth_obj;
+            return false;
+        }
+
+        bool FWidthType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_bool(errs, dst, *lhs.fwidth_obj == *rhs.fwidth_obj);
+        }
+
+        bool FWidthType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_bool(errs, dst, *lhs.fwidth_obj != *rhs.fwidth_obj);
+        }
+
+        bool FWidthType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            std::string str;
+            return
+                core::dtype_str(*src.fwidth_obj, str) ||
+                heap.create_obj_str(errs, dst, str);
+        }
+
+        bool IntType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_int(errs, dst, *src.int_obj);
+        }
+
+        bool IntType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
+        {
+            return heap.create_obj_int(errs, dst, 0);
+        }
+
+        bool IntType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            *lhs.int_obj = *rhs.int_obj;
+            return false;
+        }
+
+        bool IntType::iadd(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            *lhs.int_obj += *rhs.int_obj;
+            return false;
+        }
+
+        bool IntType::isub(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            *lhs.int_obj -= *rhs.int_obj;
+            return false;
+        }
+
+        bool IntType::imul(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            *lhs.int_obj *= *rhs.int_obj;
+            return false;
+        }
+
+        bool IntType::idiv(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            *lhs.int_obj /= *rhs.int_obj;
+            return false;
+        }
+
+        bool IntType::imod(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            *lhs.int_obj %= *rhs.int_obj;
+            return false;
+        }
+
+        bool IntType::add(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_int(errs, dst, *lhs.int_obj + *rhs.int_obj);
+        }
+
+        bool IntType::sub(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_int(errs, dst, *lhs.int_obj - *rhs.int_obj);
+        }
+
+        bool IntType::mul(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_int(errs, dst, *lhs.int_obj * *rhs.int_obj);
+        }
+
+        bool IntType::div(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_int(errs, dst, *lhs.int_obj / *rhs.int_obj);
+        }
+
+        bool IntType::mod(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_int(errs, dst, *lhs.int_obj % *rhs.int_obj);
+        }
+
+        bool IntType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_bool(errs, dst, *lhs.int_obj == *rhs.int_obj);
+        }
+
+        bool IntType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_bool(errs, dst, *lhs.int_obj != *rhs.int_obj);
+        }
+
+        bool IntType::ge(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_bool(errs, dst, *lhs.int_obj >= *rhs.int_obj);
+        }
+
+        bool IntType::le(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_bool(errs, dst, *lhs.int_obj <= *rhs.int_obj);
+        }
+
+        bool IntType::gt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_bool(errs, dst, *lhs.int_obj > *rhs.int_obj);
+        }
+
+        bool IntType::lt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_bool(errs, dst, *lhs.int_obj < *rhs.int_obj);
+        }
+
+        bool IntType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            // TODO: implement int to string conversion
+            return heap.create_obj_str(errs, dst, std::to_string(*src.int_obj));
+        }
+
+        bool IntType::xflt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_float(errs, dst, *src.int_obj);
+        }
+
+        bool IntType::xint(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_int(errs, dst, *src.int_obj);
         }
         
-        Obj::Obj(ObjType ty) :
-            ty(ty),
-            init(false)
-        {}
-
-        template<>
-        ObjDType::ObjImp() :
-            Obj(ObjType::TYPE)
+        bool FloatType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            data.ety = ObjType::INVALID;
-            data.has_cargs = false;
-            data.cargs = {};
+            return heap.create_obj_float(errs, dst, *src.float_obj);
         }
 
-        template<>
-        ObjDType::~ObjImp() {}
-
-        template<>
-        std::shared_ptr<Obj> ObjDType::copy() const
+        bool FloatType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
         {
-            check_init(this);
-
-            if (data.has_cargs)
-                return create_obj_dtype(data.ety, data.cargs);
-            return create_obj_dtype(data.ety);
+            return heap.create_obj_float(errs, dst, 1.0);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjDType::inst() const
+        bool FloatType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
-            check_init(this);
-
-            switch (data.ety)
-            {
-            case ObjType::TYPE:
-                assert(!data.has_cargs);
-                return create_obj_dtype();
-            case ObjType::FWIDTH:
-                assert(!data.has_cargs);
-                return create_obj_fwidth();
-            case ObjType::BOOL:
-                assert(!data.has_cargs);
-                return create_obj_bool();
-            case ObjType::INT:
-                assert(!data.has_cargs);
-                return create_obj_int();
-            case ObjType::FLOAT:
-                assert(!data.has_cargs);
-                return create_obj_float();
-            case ObjType::STR:
-                assert(!data.has_cargs);
-                return create_obj_str();
-            case ObjType::ARRAY:
-                if (data.has_cargs)
-                {
-                    if (data.cargs.size() != 2)
-                        throw GenerationError("Invalid number of carg parameters for array type");
-                    check_type(ObjType::TYPE, data.cargs[0]);
-                    check_type(ObjType::INT, data.cargs[1]);
-                    return create_obj_array(std::static_pointer_cast<ObjDType>(data.cargs[0]), static_cast<const ObjInt*>(data.cargs[1].get())->data.val);
-                }
-                else
-                    return create_obj_array();
-            case ObjType::TUPLE:
-                if (data.has_cargs)
-                {
-                    std::vector<std::shared_ptr<ObjDType>> dtypes;
-                    for (auto e : data.cargs)
-                    {
-                        check_type(ObjType::TYPE, e);
-                        dtypes.push_back(std::static_pointer_cast<ObjDType>(e));
-                    }
-                    return create_obj_tuple(dtypes);
-                }
-                else
-                    return create_obj_tuple();
-            case ObjType::TENSOR:
-                if (data.has_cargs)
-                {
-                    if (data.cargs.size() == 0)
-                        throw GenerationError("Invalid number of carg parameters for tensor type");
-                    check_type(ObjType::FWIDTH, data.cargs[0]);
-                    std::vector<uint32_t> dims;
-                    for (size_t i = 1; i < data.cargs.size(); i++)
-                    {
-                        check_init(data.cargs[i]);
-                        check_type(ObjType::INT, data.cargs[i]);
-                        dims.push_back(std::static_pointer_cast<ObjInt>(data.cargs[i])->data.val);
-                    }
-                    return create_obj_tensor(std::static_pointer_cast<ObjFWidth>(data.cargs[0])->data.dty, dims);
-                }
-                else
-                    return create_obj_tensor();
-            }
-            throw GenerationError("Invalid type for instantiation");
+            *lhs.float_obj = *rhs.float_obj;
+            return false;
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjDType::cargs(const std::vector<std::shared_ptr<Obj>>& args)
+        bool FloatType::iadd(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
-            check_init(this);
-            if (data.has_cargs)
-                throw GenerationError("Const args have already been set");
-            return create_obj_dtype(data.ety, args);
+            *lhs.float_obj += *rhs.float_obj;
+            return false;
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjDType::eq(const std::shared_ptr<Obj>& val) const
+        bool FloatType::isub(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            // shortcut
-            if (this == val.get())
-                return create_obj_bool(true);
-
-            if (data.ety != mty(val)->data.ety)
-                return create_obj_bool(false);
-            if (data.has_cargs)
-            {
-                if (data.cargs.size() != mty(val)->data.cargs.size())
-                    return create_obj_bool(false);
-                for (int i = 0; i < data.cargs.size(); i++)
-                    if (data.cargs[i]->ne(mty(val)->data.cargs[i])->bval())
-                        return create_obj_bool(false);
-            }
-            return create_obj_bool(true);
+            *lhs.float_obj -= *rhs.float_obj;
+            return false;
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjDType::ne(const std::shared_ptr<Obj>& val) const
+        bool FloatType::imul(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            // shortcut
-            if (this == val.get())
-                return create_obj_bool(false);
-
-            if (data.ety != mty(val)->data.ety)
-                return create_obj_bool(true);
-            if (data.has_cargs)
-            {
-                if (data.cargs.size() != mty(val)->data.cargs.size())
-                    return create_obj_bool(true);
-                for (int i = 0; i < data.cargs.size(); i++)
-                    if (data.cargs[i]->ne(mty(val)->data.cargs[i])->bval())
-                        return create_obj_bool(true);
-            }
-            return create_obj_bool(false);
+            *lhs.float_obj *= *rhs.float_obj;
+            return false;
         }
 
-        template<>
-        ObjInvalid::ObjImp() :
-            Obj(ObjType::INVALID)
-        {}
-
-        template<>
-        ObjInvalid::~ObjImp() {}
-
-        template<>
-        ObjVar::ObjImp() :
-            Obj(ObjType::VAR)
+        bool FloatType::idiv(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
-            data.self = nullptr;
+            *lhs.float_obj /= *rhs.float_obj;
+            return false;
         }
 
-        template<>
-        ObjVar::~ObjImp() {}
-
-        template<>
-        bool ObjVar::bval() const
+        bool FloatType::add(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            if (!data.self)
-                return ObjImp::bval();
-            return data.self->bval();
+            return heap.create_obj_float(errs, dst, *lhs.float_obj + *rhs.float_obj);
         }
 
-        // TODO: implement the rest of the ObjVar methods
-
-        template<>
-        ObjFWidth::ObjImp() :
-            Obj(ObjType::FWIDTH)
+        bool FloatType::sub(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            data.dty = core::tensor_dty::F32;
+            return heap.create_obj_float(errs, dst, *lhs.float_obj - *rhs.float_obj);
         }
 
-        template<>
-        ObjFWidth::~ObjImp() {}
-
-        template<>
-        void ObjFWidth::assign(const std::shared_ptr<Obj>& val)
+        bool FloatType::mul(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_mtype(val);
-            check_init(val);
-            data.dty = mty(val)->data.dty;
-            init = true;
+            return heap.create_obj_float(errs, dst, *lhs.float_obj * *rhs.float_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjFWidth::copy() const
+        bool FloatType::div(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            return create_obj_fwidth(data.dty);
+            return heap.create_obj_float(errs, dst, *lhs.float_obj / *rhs.float_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjFWidth::eq(const std::shared_ptr<Obj>& val) const
+        bool FloatType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            auto pobj = create_obj_bool();
-            pobj->data.val = data.dty == mty(val)->data.dty;
-            pobj->init = true;
-            return pobj;
+            return heap.create_obj_bool(errs, dst, *lhs.float_obj == *rhs.float_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjFWidth::ne(const std::shared_ptr<Obj>& val) const
+        bool FloatType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            auto pobj = create_obj_bool();
-            pobj->data.val = data.dty != mty(val)->data.dty;
-            pobj->init = true;
-            return pobj;
+            return heap.create_obj_bool(errs, dst, *lhs.float_obj != *rhs.float_obj);
         }
 
-        template<>
-        ObjBool::ObjImp() :
-            Obj(ObjType::BOOL)
+        bool FloatType::ge(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            data.val = false;
+            return heap.create_obj_bool(errs, dst, *lhs.float_obj >= *rhs.float_obj);
         }
 
-        template<>
-        ObjBool::~ObjImp() {}
-
-        template<>
-        bool ObjBool::bval() const
+        bool FloatType::le(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            return data.val;
+            return heap.create_obj_bool(errs, dst, *lhs.float_obj <= *rhs.float_obj);
         }
 
-        template<>
-        void ObjBool::assign(const std::shared_ptr<Obj>& val)
+        bool FloatType::gt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_mtype(val);
-            check_init(val);
-            data.val = mty(val)->data.val;
-            init = true;
+            return heap.create_obj_bool(errs, dst, *lhs.float_obj > *rhs.float_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjBool::copy() const
+        bool FloatType::lt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            return create_obj_bool(data.val);
+            return heap.create_obj_bool(errs, dst, *lhs.float_obj < *rhs.float_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjBool::andop(const std::shared_ptr<Obj>& val) const
+        bool FloatType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            auto pobj = create_obj_bool();
-            pobj->data.val = data.val && mty(val)->data.val;
-            pobj->init = true;
-            return pobj;
+            // TODO: implement float to string conversion
+            return heap.create_obj_str(errs, dst, std::to_string(*src.float_obj));
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjBool::orop(const std::shared_ptr<Obj>& val) const
+        bool FloatType::xflt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            auto pobj = create_obj_bool();
-            pobj->data.val = data.val || mty(val)->data.val;
-            pobj->init = true;
-            return pobj;
+            return heap.create_obj_float(errs, dst, *src.float_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjBool::eq(const std::shared_ptr<Obj>& val) const
+        bool FloatType::xint(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            auto pobj = create_obj_bool();
-            pobj->data.val = data.val == mty(val)->data.val;
-            pobj->init = true;
-            return pobj;
+            return heap.create_obj_int(errs, dst, *src.float_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjBool::ne(const std::shared_ptr<Obj>& val) const
+        bool StrType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            auto pobj = create_obj_bool();
-            pobj->data.val = data.val != mty(val)->data.val;
-            pobj->init = true;
-            return pobj;
+            return heap.create_obj_str(errs, dst, *src.str_obj);
         }
 
-        template<>
-        ObjInt::ObjImp() :
-            Obj(ObjType::INT)
+        bool StrType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
         {
-            data.val = 0;
+            return heap.create_obj_str(errs, dst, "");
         }
 
-        template<>
-        ObjInt::~ObjImp() {}
-
-        template<>
-        void ObjInt::assign(const std::shared_ptr<Obj>& val)
+        bool StrType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
-            check_mtype(val);
-            check_init(val);
-            data.val = mty(val)->data.val;
-            init = true;
+            *lhs.str_obj = *rhs.str_obj;
+            return false;
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjInt::copy() const
+        bool StrType::iadd(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
-            check_init(this);
-            return create_obj_int(data.val);
+            *lhs.str_obj += *rhs.str_obj;
+            return false;
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjInt::neg() const
+        bool StrType::add(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            auto pobj = create_obj_int();
-            pobj->data.val = -data.val;
-            pobj->init = true;
-            return pobj;
+            return heap.create_obj_str(errs, dst, *lhs.str_obj + *rhs.str_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjInt::add(const std::shared_ptr<Obj>& val) const
+        bool StrType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            check_init(val);
-
-            if (val->ty == ObjType::INT)
-            {
-                auto pobj = create_obj_int();
-                pobj->data.val = data.val + static_cast<const ObjInt*>(val.get())->data.val;
-                pobj->init = true;
-                return pobj;
-            }
-            else if (val->ty == ObjType::FLOAT)
-            {
-                auto pobj = create_obj_float();
-                pobj->data.val = data.val + static_cast<const ObjFloat*>(val.get())->data.val;
-                pobj->init = true;
-                return pobj;
-            }
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+            return heap.create_obj_bool(errs, dst, *lhs.str_obj == *rhs.str_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjInt::sub(const std::shared_ptr<Obj>& val) const
+        bool StrType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            check_init(val);
-
-            if (val->ty == ObjType::INT)
-            {
-                auto pobj = create_obj_int();
-                pobj->data.val = data.val - static_cast<const ObjInt*>(val.get())->data.val;
-                pobj->init = true;
-                return pobj;
-            }
-            else if (val->ty == ObjType::FLOAT)
-            {
-                auto pobj = create_obj_float();
-                pobj->data.val = data.val - static_cast<const ObjFloat*>(val.get())->data.val;
-                pobj->init = true;
-                return pobj;
-            }
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+            return heap.create_obj_bool(errs, dst, *lhs.str_obj != *rhs.str_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjInt::mul(const std::shared_ptr<Obj>& val) const
+        bool StrType::ge(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            check_init(val);
-
-            if (val->ty == ObjType::INT)
-            {
-                auto pobj = create_obj_int();
-                pobj->data.val = data.val * static_cast<const ObjInt*>(val.get())->data.val;
-                pobj->init = true;
-                return pobj;
-            }
-            else if (val->ty == ObjType::FLOAT)
-            {
-                auto pobj = create_obj_float();
-                pobj->data.val = data.val * static_cast<const ObjFloat*>(val.get())->data.val;
-                pobj->init = true;
-                return pobj;
-            }
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+            return heap.create_obj_bool(errs, dst, *lhs.str_obj >= *rhs.str_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjInt::div(const std::shared_ptr<Obj>& val) const
+        bool StrType::le(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            check_init(val);
-
-            if (val->ty == ObjType::INT)
-            {
-                auto pobj = create_obj_int();
-                pobj->data.val = data.val / static_cast<const ObjInt*>(val.get())->data.val;
-                pobj->init = true;
-                return pobj;
-            }
-            else if (val->ty == ObjType::FLOAT)
-            {
-                auto pobj = create_obj_float();
-                pobj->data.val = data.val / static_cast<const ObjFloat*>(val.get())->data.val;
-                pobj->init = true;
-                return pobj;
-            }
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+            return heap.create_obj_bool(errs, dst, *lhs.str_obj <= *rhs.str_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjInt::eq(const std::shared_ptr<Obj>& val) const
+        bool StrType::gt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_bool();
-            pobj->init = true;
-            switch (val->ty)
-            {
-            case ObjType::INT:
-                pobj->data.val = data.val == static_cast<const ObjInt*>(val.get())->data.val;
-                return pobj;
-            case ObjType::FLOAT:
-                pobj->data.val = data.val == static_cast<const ObjFloat*>(val.get())->data.val;
-                return pobj;
-            }
-            throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+            return heap.create_obj_bool(errs, dst, *lhs.str_obj > *rhs.str_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjInt::ne(const std::shared_ptr<Obj>& val) const
+        bool StrType::lt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_bool();
-            pobj->init = true;
-            switch (val->ty)
-            {
-            case ObjType::INT:
-                pobj->data.val = data.val != static_cast<const ObjInt*>(val.get())->data.val;
-                return pobj;
-            case ObjType::FLOAT:
-                pobj->data.val = data.val != static_cast<const ObjFloat*>(val.get())->data.val;
-                return pobj;
-            }
-            throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+            return heap.create_obj_bool(errs, dst, *lhs.str_obj < *rhs.str_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjInt::ge(const std::shared_ptr<Obj>& val) const
+        bool StrType::idx(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_bool();
-            pobj->init = true;
-            switch (val->ty)
-            {
-            case ObjType::INT:
-                pobj->data.val = data.val >= static_cast<const ObjInt*>(val.get())->data.val;
-                return pobj;
-            case ObjType::FLOAT:
-                pobj->data.val = data.val >= static_cast<const ObjFloat*>(val.get())->data.val;
-                return pobj;
-            }
-            throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+            return heap.create_obj_str(errs, dst, std::string(1, (*lhs.str_obj)[*rhs.int_obj]));
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjInt::le(const std::shared_ptr<Obj>& val) const
+        bool StrType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_bool();
-            pobj->init = true;
-            switch (val->ty)
-            {
-            case ObjType::INT:
-                pobj->data.val = data.val <= static_cast<const ObjInt*>(val.get())->data.val;
-                return pobj;
-            case ObjType::FLOAT:
-                pobj->data.val = data.val <= static_cast<const ObjFloat*>(val.get())->data.val;
-                return pobj;
-            }
-            throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+            return heap.create_obj_str(errs, dst, *src.str_obj);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjInt::gt(const std::shared_ptr<Obj>& val) const
+        bool StrType::xflt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_bool();
-            pobj->init = true;
-            switch (val->ty)
-            {
-            case ObjType::INT:
-                pobj->data.val = data.val > static_cast<const ObjInt*>(val.get())->data.val;
-                return pobj;
-            case ObjType::FLOAT:
-                pobj->data.val = data.val > static_cast<const ObjFloat*>(val.get())->data.val;
-                return pobj;
-            }
-            throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+            // TODO: implement string to float conversion
+            return heap.create_obj_float(errs, dst, std::stod(*src.str_obj));
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjInt::lt(const std::shared_ptr<Obj>& val) const
+        bool StrType::xint(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_bool();
-            pobj->init = true;
-            switch (val->ty)
-            {
-            case ObjType::INT:
-                pobj->data.val = data.val < static_cast<const ObjInt*>(val.get())->data.val;
-                return pobj;
-            case ObjType::FLOAT:
-                pobj->data.val = data.val < static_cast<const ObjFloat*>(val.get())->data.val;
-                return pobj;
-            }
-            throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
+            // TODO: implement string to int conversion
+            return heap.create_obj_int(errs, dst, std::stoll(*src.str_obj));
         }
-
-        template<>
-        ObjFloat::ObjImp() :
-            Obj(ObjType::FLOAT)
-        {
-            data.val = 1.0;
-        }
-
-        template<>
-        ObjFloat::~ObjImp() {}
         
-        template<>
-        std::shared_ptr<Obj> ObjFloat::copy() const
+        bool ArrType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            check_init(this);
-            return create_obj_float(data.val);
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjFloat::neg() const
-        {
-            check_init(this);
-            auto pobj = create_obj_float();
-            pobj->data.val = -data.val;
-            pobj->init = true;
-            return pobj;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjFloat::add(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_float();
-            if (val->ty == ObjType::INT)
-                pobj->data.val = data.val + static_cast<const ObjInt*>(val.get())->data.val;
-            else if (val->ty == ObjType::FLOAT)
-                pobj->data.val = data.val + static_cast<const ObjFloat*>(val.get())->data.val;
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
-
-            pobj->init = true;
-            return pobj;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjFloat::sub(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_float();
-            if (val->ty == ObjType::INT)
-                pobj->data.val = data.val - static_cast<const ObjInt*>(val.get())->data.val;
-            else if (val->ty == ObjType::FLOAT)
-                pobj->data.val = data.val - static_cast<const ObjFloat*>(val.get())->data.val;
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
-
-            pobj->init = true;
-            return pobj;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjFloat::mul(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_float();
-            if (val->ty == ObjType::INT)
-                pobj->data.val = data.val * static_cast<const ObjInt*>(val.get())->data.val;
-            else if (val->ty == ObjType::FLOAT)
-                pobj->data.val = data.val * static_cast<const ObjFloat*>(val.get())->data.val;
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
-
-            pobj->init = true;
-            return pobj;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjFloat::div(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_float();
-            if (val->ty == ObjType::INT)
-                pobj->data.val = data.val / static_cast<const ObjInt*>(val.get())->data.val;
-            else if (val->ty == ObjType::FLOAT)
-                pobj->data.val = data.val / static_cast<const ObjFloat*>(val.get())->data.val;
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
-
-            pobj->init = true;
-            return pobj;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjFloat::eq(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_bool();
-            if (val->ty == ObjType::INT)
-                pobj->data.val = data.val == static_cast<const ObjInt*>(val.get())->data.val;
-            else if (val->ty == ObjType::FLOAT)
-                pobj->data.val = data.val == static_cast<const ObjFloat*>(val.get())->data.val;
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
-
-            pobj->init = true;
-            return pobj;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjFloat::ne(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_bool();
-            if (val->ty == ObjType::INT)
-                pobj->data.val = data.val != static_cast<const ObjInt*>(val.get())->data.val;
-            else if (val->ty == ObjType::FLOAT)
-                pobj->data.val = data.val != static_cast<const ObjFloat*>(val.get())->data.val;
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
-
-            pobj->init = true;
-            return pobj;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjFloat::ge(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_bool();
-            if (val->ty == ObjType::INT)
-                pobj->data.val = data.val >= static_cast<const ObjInt*>(val.get())->data.val;
-            else if (val->ty == ObjType::FLOAT)
-                pobj->data.val = data.val >= static_cast<const ObjFloat*>(val.get())->data.val;
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
-
-            pobj->init = true;
-            return pobj;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjFloat::le(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_bool();
-            if (val->ty == ObjType::INT)
-                pobj->data.val = data.val <= static_cast<const ObjInt*>(val.get())->data.val;
-            else if (val->ty == ObjType::FLOAT)
-                pobj->data.val = data.val <= static_cast<const ObjFloat*>(val.get())->data.val;
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
-
-            pobj->init = true;
-            return pobj;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjFloat::gt(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_bool();
-            if (val->ty == ObjType::INT)
-                pobj->data.val = data.val > static_cast<const ObjInt*>(val.get())->data.val;
-            else if (val->ty == ObjType::FLOAT)
-                pobj->data.val = data.val > static_cast<const ObjFloat*>(val.get())->data.val;
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
-
-            pobj->init = true;
-            return pobj;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjFloat::lt(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-
-            auto pobj = create_obj_bool();
-            if (val->ty == ObjType::INT)
-                pobj->data.val = data.val < static_cast<const ObjInt*>(val.get())->data.val;
-            else if (val->ty == ObjType::FLOAT)
-                pobj->data.val = data.val < static_cast<const ObjFloat*>(val.get())->data.val;
-            else
-                throw GenerationError("Expected int or float, recieved " + obj_type_name(val->ty));
-
-            pobj->init = true;
-            return pobj;
-        }
-
-        template<>
-        ObjStr::ObjImp() :
-            Obj(ObjType::STR)
-        {
-            data.val = "";
-        }
-
-        template<>
-        ObjStr::~ObjImp() {}
-        
-        template<>
-        void ObjStr::assign(const std::shared_ptr<Obj>& val)
-        {
-            check_init(val);
-            check_mtype(val);
-
-            data.val = mty(val)->data.val;
-            init = true;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjStr::copy() const
-        {
-            check_init(this);
-            return create_obj_str(data.val);
-        }
-
-        template<>
-        std::string ObjStr::str() const
-        {
-            return data.val;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjStr::get(const std::string& item)
-        {
-            check_init(this);
-
-            if (item == "length")
-                return create_obj_int(data.val.size());
-
-            throw GenerationError("str type has no member: " + item);
-        }
-
-        template<>
-        std::vector<std::shared_ptr<Obj>> ObjStr::iter()
-        {
-            check_init(this);
-
-            std::vector<std::shared_ptr<Obj>> iters;
-            for (auto e : data.val)
+            std::vector<Obj> objs;
+            for (const Obj e_src : *src.agg_obj)
             {
-                auto pelem = create_obj_str();
-                pelem->data.val = std::to_string(e);
-                pelem->init = true;
-                iters.push_back(pelem);
+                Obj e_dst;
+                if (elem_ty->cpy(errs, heap, e_dst, e_src))
+                    return true;
+                objs.push_back(e_dst);
             }
-            return iters;
+            return heap.create_obj_agg(errs, dst, objs);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjStr::idx(const std::shared_ptr<Obj>& val)
+        bool ArrType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
         {
-            check_init(this);
-            check_init(val);
-            if (val->ty != ObjType::INT)
-                throw GenerationError("Expected int, recieved " + obj_type_name(val->ty));
-            if (
-                static_cast<const ObjInt*>(val.get())->data.val < 0 ||
-                static_cast<const ObjInt*>(val.get())->data.val >= data.val.size())
-                throw GenerationError("Index out of range");
-
-            auto pobj = create_obj_str();
-            pobj->data.val = data.val[static_cast<const ObjInt*>(val.get())->data.val];
-            pobj->init = true;
-            return pobj;
+            return heap.create_obj_agg(errs, dst, {});
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjStr::add(const std::shared_ptr<Obj>& val) const
+        bool ArrType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            auto pobj = create_obj_str();
-            pobj->data.val = data.val + mty(val)->data.val;
-            pobj->init = true;
-            return pobj;
+            *lhs.agg_obj = *rhs.agg_obj;  // Copies the vector of pointers, not the data in the pointers
+            return false;
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjStr::eq(const std::shared_ptr<Obj>& val) const
+        bool ArrType::iadd(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
-            // TODO: string comparison
-            throw GenerationError("Not implemented");
+            lhs.agg_obj->insert(lhs.agg_obj->end(), rhs.agg_obj->begin(), rhs.agg_obj->end());
+            return false;
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjStr::ne(const std::shared_ptr<Obj>& val) const
+        bool ArrType::add(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            // TODO: string comparison
-            throw GenerationError("Not implemented");
+            std::vector<Obj> objs;
+            objs.insert(objs.end(), lhs.agg_obj->begin(), lhs.agg_obj->end());
+            objs.insert(objs.end(), rhs.agg_obj->begin(), rhs.agg_obj->end());
+            return heap.create_obj_agg(errs, dst, objs);
         }
 
-        template<>
-        ObjArray::ObjImp() :
-            Obj(ObjType::ARRAY)
+        bool ArrType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            data.dtype = nullptr;
-            data.elems = {};
-        }
+            if (lhs.agg_obj->size() != rhs.agg_obj->size())
+                return heap.create_obj_bool(errs, dst, false);
 
-        template<>
-        ObjArray::~ObjImp() {}
-        
-        template<>
-        void ObjArray::assign(const std::shared_ptr<Obj>& val)
-        {
-            check_init(val);
-            check_mtype(val);
-
-            if (init)
+            for (size_t i = 0; i < lhs.agg_obj->size(); i++)
             {
-                assert(data.elems.size() != -1);
-                if (data.elems.size() != mty(val)->data.elems.size())
-                    throw GenerationError("Width mismatch in array assignment");
-                if (data.dtype->ne(mty(val)->data.dtype)->bval())
-                    throw GenerationError("Type mismatch in array assignment");
-                for (int i = 0; i < data.elems.size(); i++)
-                {
-                    check_init(mty(val)->data.elems[i]);
-                    data.elems[i]->assign(mty(val)->data.elems[i]);
-                }
+                Obj e;
+                if (elem_ty->eq(errs, heap, e, lhs.agg_obj->operator[](i), rhs.agg_obj->operator[](i)))
+                    return true;
+                if (!*e.bool_obj)
+                    return heap.create_obj_bool(errs, dst, false);
             }
-            else
+            return heap.create_obj_bool(errs, dst, true);
+        }
+
+        bool ArrType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            if (lhs.agg_obj->size() != rhs.agg_obj->size())
+                return heap.create_obj_bool(errs, dst, true);
+
+            for (size_t i = 0; i < lhs.agg_obj->size(); i++)
             {
-                data.dtype = mty(val)->data.dtype;
-                for (auto& e : mty(val)->data.elems)
-                {
-                    check_init(e);
-                    data.elems.push_back(e);
-                }
-                init = true;
+                Obj e;
+                if (elem_ty->eq(errs, heap, e, lhs.agg_obj->operator[](i), rhs.agg_obj->operator[](i)))
+                    return true;
+                if (!*e.bool_obj)
+                    return heap.create_obj_bool(errs, dst, true);
             }
+            return heap.create_obj_bool(errs, dst, false);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjArray::copy() const
+        bool ArrType::idx(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            std::vector<std::shared_ptr<Obj>> dups;
-            for (auto e : data.elems)
-                dups.push_back(e->copy());
-            return create_obj_array(data.dtype, dups);
+            // TODO: bounds checking
+            dst = lhs.agg_obj->operator[](*rhs.int_obj);
+            return false;
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjArray::type() const
+        bool ArrType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            auto pobj = create_obj_dtype(ty);
-            if (!init)
-                return pobj;
-            return pobj->cargs(std::static_pointer_cast<ObjDType>(data.dtype)->data.cargs);
-        }
+            if (src.agg_obj->size() == 0)
+                return heap.create_obj_str(errs, dst, "[]");
 
-        template<>
-        std::shared_ptr<Obj> ObjArray::get(const std::string& item)
-        {
-            check_init(this);
+            auto it = src.agg_obj->begin();
+            Obj str;
+            if (elem_ty->xstr(errs, heap, str, *it))
+                return true;
 
-            if (item == "length")
-                return create_obj_int(data.elems.size());
-
-            throw GenerationError("array type has no member: " + item);
-        }
-
-        template<>
-        std::vector<std::shared_ptr<Obj>> ObjArray::iter()
-        {
-            check_init(this);
-            for (auto e : data.elems)
-                check_init(e);
-            return data.elems;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjArray::idx(const std::shared_ptr<Obj>& val)
-        {
-            check_init(this);
-            check_init(val);
-            check_type(ObjType::INT, val);
-
-            int64_t i = static_cast<const ObjInt*>(val.get())->data.val;
-            if (i < 0 || data.elems.size() <= i)
-                throw GenerationError("Index out of range");
-
-            return data.elems[i];
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjArray::add(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-            if (data.dtype->ne(mty(val)->data.dtype)->bval())
-                throw GenerationError("Array element type mismatch for concatenation");
-
-            // concatenating the elements
-            std::vector<std::shared_ptr<Obj>> nelems;
-            for (auto e : data.elems)
-                nelems.push_back(e->copy());
-            for (auto e : mty(val)->data.elems)
-                nelems.push_back(e->copy());
-            return create_obj_array(data.dtype, nelems);
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjArray::eq(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            if (data.elems.size() != mty(val)->data.elems.size())
-                return create_obj_bool(false);
-
-            for (int i = 0; i < data.elems.size(); i++)
-                if (data.elems[i]->ne(mty(val)->data.elems[i])->bval())
-                    return create_obj_bool(false);
-            return create_obj_bool(true);
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjArray::ne(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            if (data.elems.size() != mty(val)->data.elems.size())
-                return create_obj_bool(true);
-
-            for (int i = 0; i < data.elems.size(); i++)
-                if (data.elems[i]->ne(mty(val)->data.elems[i])->bval())
-                    return create_obj_bool(true);
-            return create_obj_bool(false);
-        }
-
-        template<>
-        ObjTuple::ObjImp() :
-            Obj(ObjType::TUPLE)
-        {
-            data.dtypes = {};
-            data.elems = {};
-        }
-
-        template<>
-        ObjTuple::~ObjImp() {}
-        
-        template<>
-        void ObjTuple::assign(const std::shared_ptr<Obj>& val)
-        {
-            check_init(val);
-            check_mtype(val);
-            if (init)
+            std::stringstream ss;
+            ss << '[' << *str.str_obj;
+            for (it++; it != src.agg_obj->end(); it++)
             {
-                if (data.elems.size() != mty(val)->data.elems.size())
-                    throw GenerationError("Width mismatch in tuple assignment");
-                for (int i = 0; i < data.elems.size(); i++)
-                    data.elems[i]->assign(mty(val)->data.elems[i]);
+                if (elem_ty->xstr(errs, heap, str, *it))
+                    return true;
+                ss << ", " << *str.str_obj;
             }
-            else
+            ss << ']';
+            return heap.create_obj_str(errs, dst, ss.str());
+        }
+
+        bool AggType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            // This should be an error, not an assert
+            assert(elem_tys.size() == 0 || src.agg_obj->size() == elem_tys.size());
+            std::vector<Obj> objs;
+            for (size_t i = 0; i < elem_tys.size(); i++)
             {
-                assert(data.elems.size() == 0);
-                assert(data.dtypes.size() == 0);
-                for (auto e : mty(val)->data.elems)
-                    data.elems.push_back(e->copy());
-                for (auto e : mty(val)->data.dtypes)
-                    data.elems.push_back(e);
-                init = true;
+                Obj e;
+                if (elem_tys[i]->cpy(errs, heap, e, src.agg_obj->operator[](i)))
+                    return true;
+                objs.push_back(e);
             }
+            return heap.create_obj_agg(errs, dst, objs);
         }
 
-        template<>
-        std::shared_ptr<Obj> ObjTuple::get(const std::string& item)
+        bool AggType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
         {
-            check_init(this);
-
-            if (item == "length")
-                return create_obj_int(data.elems.size());
-
-            throw GenerationError("tuple type has no member: " + item);
-        }
-
-        template<>
-        std::vector<std::shared_ptr<Obj>> ObjTuple::iter()
-        {
-            check_init(this);
-            for (auto e : data.elems)
-                check_init(e);
-            return data.elems;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjTuple::idx(const std::shared_ptr<Obj>& val)
-        {
-            check_init(this);
-            check_init(val);
-            if (val->ty != ObjType::INT)
-                throw GenerationError("Expected int, recieved " + obj_type_name(val->ty));
-
-            int64_t i = static_cast<const ObjInt*>(val.get())->data.val;
-            if (i < 0 || data.elems.size() <= i)
-                throw GenerationError("Index out of range");
-
-            return data.elems[i];
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjTuple::add(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            auto pobj = create_obj_tuple();
-            for (auto e : data.elems)
-                pobj->data.elems.push_back(e);
-            for (auto e : mty(val)->data.elems)
-                pobj->data.elems.push_back(e);
-            pobj->init = true;
-            return pobj;
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjTuple::eq(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            if (data.elems.size() != mty(val)->data.elems.size())
-                return create_obj_bool(false);
-
-            for (int i = 0; i < data.elems.size(); i++)
-                if (data.elems[i]->ne(mty(val)->data.elems[i]))
-                    return create_obj_bool(false);
-            return create_obj_bool(true);
-        }
-
-        template<>
-        std::shared_ptr<Obj> ObjTuple::ne(const std::shared_ptr<Obj>& val) const
-        {
-            check_init(this);
-            check_init(val);
-            check_mtype(val);
-
-            if (data.elems.size() != mty(val)->data.elems.size())
-                return create_obj_bool(true);
-
-            for (int i = 0; i < data.elems.size(); i++)
-                if (data.elems[i]->ne(mty(val)->data.elems[i]))
-                    return create_obj_bool(true);
-            return create_obj_bool(false);
-        }
-
-        template<>
-        ObjTensor::ObjImp() :
-            Obj(ObjType::TENSOR)
-        {
-            init = false;
-            data.dims = {};
-            data.pEdge = nullptr;
-            data.carg_init = false;
-            data.is_static = false;
-        }
-
-        template<>
-        ObjTensor::~ObjImp() {}
-
-        template<>
-        void ObjTensor::assign(const std::shared_ptr<Obj>& val)
-        {
-            check_mtype(val);
-            check_init(val);
-
-            // TODO: handle assignment to static tensors
-
-            if (data.carg_init)
+            std::vector<Obj> objs;
+            for (TypeObj* ty : elem_tys)
             {
-                // check to ensure the new value has the same rank and dimensions
-                if (data.dims.size() != mty(val)->data.dims.size())
-                    throw GenerationError(
-                        "Unable to assign a tensor with rank " + std::to_string(mty(val)->data.dims.size()) +
-                        " to a tensor with rank "              + std::to_string(          data.dims.size()));
-                for (size_t i = 0; i < data.dims.size(); i++)
-                {
-                    if (data.dims[i] != mty(val)->data.dims[i])
-                        throw GenerationError(
-                            "Unable to assign a tensor with dimension " + std::to_string(mty(val)->data.dims[i]) + " on index " + std::to_string(i) +
-                            " to a tensor with dimension " + std::to_string(data.dims.size()) + " on index " + std::to_string(i));
-                }
+                Obj e_dst;
+                if (ty->inst(errs, heap, e_dst))
+                    return true;
+                objs.push_back(e_dst);
             }
-            else
+            return heap.create_obj_agg(errs, dst, objs);
+        }
+
+        bool AggType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            *lhs.agg_obj = *rhs.agg_obj;  // Copies the vector of pointers, not the data in the pointers
+            return false;
+        }
+
+        bool AggType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            // These should be errors, not asserts
+            assert(lhs.agg_obj->size() == elem_tys.size());
+            assert(rhs.agg_obj->size() == elem_tys.size());
+
+            for (size_t i = 0; i < elem_tys.size(); i++)
             {
-                // initializing data.dims
-                assert(data.dims.size() == 0);
-                for (auto e : mty(val)->data.dims)
-                    data.dims.push_back(e);
-                data.carg_init = true;
+                Obj e;
+                if (elem_tys[i]->eq(errs, heap, e, lhs.agg_obj->operator[](i), rhs.agg_obj->operator[](i)))
+                    return true;
+                if (!*e.bool_obj)
+                    return heap.create_obj_bool(errs, dst, false);
             }
-
-            // doing the actual assignment
-            data.pEdge = mty(val)->data.pEdge;
-            init = true;
+            return heap.create_obj_bool(errs, dst, true);
         }
 
-        std::shared_ptr<Obj> ObjTensor::copy() const
+        bool AggType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            check_init(this);
-            assert(data.carg_init);
+            // This should be an error, not an assert
+            assert(lhs.agg_obj->size() == elem_tys.size());
+            assert(rhs.agg_obj->size() == elem_tys.size());
 
-            auto pobj = std::make_shared<ObjTensor>();
-            pobj->data.pEdge = data.pEdge;
-            pobj->data.dty = data.dty;
-            pobj->data.dims = data.dims;  // copy assignment
-            pobj->data.carg_init = true;
-            pobj->data.is_static = data.is_static;
-            pobj->init = true;
-            return pobj;
-        }
-
-        template<>
-        std::vector<std::shared_ptr<Obj>> ObjTensor::iter()
-        {
-            std::vector<std::shared_ptr<Obj>> iters;
-            iters.push_back(create_obj_fwidth(data.dty));
-            for (auto e : data.dims)
-                iters.push_back(create_obj_int(e));
-            return iters;
-        }
-
-        std::shared_ptr<Obj> ObjTensor::eq(const std::shared_ptr<Obj>& val) const
-        {
-            // TODO: check if the tensor rank and dimensions are equal (required for carg deduction)
-            throw GenerationError("Not implemented");
-        }
-
-        std::shared_ptr<Obj> ObjTensor::ne(const std::shared_ptr<Obj>& val) const
-        {
-            // TODO: check if the tensor rank or dimensions are not equal (required for carg deduction)
-            throw GenerationError("Not implemented");
-        }
-
-        template<>
-        ObjDef::ObjImp() :
-            Obj(ObjType::DEF)
-        {
-            data.pdef = nullptr;
-            data.cargs = {};
-            data.has_cargs = false;
-        }
-
-        template<>
-        ObjDef::~ObjImp() {}
-
-        template<>
-        std::shared_ptr<Obj> ObjDef::cargs(const std::vector<std::shared_ptr<Obj>>& args)
-        {
-            check_init(this);
-            if (data.has_cargs)
-                throw GenerationError("Const args have already been set");
-            return create_obj_def(data.pdef, args);
-        }
-
-        template<>
-        void ObjDef::call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const
-        {
-            check_init(this);
-            for (auto e : args)
-                check_init(e);
-
-            // creating a new scope for the def call
-            Scope* pscope = new Scope();
-
-            // saving the old state
-            Scope* prev_scope = ctx.pscope;
-            EvalState prev_state = ctx.state;
-            std::string prev_block = ctx.block_name;
-
-            // creating the new state
-            ctx.pscope = pscope;
-            ctx.state = EvalState::DEFSEQ;
-            ctx.block_name = data.pdef->get_name();
-
-            // applying the cargs, and evaluating the args
-            data.pdef->apply_cargs(ctx, data.cargs);  // If its empty, its empty
-            std::vector<std::shared_ptr<Obj>> cpy_args;
-            if (prev_state == EvalState::STARTUP)
+            for (size_t i = 0; i < elem_tys.size(); i++)
             {
-                // Generating the arguments for the entry point
-                for (const auto& [decl, name] : data.pdef->get_vargs())
-                    cpy_args.push_back(decl.auto_gen(ctx, name));  // automatically generating the arguments one by one
+                Obj e;
+                if (elem_tys[i]->eq(errs, heap, e, lhs.agg_obj->operator[](i), rhs.agg_obj->operator[](i)))
+                    return true;
+                if (!*e.bool_obj)
+                    return heap.create_obj_bool(errs, dst, true);
             }
-            else
+            return heap.create_obj_bool(errs, dst, false);
+        }
+
+        bool AggType::idx(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            // This should be an error, not an assert
+            assert(lhs.agg_obj->size() == elem_tys.size());
+
+            // TODO: bounds checking
+            dst = lhs.agg_obj->operator[](*rhs.int_obj);
+            return false;
+        }
+
+        bool AggType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            // This should be an error, not an assert
+            assert(src.agg_obj->size() == elem_tys.size());
+
+            if (src.agg_obj->size() == 0)
+                return heap.create_obj_str(errs, dst, "()");
+
+            Obj str;
+            if (elem_tys[0]->xstr(errs, heap, str, src.agg_obj->operator[](0)))
+                return true;
+
+            std::stringstream ss;
+            ss << '(' << *str.str_obj;
+            for (size_t i = 1; i < elem_tys.size(); i++)
             {
-                // Normal def call, just copy the arguments
-                for (auto e : args)
-                    cpy_args.push_back(e->copy());
+                if (elem_tys[i]->xstr(errs, heap, str, src.agg_obj->operator[](i)))
+                    return true;
+                ss << ", " << *str.str_obj;
             }
-
-            // doing the call
-            data.pdef->carg_deduction(ctx, cpy_args);
-            // ensuring the variables in the scope are fully initialized
-            for (auto e : ctx.scope())
-                check_init(std::get<1>(e));
-            auto pret = data.pdef->get_body().eval(ctx);  // not actually the return value, that's in last_ret
-            assert(pret->ty == ObjType::INVALID);
-
-            // restoring the previous state and cleanup
-            ctx.pscope = prev_scope;
-            ctx.state = prev_state;
-            ctx.block_name = prev_block;
-            delete pscope;
-        }
-
-        template<>
-        ObjFn::ObjImp() :
-            Obj(ObjType::FN)
-        {
-            // TODO: Implement functions
-            throw GenerationError("Not Implemented");
-        }
-
-        template<>
-        ObjFn::~ObjImp()
-        {
-            // TODO: Implement functions
-            throw GenerationError("Not Implemented");
-        }
-
-        template<>
-        ObjIntr::ObjImp() :
-            Obj(ObjType::INTR)
-        {
-            data.pintr = nullptr;
-            data.cargs = {};
-            data.has_cargs = false;
-        }
-
-        template<>
-        ObjIntr::~ObjImp() {}
-
-        template<>
-        std::shared_ptr<Obj> ObjIntr::cargs(const std::vector<std::shared_ptr<Obj>>& args)
-        {
-            check_init(this);
-            if (data.has_cargs)
-                throw GenerationError("Const args have already been set");
-            return create_obj_intr(data.pintr, args);
-        }
-
-        template<>
-        void ObjIntr::call(EvalCtx& ctx, const std::vector<std::shared_ptr<Obj>>& args) const
-        {
-            check_init(this);
-            for (auto e : args)
-                check_init(e);
-
-            // copying the arguments for the new scope
-            std::vector<std::shared_ptr<Obj>> cpy_args;
-            for (auto e : args)
-            {
-                check_type(ObjType::TENSOR, e);
-                assert(std::static_pointer_cast<ObjTensor>(e)->data.pEdge);
-                cpy_args.push_back(e->copy());
-            }
-
-            // creating a new scope for the intr call
-            Scope* pscope = new Scope();
-
-            // saving the old state
-            Scope* prev_scope = ctx.pscope;
-            EvalState prev_state = ctx.state;
-            std::string prev_block = ctx.block_name;
-
-            // creating the new state
-            ctx.pscope = pscope;
-            ctx.state = EvalState::INTR;
-            ctx.block_name = data.pintr->get_name();
-
-            // applying the cargs, and evaluating the args
-            data.pintr->apply_cargs(ctx, data.cargs);  // If its empty, its empty
-            data.pintr->carg_deduction(ctx, cpy_args);
-            // ensuring the variables in the scope are fully initialized
-            for (auto e : ctx.scope())
-                check_init(std::get<1>(e));
-            // At this point, the scope contains only cargs and args, since the args are all tensors, I can copy out the cargs
-            std::map<std::string, std::shared_ptr<Obj>> node_cargs;
-            for (const auto& [name, val] : ctx.scope())
-                if (val->ty != ObjType::TENSOR)
-                    node_cargs[name] = val->copy();
-            auto pret = data.pintr->get_body().eval(ctx);  // not actually the return value, that's in last_ret
-            assert(pret->ty == ObjType::INVALID);
-
-            // restoring the previous state and cleanup
-            ctx.pscope = prev_scope;
-            ctx.state = prev_state;
-            ctx.block_name = prev_block;
-            delete pscope;
-
-            // creating the new node based on the inputs and output from the intrinsic
-            core::Node* pnode = new core::Node();
-            pnode->name = data.pintr->get_name();
-            pnode->cargs = node_cargs;
-            // node input connections
-            for (int i = 0; i < args.size(); i++)
-            {
-                std::static_pointer_cast<ObjTensor>(args[i])->data.pEdge->outputs.push_back({ pnode, i });  // edge output to node input
-                pnode->inputs.push_back(std::static_pointer_cast<ObjTensor>(args[i])->data.pEdge);  // node input to edge output
-            }
-            // node output connections
-            if (last_ret->ty == ObjType::TENSOR)
-            {
-                // single output
-
-                ObjTensor* pten = static_cast<ObjTensor*>(last_ret.get());
-                if (!pten->data.pEdge)  // creating the edge if needed
-                {
-                    if (!pten->data.carg_init)
-                        throw GenerationError("Intrinsic output tensors must have a known shape");
-                    // creating a new edge
-                    pten->data.pEdge = new core::Edge();
-                    pten->data.pEdge->dsc.dty = pten->data.dty;
-                    pten->data.pEdge->dsc.rk = pten->data.dims.size();
-                    for (auto e : pten->data.dims)
-                        pten->data.pEdge->dsc.dims.push_back(e);
-                }
-                else if (pten->data.pEdge->input)  // if the edge already exists, make sure the input hasn't been mapped yet
-                    throw GenerationError("Edge input has already been mapped");
-                assert(pten->data.pEdge->inpid == -1);
-
-                pten->data.pEdge->input = pnode;  // edge input to node output
-                pten->data.pEdge->inpid = 0;
-                pnode->outputs.push_back(pten->data.pEdge);  // node output to edge input
-            }
-            else
-            {
-                // multiple outputs
-                const auto& outs = last_ret->iter();
-                for (int i = 0; i < outs.size(); i++)
-                {
-                    check_type(ObjType::TENSOR, outs[i]);
-
-                    ObjTensor* pten = static_cast<ObjTensor*>(outs[i].get());
-                    if (!pten->data.pEdge)  // creating the edge if needed
-                    {
-                        if (!pten->data.carg_init)
-                            throw GenerationError("Intrinsic output tensors must have a known shape");
-                        // creating a new edge
-                        pten->data.pEdge = new core::Edge();
-                        pten->data.pEdge->dsc.rk = pten->data.dims.size();
-                        for (auto e : pten->data.dims)
-                            pten->data.pEdge->dsc.dims.push_back(e);
-                    }
-                    else if (pten->data.pEdge->input)  // if the edge already exists, make sure the input hasn't been mapped yet
-                        throw GenerationError("Edge input has already been mapped");
-                    assert(pten->data.pEdge->inpid == -1);
-
-                    pten->data.pEdge->input = pnode;  // edge input to node output
-                    pten->data.pEdge->inpid = i;
-                    pnode->outputs.push_back(pten->data.pEdge);  // node output to edge input
-                }
-            }
-        }
-
-        template<>
-        ObjModule::ObjImp() :
-            Obj(ObjType::MODULE)
-        {
-            // TODO: Implement modules
-            throw GenerationError("Not Implmented");
-        }
-
-        ObjModule::~ObjImp()
-        {
-            // TODO: Implement modules
-            throw GenerationError("Not Implmented");
-        }
-
-        template<>
-        ObjPackage::ObjImp() :
-            Obj(ObjType::PACKAGE)
-        {
-            // TODO: Implement packages
-            throw GenerationError("Not Implmented");
-        }
-
-        template<>
-        ObjPackage::~ObjImp()
-        {
-            // TODO: Implement packages
-            throw GenerationError("Not Implmented");
-        }
-
-        // Object contructors, not going to use factories
-
-        std::shared_ptr<Obj> create_obj_type(ObjType ty)
-        {
-            std::shared_ptr<Obj> pelem;
-            switch (ty)
-            {
-            case ObjType::TYPE   :    pelem = create_obj_dtype   (); break;
-            case ObjType::VAR    :    pelem = create_obj_var     (); break;
-            case ObjType::BOOL   :    pelem = create_obj_bool    (); break;
-            case ObjType::INT    :    pelem = create_obj_int     (); break;
-            case ObjType::FLOAT  :    pelem = create_obj_float   (); break;
-            case ObjType::STR    :    pelem = create_obj_str     (); break;
-            case ObjType::ARRAY  :    pelem = create_obj_array   (); break;
-            case ObjType::TUPLE  :    pelem = create_obj_tuple   (); break;
-            case ObjType::TENSOR :    pelem = create_obj_tensor  (); break;
-            case ObjType::DEF    :    pelem = create_obj_def     (); break;
-            case ObjType::FN     :    pelem = create_obj_fn      (); break;
-            case ObjType::INTR   :    pelem = create_obj_intr    (); break;
-            case ObjType::MODULE :    pelem = create_obj_module  (); break;
-            case ObjType::PACKAGE:    pelem = create_obj_package (); break;
-            default:
-                throw GenerationError("Invalid object type for contruction: " + obj_type_name(ty));
-            }
-            return pelem;
-        }
-
-        std::shared_ptr<ObjDType> create_obj_dtype()
-        {
-            auto pobj = std::make_shared<ObjDType>();
-            pobj->init = false;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjDType> create_obj_dtype(ObjType ty)
-        {
-            auto pobj = std::make_shared<ObjDType>();
-            pobj->data.ety = ty;
-            pobj->data.cargs = {};
-            pobj->data.has_cargs = false;
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjDType> create_obj_dtype(ObjType ty, const std::vector<std::shared_ptr<Obj>>& cargs)
-        {
-            auto pobj = std::make_shared<ObjDType>();
-            pobj->data.ety = ty;
-            for (auto e : cargs)
-                check_init(e);
-            pobj->data.cargs = cargs;
-            pobj->data.has_cargs = true;
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjInvalid> create_obj_invalid()
-        {
-            return std::make_shared<ObjInvalid>();
-        }
-
-        std::shared_ptr<ObjVar> create_obj_var()
-        {
-            return std::make_shared<ObjVar>();
-        }
-
-        std::shared_ptr<ObjFWidth> create_obj_fwidth()
-        {
-            return std::make_shared<ObjFWidth>();
-        }
-
-        std::shared_ptr<ObjFWidth> create_obj_fwidth(core::tensor_dty dty)
-        {
-            auto pobj = std::make_shared<ObjFWidth>();
-            pobj->data.dty = dty;
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjBool> create_obj_bool()
-        {
-            auto pobj = std::make_shared<ObjBool>();
-            pobj->init = false;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjBool> create_obj_bool(bool val)
-        {
-            auto pobj = std::make_shared<ObjBool>();
-            pobj->data.val = val;
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjInt> create_obj_int()
-        {
-            auto pobj = std::make_shared<ObjInt>();
-            pobj->init = false;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjInt> create_obj_int(int64_t val)
-        {
-            auto pobj = std::make_shared<ObjInt>();
-            pobj->data.val = val;
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjFloat> create_obj_float()
-        {
-            auto pobj = std::make_shared<ObjFloat>();
-            pobj->init = false;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjFloat> create_obj_float(double val)
-        {
-            auto pobj = std::make_shared<ObjFloat>();
-            pobj->data.val = val;
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjStr> create_obj_str()
-        {
-            auto pobj = std::make_shared<ObjStr>();
-            pobj->init = false;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjStr> create_obj_str(const std::string& val)
-        {
-            auto pobj = std::make_shared<ObjStr>();
-            pobj->data.val = val;
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjArray> create_obj_array()
-        {
-            return std::make_shared<ObjArray>();
-        }
-
-        std::shared_ptr<ObjArray> create_obj_array(const std::shared_ptr<Obj> dtype, int sz)
-        {
-            auto pobj = std::make_shared<ObjArray>();
-            pobj->data.dtype = dtype;
-            for (int i = 0; i < sz; i++)
-                pobj->data.elems.push_back(dtype->inst());
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjArray> create_obj_array(const std::shared_ptr<Obj> dtype, const std::vector<std::shared_ptr<Obj>>& elems)
-        {
-            auto pobj = std::make_shared<ObjArray>();
-            pobj->data.dtype = dtype;
-            for (auto e : elems)
-            {
-                pobj->data.elems.push_back(dtype->inst());
-                pobj->data.elems.back()->assign(e);
-            }
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjTuple> create_obj_tuple()
-        {
-            return std::make_shared<ObjTuple>();
-        }
-
-        std::shared_ptr<ObjTuple> create_obj_tuple(const std::vector<std::shared_ptr<ObjDType>>& dtypes)
-        {
-            auto pobj = std::make_shared<ObjTuple>();
-            for (auto e : dtypes)
-            {
-                pobj->data.dtypes.push_back(e);
-                pobj->data.elems.push_back(e->inst());
-            }
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjTuple> create_obj_tuple(const std::vector<std::shared_ptr<Obj>>& elems)
-        {
-            auto pobj = std::make_shared<ObjTuple>();
-            pobj->data.elems = elems;
-            for (auto e : elems)
-                pobj->data.dtypes.push_back(e->type());
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjTensor> create_obj_tensor()
-        {
-            auto pobj = std::make_shared<ObjTensor>();
-            pobj->data.pEdge = nullptr;
-            pobj->data.dims = {};
-            pobj->data.carg_init = false;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjTensor> create_obj_tensor(core::tensor_dty dty, const std::vector<uint32_t>& dims)
-        {
-            auto pobj = std::make_shared<ObjTensor>();
-            pobj->data.pEdge = nullptr;
-            pobj->data.dims = dims;
-            pobj->data.dty = dty;
-            pobj->data.carg_init = true;
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjDef> create_obj_def()
-        {
-            return std::make_shared<ObjDef>();
-        }
-
-        std::shared_ptr<ObjDef> create_obj_def(const AstDef* pdef)
-        {
-            auto pobj = std::make_shared<ObjDef>();
-            pobj->data.pdef = pdef;
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjDef> create_obj_def(const AstDef* pdef, const std::vector<std::shared_ptr<Obj>>& cargs)
-        {
-            auto pobj = std::make_shared<ObjDef>();
-            pobj->data.pdef = pdef;
-            for (auto e : cargs)
-                check_init(e);
-            pobj->data.cargs = cargs;
-            pobj->data.has_cargs = true;
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjFn> create_obj_fn()
-        {
-            return std::make_shared<ObjFn>();
-        }
-
-        std::shared_ptr<ObjFn> create_obj_fn(const AstFn* pfn)
-        {
-            auto pobj = std::make_shared<ObjFn>();
-            pobj->data.pfn = pfn;
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjIntr> create_obj_intr()
-        {
-            return std::make_shared<ObjIntr>();
-        }
-
-        std::shared_ptr<ObjIntr> create_obj_intr(const AstIntr* pintr)
-        {
-            auto pobj = std::make_shared<ObjIntr>();
-            pobj->data.pintr = pintr;
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjIntr> create_obj_intr(const AstIntr* pintr, const std::vector<std::shared_ptr<Obj>>& cargs)
-        {
-            auto pobj = std::make_shared<ObjIntr>();
-            pobj->data.pintr = pintr;
-            for (auto e : cargs)
-                check_init(e);
-            pobj->data.cargs = cargs;
-            pobj->data.has_cargs = true;
-            pobj->init = true;
-            return pobj;
-        }
-
-        std::shared_ptr<ObjModule> create_obj_module()
-        {
-            throw GenerationError("Not implemented");
-        }
-
-        std::shared_ptr<ObjPackage> create_obj_package()
-        {
-            throw GenerationError("Not Implemented");
+            ss << ')';
+            return heap.create_obj_str(errs, dst, ss.str());
         }
     }
 }

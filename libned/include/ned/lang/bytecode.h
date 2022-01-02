@@ -416,15 +416,16 @@ namespace nn
 * jmp <label>  Unconditional Jump
 * brt <label>  Branch if true with pop
 * brf <label>  Branch if false with pop
-* pop <int>    Pops element <int> off the stack
 * 
-* nul          Pushes a null pointer onto the stack
 * new <addr>   Adds an object from static memory onto the stack
 * agg <int>    Creates a new aggregate object from the top <int> elements on the stack
-* aty <int>    Creates a new aggregate type from the top <int> elements on the stack
+* arr          Creates a new array type with element type specified by the tos (used for generics)
+* aty <int>    Creates a new struct type from the top <int> elements on the stack (used for generics)
 * 
-* inst         Creates an instance from the element on the top of the stack, and pops the type
+* pop <int>    Pops element <int> off the stack
 * dup <int>    Duplicates an object on the stack
+* cpy          Copies the object on the tos
+* inst         Creates an instance from the element on the top of the stack, and pops the type
 * 
 * Considers the top element on the stack to be a pointer into the code segment
 * Pops the tos, pushes the current pc onto the stack and sets a new pc

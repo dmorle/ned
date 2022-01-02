@@ -4,6 +4,8 @@
 #include <ned/lang/errors.h>
 #include <ned/lang/obj.h>
 
+#include <array>
+
 namespace nn
 {
     namespace lang
@@ -15,7 +17,7 @@ namespace nn
 
         class CallStack
         {
-            std::array<Obj, 1e6> stack;
+            std::array<Obj, (size_t)1e6> stack;
             size_t sp;
 
         public:
