@@ -15,7 +15,7 @@ namespace nn
 {
     namespace lang
     {
-        class ParsingError
+        class Error
         {
             size_t line_num;
             size_t col_num;
@@ -23,7 +23,7 @@ namespace nn
 
         public:
             template<typename... Args>
-            ParsingError(size_t line_num, size_t col_num, const std::string& fmt, const Args&... args)
+            Error(size_t line_num, size_t col_num, const std::string& fmt, const Args&... args)
             {
                 this->line_num = line_num;
                 this->col_num = col_num;
@@ -31,7 +31,7 @@ namespace nn
             }
 
             template<typename... Args>
-            ParsingError(const Token* ptk, const std::string& fmt, const Args&... args)
+            Error(const Token* ptk, const std::string& fmt, const Args&... args)
             {
                 this->line_num = ptk->line_num;
                 this->col_num = ptk->col_num;
@@ -39,17 +39,12 @@ namespace nn
             }
 
             template<typename... Args>
-            ParsingError(const Token& tk, const std::string& fmt, const Args&... args)
+            Error(const Token& tk, const std::string& fmt, const Args&... args)
             {
                 this->line_num = tk.line_num;
                 this->col_num = tk.col_num;
                 this->errmsg = std::format(fmt, args...);
             }
-        };
-
-        class RuntimeError
-        {
-            // TODO: figure out runtime errors
         };
 
         template<class T>
@@ -62,8 +57,7 @@ namespace nn
             bool add(const Args&... args) { errs.push_back(T(args...)); return true; }
         };
 
-        using ParsingErrors = ErrorList<ParsingError>;
-        using RuntimeErrors = ErrorList<RuntimeError>;
+        using Errors = ErrorList<Error>;
     }
 }
 

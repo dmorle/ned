@@ -9,8 +9,8 @@ using namespace nn::lang;
 // Parses comma deliminated token sequences within a matching set of brackets
 // Returns the index in tarr immediately after the CLOSE token was found
 // On failure, this function returns -1
-template<typename T, bool(*parse_fn)(ParsingErrors&, const TokenArray&, T&), TokenType OPEN, TokenType CLOSE>
-inline int parse_args(ParsingErrors& errs, const TokenArray& tarr, int i, std::vector<T>& args)
+template<typename T, bool(*parse_fn)(Errors&, const TokenArray&, T&), TokenType OPEN, TokenType CLOSE>
+inline int parse_args(Errors& errs, const TokenArray& tarr, int i, std::vector<T>& args)
 {
     assert(tarr[0]->ty == OPEN);
     
@@ -60,8 +60,8 @@ inline int parse_args(ParsingErrors& errs, const TokenArray& tarr, int i, std::v
 
 // Parses lines from a token sequence
 // On failure, this function returns true
-template<typename T, bool(*parse_fn)(ParsingErrors&, const TokenArray&, T&, int)>
-inline bool parse_lines(ParsingErrors& errs, const TokenArray& tarr, int i, int indent_level, std::vector<T>& lines)
+template<typename T, bool(*parse_fn)(Errors&, const TokenArray&, T&, int)>
+inline bool parse_lines(Errors& errs, const TokenArray& tarr, int i, int indent_level, std::vector<T>& lines)
 {
     int end;
     do
@@ -100,12 +100,12 @@ const std::vector<std::tuple<OpAssoc, std::vector<TokenType>>> prec_ops = {
     { OpAssoc::LTOR, { TokenType::STAR, TokenType::DIV, TokenType::MOD }}
 };
 
-bool parse_leaf_mods(ParsingErrors& errs, const TokenArray& tarr, AstExpr& ast_expr, AstExpr* lhs)
+bool parse_leaf_mods(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr, AstExpr* lhs)
 {
     return errs.add(tarr[0], "Parsing leaf mods has not been implemented yet");
 }
 
-bool parse_leaf_token(ParsingErrors& errs, const Token* ptk, AstExpr& ast_expr)
+bool parse_leaf_token(Errors& errs, const Token* ptk, AstExpr& ast_expr)
 {
     switch (ptk->ty)
     {
@@ -274,10 +274,10 @@ inline ExprType get_expr_type<5>(TokenType ty)
 }
 
 template<int prec>
-bool parse_expr_prec(ParsingErrors& errs, const TokenArray& tarr, AstExpr& ast_expr);
+bool parse_expr_prec(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr);
 
 template<int prec>
-bool parse_expr_prec(ParsingErrors& errs, const TokenArray& tarr, AstExpr& ast_expr)
+bool parse_expr_prec(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
 {
     assert(tarr.size() > 0);
     constexpr auto& [op_assoc, tys] = prec_ops[prec];
@@ -312,7 +312,7 @@ LEFT_ERR:
 }
 
 template<>
-bool parse_expr_prec<7>(ParsingErrors& errs, const TokenArray& tarr, AstExpr& ast_expr)
+bool parse_expr_prec<7>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
 {
     assert(tarr.size() > 0);
 
@@ -432,7 +432,7 @@ bool parse_expr_prec<7>(ParsingErrors& errs, const TokenArray& tarr, AstExpr& as
 }
 
 template<>
-bool parse_expr_prec<6>(ParsingErrors& errs, const TokenArray& tarr, AstExpr& ast_expr)
+bool parse_expr_prec<6>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
 {
     assert(tarr.size() > 0);
 
@@ -500,7 +500,7 @@ bool parse_expr_prec<6>(ParsingErrors& errs, const TokenArray& tarr, AstExpr& as
 }
 
 template<>
-bool parse_expr_prec<0>(ParsingErrors& errs, const TokenArray& tarr, AstExpr& ast_expr)
+bool parse_expr_prec<0>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
 {
     assert(tarr.size() > 0);
     
@@ -537,7 +537,7 @@ namespace nn
 {
     namespace lang
     {
-        bool parse_expr(ParsingErrors& errs, const TokenArray& tarr, AstExpr& ast_expr)
+        bool parse_expr(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
         {
             assert(tarr.size() > 0);
             ast_expr.fname = tarr[0]->fname;
@@ -555,7 +555,7 @@ namespace nn
             return parse_expr_prec<0>(errs, { tarr, i, end + 1 }, ast_expr);
         }
 
-        bool parse_line(ParsingErrors& errs, const TokenArray& tarr, AstLine& ast_line, int indent_level)
+        bool parse_line(Errors& errs, const TokenArray& tarr, AstLine& ast_line, int indent_level)
         {
             assert(tarr.size() > 0);
             ast_line.fname = tarr[0]->fname;
@@ -713,7 +713,7 @@ namespace nn
             return false;
         }
 
-        bool parse_arg_decl(ParsingErrors& errs, const TokenArray& tarr, AstArgDecl& ast_arg_decl)
+        bool parse_arg_decl(Errors& errs, const TokenArray& tarr, AstArgDecl& ast_arg_decl)
         {
             // TODO: figure out how to handle fn and def references
             int i = tarr.size() - 1;
@@ -729,7 +729,7 @@ namespace nn
             return parse_expr(errs, { tarr, 0, i }, ast_arg_decl.type_expr);
         }
 
-        bool parse_signature(ParsingErrors& errs, const TokenArray& tarr, AstStructSig& ast_struct_sig)
+        bool parse_signature(Errors& errs, const TokenArray& tarr, AstStructSig& ast_struct_sig)
         {
             assert(tarr.size() > 0);
 
@@ -756,7 +756,7 @@ namespace nn
             return false;
         }
 
-        bool parse_signature(ParsingErrors& errs, const TokenArray& tarr, AstFnSig& ast_fn_sig)
+        bool parse_signature(Errors& errs, const TokenArray& tarr, AstFnSig& ast_fn_sig)
         {
             assert(tarr.size() > 0);
 
@@ -811,7 +811,7 @@ namespace nn
             return false;
         }
 
-        bool parse_signature(ParsingErrors& errs, const TokenArray& tarr, AstBlockSig& ast_block_sig)
+        bool parse_signature(Errors& errs, const TokenArray& tarr, AstBlockSig& ast_block_sig)
         {
             assert(tarr.size() > 0);
 
@@ -872,7 +872,7 @@ namespace nn
         }
 
         template<CodeBlockSig SIG>
-        bool parse_code_block(ParsingErrors& errs, const TokenArray& tarr, AstCodeBlock<SIG>& ast_code_block)
+        bool parse_code_block(Errors& errs, const TokenArray& tarr, AstCodeBlock<SIG>& ast_code_block)
         {
             assert(tarr.size() > 0);
 
@@ -895,11 +895,11 @@ namespace nn
             return false;
         }
 
-        template<> bool parse_code_block<AstStructSig>(ParsingErrors&, const TokenArray&, AstCodeBlock<AstStructSig>&);
-        template<> bool parse_code_block<AstFnSig>    (ParsingErrors&, const TokenArray&, AstCodeBlock<AstFnSig>&    );
-        template<> bool parse_code_block<AstBlockSig> (ParsingErrors&, const TokenArray&, AstCodeBlock<AstBlockSig>& );
+        template<> bool parse_code_block<AstStructSig>(Errors&, const TokenArray&, AstCodeBlock<AstStructSig>&);
+        template<> bool parse_code_block<AstFnSig>    (Errors&, const TokenArray&, AstCodeBlock<AstFnSig>&    );
+        template<> bool parse_code_block<AstBlockSig> (Errors&, const TokenArray&, AstCodeBlock<AstBlockSig>& );
 
-        bool parse_import(ParsingErrors& errs, const TokenArray& tarr, AstImport& ast_import)
+        bool parse_import(Errors& errs, const TokenArray& tarr, AstImport& ast_import)
         {
             bool expect_idn = true;
             for (auto& tk : tarr)
@@ -920,7 +920,7 @@ namespace nn
             }
         }
 
-        bool parse_module(ParsingErrors& errs, const TokenArray& tarr, AstModule& ast_module)
+        bool parse_module(Errors& errs, const TokenArray& tarr, AstModule& ast_module)
         {
             ast_module.fname = tarr[0]->fname;
 

@@ -1,4 +1,4 @@
-.proc min  # fn min<type T>(T left, T right) -> T:
+.min  # fn min<type T>(T left, T right) -> T:
     # if left < right:
     dup   2           # Duplicating left (stack: pc, right, left, T)
     dup   2           # Duplicating right (stack: left, pc, right, left, T)
@@ -15,7 +15,7 @@
     dup   1           # Duplicating right (stack: pc, right, left, T)
     ret   1
 
-.proc max  # fn max<type T>(T left, T right) -> T
+.max  # fn max<type T>(T left, T right) -> T
     # if left > right:
     dup   2           # Duplicating left (stack: pc, right, left, T)
     dup   2           # Duplicating right (stack: left, pc, right, left, T)
@@ -32,7 +32,7 @@
     dup   1           # Duplicating right (stack: pc, right, left, T)
     ret   1
 
-.proc range:  # fn range(int n) -> array<int>
+.range  # fn range(int n) -> array<int>
     # array<int> result
     agg   0
 
@@ -105,30 +105,7 @@
 #
 #:end
 
-struct node2<type T>:
-    node1<T> nd
-
-struct node1<type T>:
-    node2<T> nd
-
-fn map<type T>(T val) -> T:
-    node1<T> t
-    return map(t)
-
-    dup   2
-    call  node1
-
-    aty   0  # t.nd
-    aty   1  # t
-    dup   1
-    set
-
-
-fn test():
-    int i
-    map(i)
-
-.proc node  # struct node<type T>
+.node  # struct node<type T>
     # T val
     dup   1
     inst
@@ -142,8 +119,7 @@ fn test():
     agg   3
     ret   1
 
-.proc list
-    # struct list<type T>
+.list  # struct list<type T>
     # node<T> root
     agg   0
 
@@ -154,7 +130,7 @@ fn test():
     agg   2
     ret   1
 
-.proc create  # fn create<type T>() -> list<T>
+.create  # fn create<type T>() -> list<T>
     # list<T> arr
     dup   1
     new   proc list

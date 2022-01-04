@@ -10,10 +10,8 @@ namespace nn
 {
     namespace lang
     {
-        class CodeSegment
-        {
-
-        };
+        using CodeSegPtr = uint8_t*;
+        using DataSegPtr = Obj*;
 
         class CallStack
         {

@@ -11,7 +11,7 @@ add_library(
     "source/lang/ast.cpp"
     "source/lang/bytecode.cpp"
     "source/lang/errors.cpp"
-    "source/lang/eval.cpp"
+    
     "source/lang/lexer.cpp"
     "source/lang/obj.cpp"
     "source/lang/typing.cpp"

@@ -288,19 +288,19 @@ namespace nn
 
         // parse_* functions return true on failure, false on success
 
-        bool parse_expr       (ParsingErrors& errs, const TokenArray& tarr, AstExpr&);
+        bool parse_expr       (Errors& errs, const TokenArray& tarr, AstExpr&);
 
-        bool parse_line       (ParsingErrors& errs, const TokenArray& tarr, AstLine&, int indent_level);
+        bool parse_line       (Errors& errs, const TokenArray& tarr, AstLine&, int indent_level);
 
-        bool parse_arg_decl   (ParsingErrors& errs, const TokenArray& tarr, AstArgDecl&);
+        bool parse_arg_decl   (Errors& errs, const TokenArray& tarr, AstArgDecl&);
 
-        bool parse_struct_sig (ParsingErrors& errs, const TokenArray& tarr, AstStructSig&);
+        bool parse_struct_sig (Errors& errs, const TokenArray& tarr, AstStructSig&);
 
-        template<CodeBlockSig SIG> bool parse_signature  (ParsingErrors& errs, const TokenArray& tarr, SIG& sig);
-        template<CodeBlockSig SIG> bool parse_code_block (ParsingErrors& errs, const TokenArray& tarr, AstCodeBlock<SIG>&);
+        template<CodeBlockSig SIG> bool parse_signature  (Errors& errs, const TokenArray& tarr, SIG& sig);
+        template<CodeBlockSig SIG> bool parse_code_block (Errors& errs, const TokenArray& tarr, AstCodeBlock<SIG>&);
 
-        bool parse_import     (ParsingErrors& errs, const TokenArray& tarr, AstImport&);
-        bool parse_module     (ParsingErrors& errs, const TokenArray& tarr, AstModule&);
+        bool parse_import     (Errors& errs, const TokenArray& tarr, AstImport&);
+        bool parse_module     (Errors& errs, const TokenArray& tarr, AstModule&);
     }
 }
 

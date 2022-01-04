@@ -7,7 +7,9 @@
 #include <map>
 #include <type_traits>
 
-#include <ned/lang/ast.h>
+#include <ned/lang/lexer.h>
+#include <ned/lang/obj.h>
+#include <ned/lang/interp.h>
 
 namespace nn
 {
@@ -15,398 +17,210 @@ namespace nn
     {
         class Instruction
         {
+        protected:
+            std::string fname;
+            size_t line_num, col_num;
+
+            Instruction(const Token* ptk) : fname(ptk->fname), line_num(ptk->line_num), col_num(ptk->col_num) {}
         public:
-            virtual size_t size() const = 0;
-            virtual void* to_bytes(void* buf) const = 0;
-
-            virtual void set_labels(const std::map<std::string, size_t>& label_map) = 0;
+            virtual CodeSegPtr to_bytes(CodeSegPtr buf) const = 0;
+            virtual bool set_labels(Errors& errs, const std::map<std::string, size_t>& label_map) = 0;
         };
-
-        template<typename T>
-        concept InstructionType =
-            std::is_base_of<Instruction, T>::value &&
-            std::is_copy_constructible<T>::value;
-
-        class StaticRef {};
-        class Module;
-
-        class StaticsBuilder
+        
+        class ByteCodeBody
         {
-        public:
-            StaticRef get(std::string ty, std::string val);
-            void apply_module(const Module& mod);
-        };
-
-        class CodeBody
-        {
-            std::string name;
             std::vector<std::unique_ptr<Instruction>> instructions;
-            std::map<std::string, size_t> var_map;
             std::map<std::string, size_t> label_map;
-
-            template<typename T> static int get_stack_change();
+            size_t body_sz;
 
         public:
             size_t size() const;
-            void* to_bytes(void* buf, size_t block_offset) const;
-            void set_var_name(const std::string& var);
-            void add_label(const std::string& var);
+            CodeSegPtr to_bytes(Errors& errs, size_t offset, CodeSegPtr buf) const;
+            bool add_label(Errors& errs, const TokenImp<TokenType::IDN>* lbl);
 
-            void add_instruction(const InstructionType auto& inst)
+            template<typename T>
+            bool add_instruction(const T& inst)
             {
-                constexpr int n = CodeBody::get_stack_change<decltype(inst)>();
-                std::vector<const std::string&> popped_vars;
-                if (n != 0)  // Hopefully this will get optimized away when the template gets expanded
-                    for (auto& [key, val] : var_map)
-                        val += n;
-                if (n < 0)  // Hopefully this will also get optimized away when the template gets expanded
-                    for (const auto& e : popped_vars)
-                        var_map.erase(e);
+                static_assert(std::is_same<decltype(T::value), size_t>::value);
+                body_sz += T::size;
                 instructions.push_back(std::make_unique(inst));
+                return false;
             }
         };
 
-        enum class CodeBlockType
+        class ByteCodeModule
         {
-            STRUCT,
-            FN,
-            DEF,
-            INTR
+            std::map<std::string, ByteCodeBody> blocks;
+            std::vector<Obj> statics;
+            ProgramHeap& heap;
+
+            friend bool parsebc_static(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, Obj& obj);
+        public:
+            ByteCodeModule(ProgramHeap& heap) : heap(heap) {}
+            bool add_block(Errors& errs, const std::string& name, const ByteCodeBody& body);
+            bool add_static(Obj obj, size_t& addr);
+            bool export_module(CodeSegPtr& code_segment, DataSegPtr& data_segment);
         };
 
-        struct CodeBlock
-        {
-            CodeBlockType ty;
-            std::string name;
-            CodeBody body;
-        };
-
-        struct Module
-        {
-            std::vector<CodeBlock> blocks;
-        };
-
-        enum class InstructionTypes : uint8_t
+        enum class InstructionType : uint8_t
         {
             JMP,
             BRT,
             BRF,
-            POP,
             NEW,
+            AGG,
             ARR,
-            TUP,
-            TEN,
-            INST,
-            TYPE,
+            ATY,
+            POP,
             DUP,
-            CARG,
+            CPY,
+            INST,
             CALL,
             RET,
             SET,
+            IADD,
+            ISUB,
+            IMUL,
+            IDIV,
+            IMOD,
             ADD,
             SUB,
             MUL,
             DIV,
             MOD,
-            IDX,
             EQ,
             NE,
             GT,
             LT,
             GE,
-            LE
+            LE,
+            IDX,
+            XSTR,
+            XFLT,
+            XINT,
+
+            TEN,
+            EBLK,
+            DBLK,
+            CBLK,
+            IBLK,
+            BINP,
+            BOUT,
+            EXT,
+            EXP
         };
 
         namespace instruction
         {
-            class Labeled :
+            template<InstructionType OPCODE>
+            class Labeled :  // instructions of the form <opcode> <label>
                 public Instruction
             {
                 std::string label;
-                size_t label_idx = 0;
+                size_t label_ptr = 0;
             public:
-                Labeled(std::string label) : label(label) {}
+                Labeled(const Token* ptk, std::string label) : Instruction(ptk), label(label) {}
+                static constexpr size_t size = sizeof(InstructionType) + sizeof(size_t);
 
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
+                virtual bool set_labels(Errors& errs, const std::map<std::string, size_t>& label_map) override
+                {
+                    if (!label_map.contains(label))
+                        return errs.add(line_num, col_num, "Unresolved reference to label '{}'", label);
+                    label_ptr = label_map.at(label);
+                    return false;
+                }
+
+                virtual CodeSegPtr to_bytes(CodeSegPtr buf) const override
+                {
+                    *static_cast<InstructionType*>(buf) = OPCODE;
+                    buf += sizeof(InstructionType);
+                    *static_cast<size_t*>(buf) = label_ptr;
+                    buf += sizeof(size_t);
+                    return buf;
+                }
             };
 
-            class Jmp :
-                public Labeled
-            {
-            public:
-                using Labeled::Labeled;
-
-                virtual void* to_bytes(void* buf) const;
-            };
-
-            class Brt :
-                public Labeled
-            {
-            public:
-                using Labeled::Labeled;
-
-                virtual void* to_bytes(void* buf) const;
-            };
-
-            class Brf :
-                public Labeled
-            {
-            public:
-                using Labeled::Labeled;
-
-                virtual void* to_bytes(void* buf) const;
-            };
-
-            class Pop :
+            template<InstructionType OPCODE>
+            class Valued :  // instructions of the form <opcode> <uint>
                 public Instruction
             {
-                size_t n;
+                size_t val;
             public:
-                Pop(size_t n) : n(n) {}
+                Valued(const Token* ptk, size_t val) : Instruction(ptk), val(val) {}
+                static constexpr size_t size = sizeof(InstructionType) + sizeof(size_t);
 
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
+                virtual bool set_labels(Errors&, const std::map<std::string, size_t>&) override {}
+
+                virtual CodeSegPtr to_bytes(CodeSegPtr buf) const override
+                {
+                    *static_cast<InstructionType*>(buf) = OPCODE;
+                    buf += sizeof(InstructionType);
+                    *static_cast<size_t*>(buf) = val;
+                    buf += sizeof(size_t);
+                    return buf;
+                }
             };
 
-            class New :
-                public Instruction
-            {
-                StaticRef ref;
-            public:
-                New(StaticRef ref);
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Arr :
-                public Instruction
-            {
-                size_t n;
-            public:
-                Arr(size_t n) : n(n) {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Tup :
-                public Instruction
-            {
-                size_t n;
-            public:
-                Tup(size_t n) : n(n) {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Inst :
+            template<InstructionType OPCODE>
+            class Implicit :  // instructions of the form <opcode>
                 public Instruction
             {
             public:
-                Inst() {}
+                Implicit(const Token* ptk) : Instruction(ptk) {}
+                static constexpr size_t size = sizeof(InstructionType);
 
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
+                virtual bool set_labels(Errors&, const std::map<std::string, size_t>&) override {}
+
+                virtual CodeSegPtr to_bytes(CodeSegPtr buf) const override
+                {
+                    *static_cast<InstructionType*>(buf) = OPCODE;
+                    buf += sizeof(InstructionType);
+                    return buf;
+                }
             };
 
-            class Type :
-                public Instruction
-            {
-            public:
-                Type() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Dup :
-                public Instruction
-            {
-                size_t n;
-            public:
-                Dup(size_t n) : n(n) {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Carg :
-                public Instruction
-            {
-                size_t n;
-            public:
-                Carg(size_t n) : n(n) {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Call :
-                public Instruction
-            {
-            public:
-                Call() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Ret :
-                public Instruction
-            {
-            public:
-                Ret() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Add :
-                public Instruction
-            {
-            public:
-                Add() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Sub :
-                public Instruction
-            {
-            public:
-                Sub() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Mul :
-                public Instruction
-            {
-            public:
-                Mul() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Div :
-                public Instruction
-            {
-            public:
-                Div() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Mod :
-                public Instruction
-            {
-            public:
-                Mod() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Eq :
-                public Instruction
-            {
-            public:
-                Eq() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Ne :
-                public Instruction
-            {
-            public:
-                Ne() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Ge :
-                public Instruction
-            {
-            public:
-                Ge() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Le :
-                public Instruction
-            {
-            public:
-                Le() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Gt :
-                public Instruction
-            {
-            public:
-                Gt() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Lt :
-                public Instruction
-            {
-            public:
-                Lt() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
-
-            class Idx :
-                public Instruction
-            {
-            public:
-                Idx() {}
-
-                virtual size_t size() const;
-                virtual void* to_bytes(void* buf) const;
-                virtual void set_labels(const std::map<std::string, size_t>& label_map);
-            };
+            using enum ::nn::lang::InstructionType;
+            using Jmp  = Labeled  < JMP  >;
+            using Brt  = Labeled  < BRT  >;
+            using Brf  = Labeled  < BRF  >;
+            using New  = Valued   < NEW  >;
+            using Agg  = Valued   < AGG  >;
+            using Arr  = Implicit < ARR  >;
+            using Aty  = Valued   < ATY  >;
+            using Pop  = Valued   < POP  >;
+            using Dup  = Valued   < DUP  >;
+            using Cpy  = Implicit < CPY  >;
+            using Inst = Implicit < INST >;
+            using Call = Implicit < CALL >;
+            using Ret  = Implicit < RET  >;
+            using Set  = Implicit < SET  >;
+            using IAdd = Implicit < IADD >;
+            using ISub = Implicit < ISUB >;
+            using IMul = Implicit < IMUL >;
+            using IDiv = Implicit < IDIV >;
+            using IMod = Implicit < IMOD >;
+            using Add  = Implicit < ADD  >;
+            using Sub  = Implicit < SUB  >;
+            using Mul  = Implicit < MUL  >;
+            using Div  = Implicit < DIV  >;
+            using Mod  = Implicit < MOD  >;
+            using Eq   = Implicit < EQ   >;
+            using Ne   = Implicit < NE   >;
+            using Ge   = Implicit < GE   >;
+            using Le   = Implicit < LE   >;
+            using Gt   = Implicit < GT   >;
+            using Lt   = Implicit < LT   >;
+            using Idx  = Implicit < IDX  >;
+            using XStr = Implicit < XSTR >;
+            using XFlt = Implicit < XFLT >;
+            using XInt = Implicit < XINT >;
         }
+        
+        bool parsebc_static(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, size_t& addr);
+        bool parsebc_instruction(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, ByteCodeBody& body);
+        bool parsebc_body(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, ByteCodeBody& body);
+        bool parsebc_module(Errors& errs, const char* fname, char* buf, size_t bufsz, ByteCodeModule& mod);
+        bool parsebc_module(Errors& errs, const char* fname, FILE* pf, ByteCodeModule& mod);
     }
 }
 
@@ -418,12 +232,12 @@ namespace nn
 * brf <label>  Branch if false with pop
 * 
 * new <addr>   Adds an object from static memory onto the stack
-* agg <int>    Creates a new aggregate object from the top <int> elements on the stack
+* agg <uint>   Creates a new aggregate object from the top <uint> elements on the stack
 * arr          Creates a new array type with element type specified by the tos (used for generics)
-* aty <int>    Creates a new struct type from the top <int> elements on the stack (used for generics)
+* aty <uint>   Creates a new struct type from the top <uint> elements on the stack (used for generics)
 * 
-* pop <int>    Pops element <int> off the stack
-* dup <int>    Duplicates an object on the stack
+* pop <uint>   Pops element <uint> off the stack
+* dup <uint>   Duplicates an object on the stack
 * cpy          Copies the object on the tos
 * inst         Creates an instance from the element on the top of the stack, and pops the type
 * 
@@ -431,10 +245,10 @@ namespace nn
 * Pops the tos, pushes the current pc onto the stack and sets a new pc
 * call
 * 
-* Returns <int> elements from a code block
+* Returns <uint> elements from a code block
 * Retrieves the program counter and a reference to the caller from the call stack
 * Relies on the caller to cleanup the stack from the call, and updates the program counter
-* ret  <int>
+* ret
 * 
 * Binary Operations; Pops the top two elements off the stack, does the op, pushes the result
 * 
@@ -466,10 +280,10 @@ namespace nn
 * 
 * Deep learning instructions
 * 
-* ten <int>    Creates a new tensor with rank <int>
+* ten <uint>   Creates a new tensor with rank <uint>
 * 
-* blke         Enable deep learning instructions
-* blkd         Disable deep learning instructions
+* eblk         Enable deep learning instructions
+* dblk         Disable deep learning instructions
 * 
 * cblk         Creates a new counpound block context with a name
 * iblk         Creates a new intrinsic block context with a name

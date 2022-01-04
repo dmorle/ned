@@ -444,7 +444,7 @@ namespace nn
         }
 #endif
 
-        bool lex_buf(ParsingErrors& errs, const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num, uint32_t line_start)
+        bool lex_buf(Errors& errs, const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num, uint32_t line_start)
         {
             bool use_indents = true;
 
@@ -904,7 +904,7 @@ namespace nn
             return false;
         }
 
-        bool lex_file(ParsingErrors& errs, const char* fname, FILE* pf, TokenArray& tarr)
+        bool lex_file(Errors& errs, const char* fname, FILE* pf, TokenArray& tarr)
         {
             // temp, bad implmentation
             fseek(pf, 0, SEEK_END);
