@@ -19,10 +19,12 @@ namespace nn
             size_t sp;
 
         public:
-            bool pop(RuntimeErrors& errs, Obj& obj);
-            bool get(RuntimeErrors& errs, size_t i, Obj& obj);
-            bool push(RuntimeErrors& errs, Obj val);
+            bool pop(Errors& errs, Obj& obj);
+            bool get(Errors& errs, size_t i, Obj& obj);
+            bool push(Errors& errs, Obj val);
         };
+
+        bool exec(Errors& errs, CallStack& stack, ProgramHeap& heap, CodeSegPtr* code, DataSegPtr* data, size_t pc);
     }
 }
 

@@ -1,11 +1,11 @@
 #ifndef NED_AST_H
 #define NED_AST_H
 
-#include <ned/lang/lexer.h>
 #include <ned/lang/errors.h>
 
 #include <vector>
 #include <string>
+#include <memory>
 
 namespace nn
 {
@@ -60,7 +60,7 @@ namespace nn
         struct AstArgDecl
         {
             bool is_packed = false;
-            AstExpr type_expr;  // The expression that was used to define the pased type
+            std::unique_ptr<AstExpr> type_expr;  // The expression that was used to define the passed type
             std::string var_name;
         };
 
@@ -113,33 +113,26 @@ namespace nn
 
         struct AstExprUnaryOp
         {
-            AstExpr* expr = nullptr;
-
-            ~AstExprUnaryOp();
+            std::unique_ptr<AstExpr> expr = nullptr;
         };
 
         struct AstExprBinaryOp
         {
-            AstExpr* left;
-            AstExpr* right;
-
-            ~AstExprBinaryOp();
+            std::unique_ptr<AstExpr> left;
+            std::unique_ptr<AstExpr> right;
         };
 
         struct AstExprName
         {
-            AstExpr* expr = nullptr;
+            std::unique_ptr<AstExpr> expr = nullptr;
             std::string val = "";
-
-            ~AstExprName();
         };
 
         struct AstExprCall
         {
-            AstExpr* callee = nullptr;
+            std::unique_ptr<AstExpr> callee = nullptr;
             std::vector<AstExpr> args = {};
 
-            ~AstExprCall();
         };
 
         struct AstExpr
@@ -168,6 +161,8 @@ namespace nn
             };
 
             AstExpr() {}
+            AstExpr(AstExpr&&);
+            AstExpr& operator=(AstExpr&&);
             ~AstExpr();
         };
 
@@ -250,6 +245,8 @@ namespace nn
             };
 
             AstLine() {}
+            AstLine(AstLine&& line);
+            AstLine& operator=(AstLine&& line);
             ~AstLine();
         };
 

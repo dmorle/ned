@@ -1,11 +1,13 @@
+#ifndef NED_ERRORS_H
+#error errors.h must be included before lexer.h
+#endif
 #ifndef NED_LEXER_H
 #define NED_LEXER_H
-
-#include <ned/lang/errors.h>
 
 #include <vector>
 #include <string>
 #include <cassert>
+#include <stdexcept>
 
 #define FNAME_SIZE 256
 #define IDN_SIZE   64
@@ -88,8 +90,18 @@ namespace nn
             KW_NOT,
         };
 
+        class Token;
         template<TokenType T>
         class TokenImp;
+
+        class Error;
+        template<typename T>
+        class ErrorList;
+        using Errors = ErrorList<Error>;
+
+        template<TokenType TY> constexpr const TokenImp<TY>& create_default(Token* ptk);
+        constexpr std::string to_string(const TokenType ty);
+        std::string to_string(const Token* ptk);
 
         class Token
         {
@@ -111,12 +123,8 @@ namespace nn
             template<TokenType TY> TokenImp<TY>& get() { assert(ty != TY); return *reinterpret_cast<TokenImp<TY>*>(this); }
             template<TokenType TY> const TokenImp<TY>& get() const { assert(ty != TY); return *reinterpret_cast<const TokenImp<TY>*>(this); }
             template<TokenType TY> bool expect(Errors& errs) const {
-                if (ty == TY) return false; return errs.add(*this, "Expected {}, found {}", to_string(TY), to_string(ty)); }
+                if (ty == TY) return false; return errs.add(this, "Expected {}, found {}", to_string(TY), to_string(ty)); }
         };
-
-        template<TokenType TY> constexpr const TokenImp<TY>& create_default(Token* ptk);
-        constexpr std::string to_string(const TokenType ty);
-        std::string to_string(const Token* ptk);
 
         template<TokenType T>
         class TokenImp :
@@ -314,6 +322,25 @@ namespace nn
             }
 
             // returns -1 if token is not present in range
+            template<class SearchCriteria>
+            int search(SearchCriteria&& sc, int start, int end) const
+            {
+                end %= size();
+                int idx = start;
+                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
+                while (idx < end)
+                {
+                    int ret = sc.accept(pstart, idx);
+                    if (ret >= 0)
+                        return ret;
+                    idx++;
+                    pstart = reinterpret_cast<const Token*>((const uint8_t*)pstart + pstart->sz);
+                }
+
+                return -1;
+            }
+
+            // returns -1 if token is not present in range
             // less efficient than a forward search
             // start argument < 0 offsets from the end of the token array
             template<class SearchCriteria>
@@ -372,17 +399,12 @@ namespace nn
             int accept(const Token* ptk, int idx);
         };
 
-        class CargEndCriteria :
+        class ArgEndCriteria :
             public BracketCounter
         {
+            TokenType close;
         public:
-            int accept(const Token* ptk, int idx);
-        };
-
-        class VargEndCriteria :
-            public BracketCounter
-        {
-        public:
+            ArgEndCriteria(TokenType close);
             int accept(const Token* ptk, int idx);
         };
 

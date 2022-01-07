@@ -1,5 +1,3 @@
-cmake_minimum_required (VERSION 3.8)
-
 include_directories("include")
 
 add_library(
@@ -11,7 +9,7 @@ add_library(
     "source/lang/ast.cpp"
     "source/lang/bytecode.cpp"
     "source/lang/errors.cpp"
-    
+    "source/lang/interp.cpp"
     "source/lang/lexer.cpp"
     "source/lang/obj.cpp"
     "source/lang/typing.cpp"
@@ -22,7 +20,6 @@ add_library(
     "include/ned/lang/ast.h"
     "include/ned/lang/bytecode.h"
     "include/ned/lang/errors.h"
-    "include/ned/lang/eval.h"
     "include/ned/lang/interp.h"
     "include/ned/lang/lexer.h"
     "include/ned/lang/obj.h"
@@ -35,6 +32,17 @@ set_property(TARGET libned PROPERTY CXX_STANDARD 20)
 add_executable(
     libned_tests
     "tests/main.cpp"
+    "include/ned/core/tensor.h"
+    "include/ned/core/graph.h"
+    
+    "include/ned/lang/ast.h"
+    "include/ned/lang/bytecode.h"
+    "include/ned/lang/errors.h"
+    "include/ned/lang/interp.h"
+    "include/ned/lang/lexer.h"
+    "include/ned/lang/obj.h"
+    "include/ned/lang/typing.h"
+
 )
 
 target_compile_definitions(libned_tests PUBLIC TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/")

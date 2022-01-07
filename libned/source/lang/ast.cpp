@@ -16,14 +16,14 @@ inline int parse_args(Errors& errs, const TokenArray& tarr, int i, std::vector<T
     
     // Advancing one token past the opening bracket
     i++;
-    int end = tarr.search(CargEndCriteria(), i);
+    int end = tarr.search(ArgEndCriteria(CLOSE), i);
     if (tarr[end]->ty == CLOSE)
     {
-        // either a single carg, or its empty
+        // either a single arg, or its empty
         for (int j = i; j < end; j++)
             if (!tarr[j]->is_whitespace())
             {
-                // single carg, parse it and move on
+                // single arg, parse it and move on
                 args.push_back(T());
                 if (parse_fn(errs, { tarr, i, end }, args.back()))
                 {
@@ -32,22 +32,21 @@ inline int parse_args(Errors& errs, const TokenArray& tarr, int i, std::vector<T
                 }
                 break;
             }
-        i = end;
-        continue;
+        return end;
     }
 
-    // General case for parsing multiple cargs
+    // General case for parsing multiple args
     args.push_back(T());
-    if (parse_fn({ tarr, i, end }, args.back()))
+    if (parse_fn(errs, { tarr, i, end }, args.back()))
     {
         args.clear();
         return -1;
     }
     do
     {
-        end = tarr.search(CargEndCriteria(), i);
+        end = tarr.search(ArgEndCriteria(CLOSE), i);
         args.push_back(T());
-        if (parse_fn({ tarr, i, end }, args.back()))
+        if (parse_fn(errs, { tarr, i, end }, args.back()))
         {
             args.clear();
             return -1;
@@ -91,6 +90,7 @@ enum class OpAssoc
     RTOL
 };
 
+// Eventually this can become constexpr, but it seems my current c++ compiler doesn't have that yet...
 const std::vector<std::tuple<OpAssoc, std::vector<TokenType>>> prec_ops = {
     { OpAssoc::LTOR, { TokenType::COMMA }},
     { OpAssoc::RTOL, { TokenType::ASSIGN, TokenType::IADD, TokenType::ISUB, TokenType::IMUL, TokenType::IDIV, TokenType::IMOD }},
@@ -100,7 +100,7 @@ const std::vector<std::tuple<OpAssoc, std::vector<TokenType>>> prec_ops = {
     { OpAssoc::LTOR, { TokenType::STAR, TokenType::DIV, TokenType::MOD }}
 };
 
-bool parse_leaf_mods(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr, AstExpr* lhs)
+bool parse_leaf_mods(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr, std::unique_ptr<AstExpr> lhs)
 {
     return errs.add(tarr[0], "Parsing leaf mods has not been implemented yet");
 }
@@ -209,6 +209,7 @@ inline ExprType get_expr_type<1>(TokenType ty)
         return ExprType::BINARY_IMOD;
     }
     assert(false);
+    return ExprType::INVALID;
 }
 
 template<>
@@ -222,6 +223,7 @@ inline ExprType get_expr_type<2>(TokenType ty)
         return ExprType::BINARY_OR;
     }
     assert(false);
+    return ExprType::INVALID;
 }
 
 template<>
@@ -243,6 +245,7 @@ inline ExprType get_expr_type<3>(TokenType ty)
         return ExprType::BINARY_CMP_LE;
     }
     assert(false);
+    return ExprType::INVALID;
 }
 
 template<>
@@ -256,6 +259,7 @@ inline ExprType get_expr_type<4>(TokenType ty)
         return ExprType::BINARY_SUB;
     }
     assert(false);
+    return ExprType::INVALID;
 }
 
 template<>
@@ -271,16 +275,23 @@ inline ExprType get_expr_type<5>(TokenType ty)
         return ExprType::BINARY_MOD;
     }
     assert(false);
+    return ExprType::INVALID;
 }
 
 template<int prec>
 bool parse_expr_prec(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr);
 
+// specializations
+template<> bool parse_expr_prec<7>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr);
+template<> bool parse_expr_prec<6>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr);
+template<> bool parse_expr_prec<0>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr);
+
 template<int prec>
 bool parse_expr_prec(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
 {
+    static_assert(0 <= prec && prec <= 7);
     assert(tarr.size() > 0);
-    constexpr auto& [op_assoc, tys] = prec_ops[prec];
+    const auto& [op_assoc, tys] = prec_ops[prec];  // TODO: update my c++ compiler and make this constexpr
     int pos;
     if (op_assoc == OpAssoc::LTOR)
         pos = tarr.search(IsInCriteria(tys), 1, -1);
@@ -290,25 +301,17 @@ bool parse_expr_prec(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
         return parse_expr_prec<prec + 1>(errs, tarr, ast_expr);
     if (pos < 1 || tarr.size() - pos < 2)
         return errs.add(tarr[pos], "Dangling operator");
-    AstExpr* pleft;
-    AstExpr* pright;
-    pleft = new AstExpr();
+    std::unique_ptr<AstExpr> pleft = std::make_unique<AstExpr>();
     if (parse_expr_prec<prec + 1>(errs, { tarr, 0, pos }, *pleft))
-        goto LEFT_ERR;
-    pright = new AstExpr();
+        return true;
+    std::unique_ptr<AstExpr> pright = std::make_unique<AstExpr>();
     if (parse_expr_prec<prec + 1>(errs, { tarr, pos + 1 }, *pright))
-        goto RIGHT_ERR;
+        return true;
     new (&ast_expr.expr_binary) AstExprBinaryOp();
     ast_expr.ty = get_expr_type<prec>(tarr[pos]->ty);
-    ast_expr.expr_binary.left = pleft;
-    ast_expr.expr_binary.right = pright;
+    ast_expr.expr_binary.left = std::move(pleft);
+    ast_expr.expr_binary.right = std::move(pright);
     return false;
-
-RIGHT_ERR:
-    delete pright;
-LEFT_ERR:
-    delete pleft;
-    return true;
 }
 
 template<>
@@ -319,7 +322,7 @@ bool parse_expr_prec<7>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
     if (tarr.size() == 1)  // single token leaf node
         return parse_leaf_token(errs, tarr[0], ast_expr);
 
-    AstExpr* lhs;
+    std::unique_ptr<AstExpr> lhs = nullptr;
     int i;
     if (tarr[0]->ty == TokenType::ROUND_O)
     {
@@ -337,7 +340,7 @@ bool parse_expr_prec<7>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
         if (end == tarr.size() - 1)
             return parse_expr(errs, { tarr, 1, i }, ast_expr);
 
-        lhs = new AstExpr();
+        lhs = std::make_unique<AstExpr>();
         if (parse_expr(errs, { tarr, 1, i }, *lhs))
             return true;
         i = end;
@@ -360,7 +363,7 @@ bool parse_expr_prec<7>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
             if (end != tarr.size() - 1)
             {
                 // has mods => initialize lhs and continue execution
-                lhs = new AstExpr();
+                lhs = std::make_unique<AstExpr>();
                 new (&lhs->expr_agg) AstExprAggLit();
                 lhs->ty = ExprType::LIT_ARRAY;
                 i = end;
@@ -382,13 +385,13 @@ bool parse_expr_prec<7>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
             if (end != tarr.size() - 1)
             {
                 // has mods => initialize lhs and continue execution
-                lhs = new AstExpr();
+                lhs = std::make_unique<AstExpr>();
                 new (&lhs->expr_agg) AstExprAggLit();
                 lhs->ty = ExprType::LIT_ARRAY;
                 if (arr_expr.ty == ExprType::LIT_TUPLE)
                     lhs->expr_agg.elems = std::move(arr_expr.expr_agg.elems);
                 else
-                    lhs->expr_agg.elems.push_back(arr_expr);
+                    lhs->expr_agg.elems.push_back(std::move(arr_expr));
                 i = end;
             }
             else
@@ -399,7 +402,7 @@ bool parse_expr_prec<7>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
                 if (arr_expr.ty == ExprType::LIT_TUPLE)
                     ast_expr.expr_agg.elems = std::move(arr_expr.expr_agg.elems);
                 else
-                    ast_expr.expr_agg.elems.push_back(arr_expr);
+                    ast_expr.expr_agg.elems.push_back(std::move(arr_expr));
                 return false;
             }
         }
@@ -417,27 +420,25 @@ bool parse_expr_prec<7>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
     else
     {
         // single token followed by modifiers
-        lhs = new AstExpr();
+        lhs = std::make_unique<AstExpr>();
         if (parse_leaf_token(errs, tarr[0], *lhs))
-        {
-            delete lhs;
             return true;
-        }
     }
 
     // If execution falls through the above code,
     // it means lhs and i are initialized and there are leaf mods that need to be parsed
     // i should be the index immediately after the lhs expression
-    return parse_leaf_mods(errs, { tarr, i }, ast_expr, lhs);
+    return parse_leaf_mods(errs, { tarr, i }, ast_expr, std::move(lhs));
 }
 
 template<>
 bool parse_expr_prec<6>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
 {
     assert(tarr.size() > 0);
+    constexpr int prec = 6;
 
     // Handling unary operators
-    AstExpr* pexpr;
+    std::unique_ptr<AstExpr> pexpr = nullptr;
     switch (tarr[0]->ty)
     {
         // Don't move repeated code out.  In the case where the type falls through,
@@ -445,54 +446,42 @@ bool parse_expr_prec<6>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
     case TokenType::ADD:
         if (tarr.size() < 2)
             return errs.add(tarr[0], "Dangling operator");
-        pexpr = new AstExpr();
-        if (parse_expr_prec<8>(errs, { tarr, 1 }, *pexpr))
-        {
-            delete pexpr;
+        pexpr = std::make_unique<AstExpr>();
+        if (parse_expr_prec<prec + 1>(errs, { tarr, 1 }, *pexpr))
             return true;
-        }
         new (&ast_expr.expr_unary) AstExprUnaryOp();
         ast_expr.ty = ExprType::UNARY_POS;
-        ast_expr.expr_unary.expr = pexpr;
+        ast_expr.expr_unary.expr = std::move(pexpr);
         return false;
     case TokenType::SUB:
         if (tarr.size() < 2)
             return errs.add(tarr[0], "Dangling operator");
-        pexpr = new AstExpr();
-        if (parse_expr_prec<8>(errs, { tarr, 1 }, *pexpr))
-        {
-            delete pexpr;
+        pexpr = std::make_unique<AstExpr>();
+        if (parse_expr_prec<prec + 1>(errs, { tarr, 1 }, *pexpr))
             return true;
-        }
         new (&ast_expr.expr_unary) AstExprUnaryOp();
         ast_expr.ty = ExprType::UNARY_NEG;
-        ast_expr.expr_unary.expr = pexpr;
+        ast_expr.expr_unary.expr = std::move(pexpr);
         return false;
     case TokenType::STAR:
         if (tarr.size() < 2)
             return errs.add(tarr[0], "Dangling operator");
-        pexpr = new AstExpr();
-        if (parse_expr_prec<8>(errs, { tarr, 1 }, *pexpr))
-        {
-            delete pexpr;
+        pexpr = std::make_unique<AstExpr>();
+        if (parse_expr_prec<prec + 1>(errs, { tarr, 1 }, *pexpr))
             return true;
-        }
         new (&ast_expr.expr_unary) AstExprUnaryOp();
         ast_expr.ty = ExprType::UNARY_UNPACK;
-        ast_expr.expr_unary.expr = pexpr;
+        ast_expr.expr_unary.expr = std::move(pexpr);
         return false;
     case TokenType::KW_NOT:
         if (tarr.size() < 2)
             return errs.add(tarr[0], "Dangling operator");
-        pexpr = new AstExpr();
-        if (parse_expr_prec<8>(errs, { tarr, 1 }, *pexpr))
-        {
-            delete pexpr;
+        pexpr = std::make_unique<AstExpr>();
+        if (parse_expr_prec<prec + 1>(errs, { tarr, 1 }, *pexpr))
             return true;
-        }
         new (&ast_expr.expr_unary) AstExprUnaryOp();
         ast_expr.ty = ExprType::UNARY_NOT;
-        ast_expr.expr_unary.expr = pexpr;
+        ast_expr.expr_unary.expr = std::move(pexpr);
         return false;
     }
 
@@ -514,7 +503,7 @@ bool parse_expr_prec<0>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
         AstExpr elem_expr;
         if (parse_expr_prec<1>(errs, { tarr, i, end }, elem_expr))
             return true;
-        elem_exprs.push_back(elem_expr);
+        elem_exprs.push_back(std::move(elem_expr));
         i = end + 1;
     }
     
@@ -529,7 +518,7 @@ bool parse_expr_prec<0>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
     AstExpr last_expr;
     if (parse_expr_prec<1>(errs, { tarr, i }, last_expr))
         return true;
-    ast_expr.expr_agg.elems.push_back(last_expr);
+    ast_expr.expr_agg.elems.push_back(std::move(last_expr));
     return false;
 }
 
@@ -726,7 +715,8 @@ namespace nn
                 ast_arg_decl.is_packed = true;
             else
                 i++;
-            return parse_expr(errs, { tarr, 0, i }, ast_arg_decl.type_expr);
+            ast_arg_decl.type_expr = std::make_unique<AstExpr>();
+            return parse_expr(errs, { tarr, 0, i }, *ast_arg_decl.type_expr);
         }
 
         bool parse_signature(Errors& errs, const TokenArray& tarr, AstStructSig& ast_struct_sig)
@@ -806,7 +796,7 @@ namespace nn
             if (ret_expr.ty == ExprType::LIT_TUPLE)
                 ast_fn_sig.rets = std::move(ret_expr.expr_agg.elems);
             else
-                ast_fn_sig.rets.push_back(ret_expr);
+                ast_fn_sig.rets.push_back(std::move(ret_expr));
 
             return false;
         }
@@ -885,7 +875,7 @@ namespace nn
                 return true;
 
             // Finding the ':' that starts the body
-            assert(!tarr[i]->expect<TokenType::COLON>(errs))
+            assert(!tarr[i]->expect<TokenType::COLON>(errs));
             for (i++; tarr[i]->ty == TokenType::INDENT; i++);  // one token past the last tab after the ':'
             if (tarr[i]->expect<TokenType::ENDL>(errs))
                 return true;
@@ -908,16 +898,19 @@ namespace nn
                     continue;
                 if (expect_idn)
                 {
-                    if (tk.expect<TokenType::IDN>(errs)) break;
+                    if (tk.expect<TokenType::IDN>(errs))
+                        return true;
                     ast_import.imp.push_back(tk.get<TokenType::IDN>().val);
                     expect_idn = false;
                 }
                 else
                 {
-                    if (tk.expect<TokenType::DOT>(errs)) break;
+                    if (tk.expect<TokenType::DOT>(errs))
+                        return true;
                     expect_idn = true;
                 }
             }
+            return false;
         }
 
         bool parse_module(Errors& errs, const TokenArray& tarr, AstModule& ast_module)
@@ -991,32 +984,138 @@ namespace nn
                     return errs.add(tarr[i], "Invalid token");
                 }
             }
+            return false;
         }
 
-        AstExprUnaryOp::~AstExprUnaryOp()
+        // From this point onward, the actual code ends and we enter c++ land
+
+        AstExpr::AstExpr(AstExpr&& expr)
         {
-            if (expr)
-                delete expr;
+            ty = expr.ty;
+            expr.ty = ExprType::INVALID;
+
+            switch (ty)
+            {
+            case ExprType::LIT_STRING:
+            case ExprType::VAR:
+                new (&expr_string) decltype(expr_string)(std::move(expr.expr_string));
+                break;
+            case ExprType::LIT_ARRAY:
+            case ExprType::LIT_TUPLE:
+                new (&expr_agg) decltype(expr_agg)(std::move(expr.expr_agg));
+                break;
+            case ExprType::UNARY_NOT:
+            case ExprType::UNARY_POS:
+            case ExprType::UNARY_NEG:
+            case ExprType::UNARY_UNPACK:
+                new (&expr_unary) decltype(expr_unary)(std::move(expr.expr_unary));
+                break;
+            case ExprType::BINARY_ADD:
+            case ExprType::BINARY_SUB:
+            case ExprType::BINARY_MUL:
+            case ExprType::BINARY_DIV:
+            case ExprType::BINARY_MOD:
+            case ExprType::BINARY_IADD:
+            case ExprType::BINARY_ISUB:
+            case ExprType::BINARY_IMUL:
+            case ExprType::BINARY_IDIV:
+            case ExprType::BINARY_IMOD:
+            case ExprType::BINARY_ASSIGN:
+            case ExprType::BINARY_AND:
+            case ExprType::BINARY_OR:
+            case ExprType::BINARY_CMP_EQ:
+            case ExprType::BINARY_CMP_NE:
+            case ExprType::BINARY_CMP_GT:
+            case ExprType::BINARY_CMP_LT:
+            case ExprType::BINARY_CMP_GE:
+            case ExprType::BINARY_CMP_LE:
+            case ExprType::BINARY_IDX:
+                new (&expr_binary) decltype(expr_binary)(std::move(expr.expr_binary));
+                break;
+            case ExprType::DOT:
+            case ExprType::VAR_DECL:
+                new (&expr_name) decltype(expr_name)(std::move(expr.expr_name));
+                break;
+            case ExprType::CARGS_CALL:
+            case ExprType::VARGS_CALL:
+                new (&expr_call) decltype(expr_call)(std::move(expr.expr_call));
+                break;
+            case ExprType::FN_DECL:
+                new (&expr_fn_decl) decltype(expr_fn_decl)(std::move(expr.expr_fn_decl));
+                break;
+            case ExprType::DEF_DECL:
+                new (&expr_def_decl) decltype(expr_def_decl)(std::move(expr.expr_def_decl));
+                break;
+            default:
+                assert(false);
+            }
         }
 
-        AstExprBinaryOp::~AstExprBinaryOp()
+        AstExpr& AstExpr::operator=(AstExpr&& expr)
         {
-            if (left)
-                delete left;
-            if (right)
-                delete right;
-        }
+            if (&expr == this)
+                return *this;
 
-        AstExprName::~AstExprName()
-        {
-            if (expr)
-                delete expr;
-        }
+            ty = expr.ty;
+            expr.ty = ExprType::INVALID;
 
-        AstExprCall::~AstExprCall()
-        {
-            if (callee)
-                delete callee;
+            switch (ty)
+            {
+            case ExprType::LIT_STRING:
+            case ExprType::VAR:
+                new (&expr_string) decltype(expr_string)(std::move(expr.expr_string));
+                break;
+            case ExprType::LIT_ARRAY:
+            case ExprType::LIT_TUPLE:
+                new (&expr_agg) decltype(expr_agg)(std::move(expr.expr_agg));
+                break;
+            case ExprType::UNARY_NOT:
+            case ExprType::UNARY_POS:
+            case ExprType::UNARY_NEG:
+            case ExprType::UNARY_UNPACK:
+                new (&expr_unary) decltype(expr_unary)(std::move(expr.expr_unary));
+                break;
+            case ExprType::BINARY_ADD:
+            case ExprType::BINARY_SUB:
+            case ExprType::BINARY_MUL:
+            case ExprType::BINARY_DIV:
+            case ExprType::BINARY_MOD:
+            case ExprType::BINARY_IADD:
+            case ExprType::BINARY_ISUB:
+            case ExprType::BINARY_IMUL:
+            case ExprType::BINARY_IDIV:
+            case ExprType::BINARY_IMOD:
+            case ExprType::BINARY_ASSIGN:
+            case ExprType::BINARY_AND:
+            case ExprType::BINARY_OR:
+            case ExprType::BINARY_CMP_EQ:
+            case ExprType::BINARY_CMP_NE:
+            case ExprType::BINARY_CMP_GT:
+            case ExprType::BINARY_CMP_LT:
+            case ExprType::BINARY_CMP_GE:
+            case ExprType::BINARY_CMP_LE:
+            case ExprType::BINARY_IDX:
+                new (&expr_binary) decltype(expr_binary)(std::move(expr.expr_binary));
+                break;
+            case ExprType::DOT:
+            case ExprType::VAR_DECL:
+                new (&expr_name) decltype(expr_name)(std::move(expr.expr_name));
+                break;
+            case ExprType::CARGS_CALL:
+            case ExprType::VARGS_CALL:
+                new (&expr_call) decltype(expr_call)(std::move(expr.expr_call));
+                break;
+            case ExprType::FN_DECL:
+                new (&expr_fn_decl) decltype(expr_fn_decl)(std::move(expr.expr_fn_decl));
+                break;
+            case ExprType::DEF_DECL:
+                new (&expr_def_decl) decltype(expr_def_decl)(std::move(expr.expr_def_decl));
+                break;
+            default:
+                assert(false);
+            }
+
+            return *this;
         }
 
         AstExpr::~AstExpr()
@@ -1062,15 +1161,93 @@ namespace nn
             case ExprType::DOT:
             case ExprType::VAR_DECL:
                 expr_name.~AstExprName();
+                break;
             case ExprType::CARGS_CALL:
             case ExprType::VARGS_CALL:
                 expr_call.~AstExprCall();
                 break;
             case ExprType::FN_DECL:
                 expr_fn_decl.~AstFnSig();
+                break;
             case ExprType::DEF_DECL:
                 expr_def_decl.~AstBlockSig();
+                break;
+            default:
+                assert(false);
             }
+        }
+
+        AstLine::AstLine(AstLine&& line)
+        {
+            ty = line.ty;
+            line.ty = LineType::INVALID;
+
+            switch (ty)
+            {
+            case LineType::EXPORT:
+                new (&line_export) decltype(line_export)(std::move(line.line_export));
+                break;
+            case LineType::RAISE:
+            case LineType::PRINT:
+            case LineType::RETURN:
+                new (&line_func) decltype(line_func)(std::move(line.line_func));
+                break;
+            case LineType::IF:
+            case LineType::ELIF:
+            case LineType::WHILE:
+                new (&line_branch) decltype(line_branch)(std::move(line.line_branch));
+                break;
+            case LineType::ELSE:
+                new (&line_else) decltype(line_else)(std::move(line.line_else));
+                break;
+            case LineType::FOR:
+                new (&line_for) decltype(line_for)(std::move(line.line_for));
+                break;
+            case LineType::EXPR:
+                new (&line_expr) decltype(line_expr)(std::move(line.line_expr));
+                break;
+            default:
+                assert(false);
+            }
+        }
+
+        AstLine& AstLine::operator=(AstLine&& line)
+        {
+            if (&line == this)
+                return *this;
+
+            ty = line.ty;
+            line.ty = LineType::INVALID;
+
+            switch (ty)
+            {
+            case LineType::EXPORT:
+                new (&line_export) decltype(line_export)(std::move(line.line_export));
+                break;
+            case LineType::RAISE:
+            case LineType::PRINT:
+            case LineType::RETURN:
+                new (&line_func) decltype(line_func)(std::move(line.line_func));
+                break;
+            case LineType::IF:
+            case LineType::ELIF:
+            case LineType::WHILE:
+                new (&line_branch) decltype(line_branch)(std::move(line.line_branch));
+                break;
+            case LineType::ELSE:
+                new (&line_else) decltype(line_else)(std::move(line.line_else));
+                break;
+            case LineType::FOR:
+                new (&line_for) decltype(line_for)(std::move(line.line_for));
+                break;
+            case LineType::EXPR:
+                new (&line_expr) decltype(line_expr)(std::move(line.line_expr));
+                break;
+            default:
+                assert(false);
+            }
+
+            return *this;
         }
 
         AstLine::~AstLine()
@@ -1098,6 +1275,9 @@ namespace nn
                 break;
             case LineType::EXPR:
                 line_expr.~AstLineExpr();
+                break;
+            default:
+                assert(false);
             }
         }
     }

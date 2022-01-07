@@ -25,6 +25,9 @@ namespace nn
 {
     namespace lang
     {
+        ByteCodeBody::ByteCodeBody(const Token* ptk) :
+            fname(ptk->fname), line_num(ptk->line_num), col_num(ptk->col_num) {}
+
         size_t ByteCodeBody::size() const
         {
             return body_sz;
@@ -50,10 +53,70 @@ namespace nn
             if (label_map.contains(lbl->val))
                 return errs.add(lbl, "Label redefinition");
             label_map[lbl->val] = instructions.size();
+            return false;
         }
 
-        bool parsebc_static(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, Obj& obj)
+        bool ByteCodeModule::add_block(Errors& errs, const std::string& name, const ByteCodeBody& body)
         {
+            if (blocks.contains(name))
+                return errs.add(body.fname, body.line_num, body.col_num, "Conflicting procedure name {}", name);
+            blocks.insert({ name, body });
+            return false;
+        }
+
+        bool ByteCodeModule::add_static_obj(Obj obj, size_t& addr)
+        {
+            addr = statics.size();
+            statics.push_back(obj);
+            return false;
+        }
+
+        bool ByteCodeModule::add_static_ref(const TokenImp<TokenType::IDN>* label, size_t& addr)
+        {
+            addr = statics.size();
+            statics.push_back({ .ptr = 0 });
+            static_block_refs.push_back({ addr, label });
+            return false;
+        }
+
+        bool ByteCodeModule::export_module(Errors& errs, CodeSegPtr& code_segment, DataSegPtr& data_segment)
+        {
+            // Ordering the blocks and getting the offsets
+            std::vector<std::string> block_order;
+            std::map<std::string, size_t> block_offsets;
+            size_t code_segment_sz = 0;
+            for (const auto& [name, body] : blocks)
+            {
+                block_order.push_back(name);
+                block_offsets[name] = code_segment_sz;
+                code_segment_sz += body.size();
+            }
+
+            // Replacing the static references
+            for (auto& [addr, label] : static_block_refs)
+            {
+                if (!blocks.contains(label->val))
+                    return errs.add(label, "Reference to undefined procedure {}", to_string(label));
+                assert(0 <= addr && addr < statics.size());
+                statics[addr].ptr = block_offsets.at(label->val);
+            }
+
+            // Constructing the code segment
+            code_segment = (CodeSegPtr)std::malloc(code_segment_sz);
+            throw std::bad_alloc();  // I'll be getting rid of exceptions when I get around to creating my own data structures
+            CodeSegPtr buf = code_segment;
+            for (const auto& name : block_order)
+                buf = blocks.at(name).to_bytes(errs, block_offsets.at(name), buf);
+
+            // Constructing the data segment
+            data_segment = (DataSegPtr)std::malloc(sizeof(Obj) * statics.size());
+            memcpy(data_segment, statics.data(), sizeof(Obj) * statics.size());
+            return false;
+        }
+
+        bool parsebc_static(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, size_t& addr)
+        {
+            Obj obj;
             switch (tarr[0]->ty)
             {
             case TokenType::KW_TYPE:
@@ -62,15 +125,25 @@ namespace nn
                 switch (tarr[1]->ty)
                 {
                 case TokenType::KW_BOOL:
-                    return mod.heap.create_type_bool(errs, obj);
+                    return
+                        mod.heap.create_type_bool(errs, obj) ||
+                        mod.add_static_obj(obj, addr);
                 case TokenType::KW_FP:
-                    return mod.heap.create_type_fwidth(errs, obj);
+                    return
+                        mod.heap.create_type_fwidth(errs, obj) ||
+                        mod.add_static_obj(obj, addr);
                 case TokenType::KW_INT:
-                    return mod.heap.create_type_int(errs, obj);
+                    return
+                        mod.heap.create_type_int(errs, obj) ||
+                        mod.add_static_obj(obj, addr);
                 case TokenType::KW_FLOAT:
-                    return mod.heap.create_type_float(errs, obj);
+                    return
+                        mod.heap.create_type_float(errs, obj) ||
+                        mod.add_static_obj(obj, addr);
                 case TokenType::KW_STR:
-                    return mod.heap.create_type_str(errs, obj);
+                    return
+                        mod.heap.create_type_str(errs, obj) ||
+                        mod.add_static_obj(obj, addr);
                 }
                 return errs.add(tarr[0], "Invalid static type '{}'", to_string(tarr[1]));
             case TokenType::KW_BOOL:
@@ -79,9 +152,13 @@ namespace nn
                 switch (tarr[1]->ty)
                 {
                 case TokenType::KW_TRUE:
-                    return mod.heap.create_obj_bool(errs, obj, true);
+                    return
+                        mod.heap.create_obj_bool(errs, obj, true) ||
+                        mod.add_static_obj(obj, addr);
                 case TokenType::KW_FALSE:
-                    return mod.heap.create_obj_bool(errs, obj, false);
+                    return
+                        mod.heap.create_obj_bool(errs, obj, false) ||
+                        mod.add_static_obj(obj, addr);
                 }
                 return errs.add(tarr[0], "Invalid static bool '{}'", to_string(tarr[1]));
             case TokenType::KW_FP:
@@ -90,11 +167,17 @@ namespace nn
                 switch (tarr[1]->ty)
                 {
                 case TokenType::KW_F16:
-                    return mod.heap.create_obj_fwidth(errs, obj, core::tensor_dty::F16);
+                    return
+                        mod.heap.create_obj_fwidth(errs, obj, core::tensor_dty::F16) ||
+                        mod.add_static_obj(obj, addr);
                 case TokenType::KW_F32:
-                    return mod.heap.create_obj_fwidth(errs, obj, core::tensor_dty::F32);
+                    return
+                        mod.heap.create_obj_fwidth(errs, obj, core::tensor_dty::F32) ||
+                        mod.add_static_obj(obj, addr);
                 case TokenType::KW_F64:
-                    return mod.heap.create_obj_fwidth(errs, obj, core::tensor_dty::F64);
+                    return
+                        mod.heap.create_obj_fwidth(errs, obj, core::tensor_dty::F64) ||
+                        mod.add_static_obj(obj, addr);
                 }
                 return errs.add(tarr[0], "Invalid static fp '{}'", to_string(tarr[1]));
             case TokenType::KW_INT:
@@ -102,19 +185,33 @@ namespace nn
                     return errs.add(tarr[0], "Malformed static int");
                 if (tarr[1]->expect<TokenType::LIT_INT>(errs))
                     return true;
-                return mod.heap.create_obj_int(errs, obj, tarr[1]->get<TokenType::LIT_INT>().val);
+                return
+                    mod.heap.create_obj_int(errs, obj, tarr[1]->get<TokenType::LIT_INT>().val) ||
+                    mod.add_static_obj(obj, addr);
             case TokenType::KW_FLOAT:
                 if (tarr.size() != 2)
                     return errs.add(tarr[0], "Malformed static float");
                 if (tarr[1]->expect<TokenType::LIT_FLOAT>(errs))
                     return true;
-                return mod.heap.create_obj_float(errs, obj, tarr[1]->get<TokenType::LIT_FLOAT>().val);
+                return
+                    mod.heap.create_obj_float(errs, obj, tarr[1]->get<TokenType::LIT_FLOAT>().val) ||
+                    mod.add_static_obj(obj, addr);
             case TokenType::KW_STR:
                 if (tarr.size() != 2)
                     return errs.add(tarr[0], "Malformed static string");
                 if (tarr[1]->expect<TokenType::LIT_STR>(errs))
                     return true;
-                return mod.heap.create_obj_str(errs, obj, tarr[1]->get<TokenType::LIT_STR>().val);
+                return
+                    mod.heap.create_obj_str(errs, obj, tarr[1]->get<TokenType::LIT_STR>().val) ||
+                    mod.add_static_obj(obj, addr);
+            case TokenType::IDN:
+                if (std::string(tarr[0]->get<TokenType::IDN>().val) != "proc")
+                    break;
+                if (tarr.size() != 2)
+                    return errs.add(tarr[0], "Malformed static proc");
+                if (tarr[1]->expect<TokenType::IDN>(errs))
+                    return true;
+                return mod.add_static_ref(&tarr[1]->get<TokenType::IDN>(), addr);
             }
             return errs.add(tarr[0], "Invalid static type '{}'", to_string(tarr[0]));
         }
@@ -150,11 +247,9 @@ namespace nn
             {
                 if (tarr.size() != 2)
                     return errs.add(tarr[0], "Invalid instruction");
-                Obj obj;
                 size_t addr;
                 return
-                    parsebc_static(errs, { tarr, 1 }, mod, obj) ||
-                    mod.add_static(obj, addr) ||
+                    parsebc_static(errs, { tarr, 1 }, mod, addr) ||
                     body.add_instruction(New(tarr[0], addr));
             }
             case hash("agg"):
@@ -336,7 +431,7 @@ namespace nn
                 int end = tarr.search(IsSameCriteria(TokenType::DOT), i);
                 if (end < 0)
                     end = tarr.size();
-                ByteCodeBody body;
+                ByteCodeBody body{ tarr[i] };
                 if (parsebc_body(errs, { tarr, i, end }, mod, body))
                     ret = true;
                 else

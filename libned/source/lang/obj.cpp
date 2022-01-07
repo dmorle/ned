@@ -389,7 +389,7 @@ namespace nn
 
         bool IntType::xflt(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            return heap.create_obj_float(errs, dst, *src.int_obj);
+            return heap.create_obj_float(errs, dst, (FloatObj)*src.int_obj);
         }
 
         bool IntType::xint(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
@@ -500,7 +500,7 @@ namespace nn
 
         bool FloatType::xint(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            return heap.create_obj_int(errs, dst, *src.float_obj);
+            return heap.create_obj_int(errs, dst, (IntObj)*src.float_obj);
         }
 
         bool StrType::cpy(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)

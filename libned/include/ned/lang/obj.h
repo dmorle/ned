@@ -1,12 +1,12 @@
 #ifndef NED_OBJ_H
 #define NED_OBJ_H
 
+#include <ned/lang/ast.h>
+#include <ned/core/graph.h>
+
 #include <string>
 #include <sstream>
 #include <unordered_map>
-
-#include <ned/core/graph.h>
-#include <ned/lang/ast.h>
 
 namespace nn
 {
@@ -31,8 +31,16 @@ namespace nn
             StrObj    *str_obj;
             AggObj    *agg_obj;
             TenObj    *ten_obj;
-            void*      ptr;
+            uint64_t   ptr;
         };
+
+        class BoolType;
+        class FWidthType;
+        class IntType;
+        class FloatType;
+        class StrType;
+        class ArrType;
+        class AggType;
 
         class ProgramHeap
         {

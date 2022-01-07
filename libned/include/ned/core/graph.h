@@ -1,13 +1,13 @@
 #ifndef NED_GRAPH_H
 #define NED_GRAPH_H
 
+#include <ned/core/tensor.h>
+
 #include <map>
 #include <tuple>
 #include <vector>
 #include <string>
 #include <memory>
-
-#include <ned/core/tensor.h>
 
 namespace nn
 {

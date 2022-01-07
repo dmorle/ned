@@ -1,4 +1,4 @@
-#include <ned/lang/lexer.h>
+#include <ned/lang/errors.h>
 
 #include <stdexcept>
 #include <cassert>
@@ -353,7 +353,7 @@ namespace nn
 
             this->is_slice = true;
 
-            int end = base.size();
+            int end = (int)base.size();
             this->mem_sz = 0;
             this->rawlen = base_buflen - base_offset;
             this->pbuf = base.pbuf + base_offset;
@@ -371,7 +371,7 @@ namespace nn
         TokenArray::TokenArray(const TokenArray& base, int start, int end)
         {
             if (end < 0)
-                end += base.size();
+                end += (int)base.size();
 
             size_t base_offset = base.offsets[start];
             
@@ -594,7 +594,7 @@ namespace nn
                         i += 2;
                         continue;
                     }
-                    return errs.add(line_num, i - line_start, "Expected '=' after '!'");
+                    return errs.add(fname, line_num, i - line_start, "Expected '=' after '!'");
                 case '=':
                     use_indents = false;
 
@@ -662,7 +662,7 @@ namespace nn
                         }
                     }
                     if (i >= bufsz)
-                        return errs.add(line_num, col_num, "Unexpected EOF while lexing integral type");
+                        return errs.add(fname, line_num, col_num, "Unexpected EOF while lexing integral type");
                     if (is_numeric(buf[i]))
                     {
                         int64_t ival = 0;
@@ -695,8 +695,8 @@ namespace nn
                         }
 
                         // use ival as the >1 portion of the float, and find the <1 portion
-                        float multiplier = 0.1;
-                        double fval = ival;
+                        float multiplier = 0.1f;
+                        double fval = (double)ival;
                         while (i < bufsz && is_numeric(buf[i]))
                         {
                             fval += multiplier * (buf[i] - '0');
@@ -736,7 +736,7 @@ namespace nn
 
                     // Only indentifiers and keywords are left
                     if (!is_idnstart(buf[i]))
-                        return errs.add(line_num, col_num, "Unexpected characted '{}'", buf[i]);
+                        return errs.add(fname, line_num, col_num, "Unexpected characted '{}'", buf[i]);
                     
                     char idn_buf[64];
                     int iidx = 0;
@@ -915,7 +915,7 @@ namespace nn
             if (result != fsz)
             {
                 delete[] pbuf;
-                errs.add(0, 0, "Unable to read file");
+                errs.add("", 0ULL, 0ULL, "Unable to read file");
                 return true;
             }
             pbuf[fsz] = '\0';
@@ -974,18 +974,12 @@ namespace nn
             return (idx + 1) * (!in_bracket() && std::find(tys.begin(), tys.end(), ptk->ty) != tys.end());
         }
 
-        int CargEndCriteria::accept(const Token* ptk, int idx)
-        {
-            count_token(ptk);
-            if (!in_bracket() && (ptk->ty == TokenType::ANGLE_C || ptk->ty == TokenType::COMMA))
-                return idx;
-            return -1;
-        }
+        ArgEndCriteria::ArgEndCriteria(TokenType close) : close(close) {}
 
-        int VargEndCriteria::accept(const Token* ptk, int idx)
+        int ArgEndCriteria::accept(const Token* ptk, int idx)
         {
             count_token(ptk);
-            if (!in_bracket() && (ptk->ty == TokenType::ROUND_C || ptk->ty == TokenType::COMMA))
+            if (!in_bracket() && (ptk->ty == close || ptk->ty == TokenType::COMMA))
                 return idx;
             return -1;
         }
