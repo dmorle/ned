@@ -43,7 +43,7 @@ namespace nn
 {
     namespace lang
     {
-        constexpr std::string to_string(const TokenType ty)
+        constexpr std::string to_string(TokenType ty)
         {
             switch (ty)
             {
@@ -251,73 +251,73 @@ namespace nn
             case TokenType::LIT_FLOAT:
                 return std::to_string(static_cast<const TokenImp<TokenType::LIT_FLOAT>*>(ptk)->val);
             case TokenType::LIT_STR:
-                return static_cast<const TokenImp<TokenType::LIT_STR>*>(ptk)->val;
+                return std::string("\"") + static_cast<const TokenImp<TokenType::LIT_STR>*>(ptk)->val + "\"";
             case TokenType::IDN:
-                return static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val;
+                return std::string(static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val) + " ";
             case TokenType::KW_STRUCT:
-                return "struct";
+                return "struct ";
             case TokenType::KW_DEF:
-                return "def";
+                return "def ";
             case TokenType::KW_INTR:
-                return "intr";
+                return "intr ";
             case TokenType::KW_FN:
-                return "fn";
+                return "fn ";
             case TokenType::KW_RETURN:
-                return "return";
+                return "return ";
             case TokenType::KW_IMPORT:
-                return "import";
+                return "import ";
             case TokenType::KW_WHILE:
-                return "while";
+                return "while ";
             case TokenType::KW_FOR:
-                return "for";
+                return "for ";
             case TokenType::KW_IN:
-                return "in";
+                return "in ";
             case TokenType::KW_BREAK:
-                return "break";
+                return "break ";
             case TokenType::KW_CONTINUE:
-                return "continue";
+                return "continue ";
             case TokenType::KW_IF:
-                return "if";
+                return "if ";
             case TokenType::KW_ELIF:
-                return "elif";
+                return "elif ";
             case TokenType::KW_ELSE:
-                return "else";
+                return "else ";
             case TokenType::KW_TYPE:
-                return "type";
+                return "type ";
             case TokenType::KW_VAR:
-                return "var";
+                return "var ";
             case TokenType::KW_FP:
-                return "fp";
+                return "fp ";
             case TokenType::KW_BOOL:
-                return "bool";
+                return "bool ";
             case TokenType::KW_INT:
-                return "int";
+                return "int ";
             case TokenType::KW_FLOAT:
-                return "float";
+                return "float ";
             case TokenType::KW_STR:
-                return "str";
+                return "str ";
             case TokenType::KW_ARRAY:
-                return "array";
+                return "array ";
             case TokenType::KW_TUPLE:
-                return "tuple";
+                return "tuple ";
             case TokenType::KW_TRUE:
-                return "true";
+                return "true ";
             case TokenType::KW_FALSE:
-                return "false";
+                return "false ";
             case TokenType::KW_RAISE:
-                return "raise";
+                return "raise ";
             case TokenType::KW_EXPORT:
-                return "export";
+                return "export ";
             case TokenType::KW_EXTERN:
-                return "extern";
+                return "extern ";
             case TokenType::KW_F16:
-                return "f16";
+                return "f16 ";
             case TokenType::KW_F32:
-                return "f32";
+                return "f32 ";
             case TokenType::KW_F64:
-                return "f64";
+                return "f64 ";
             case TokenType::KW_PRINT:
-                return "print";
+                return "print ";
             case TokenType::KW_AND:
                 return " and ";
             case TokenType::KW_OR:
@@ -440,7 +440,8 @@ namespace nn
         void TokenArray::print() const
         {
             for (int i = 0; i < size(); i++)
-                std::cout << to_string((*this)[i]) << std::endl;
+                std::cout << to_string((*this)[i]);
+            std::cout << std::endl;
         }
 #endif
 
@@ -736,7 +737,7 @@ namespace nn
 
                     // Only indentifiers and keywords are left
                     if (!is_idnstart(buf[i]))
-                        return errs.add(fname, line_num, col_num, "Unexpected characted '{}'", buf[i]);
+                        return errs.add(fname, line_num, col_num, "Unexpected character '{}'", buf[i]);
                     
                     char idn_buf[64];
                     int iidx = 0;
@@ -751,143 +752,108 @@ namespace nn
                     {
                     case hash("struct"):
                         tarr.push_back(TokenImp<TokenType::KW_STRUCT>(fname, line_num, col_num));
-                        i += 6;
                         continue;
                     case hash("def"):
                         tarr.push_back(TokenImp<TokenType::KW_DEF>(fname, line_num, col_num));
-                        i += 3;
                         continue;
                     case hash("intr"):
                         tarr.push_back(TokenImp<TokenType::KW_INTR>(fname, line_num, col_num));
-                        i += 4;
                         continue;
                     case hash("fn"):
                         tarr.push_back(TokenImp<TokenType::KW_FN>(fname, line_num, col_num));
-                        i += 2;
                         continue;
                     case hash("return"):
                         tarr.push_back(TokenImp<TokenType::KW_RETURN>(fname, line_num, col_num));
-                        i += 6;
                         continue;
                     case hash("import"):
                         tarr.push_back(TokenImp<TokenType::KW_IMPORT>(fname, line_num, col_num));
-                        i += 6;
                         continue;
                     case hash("while"):
                         tarr.push_back(TokenImp<TokenType::KW_WHILE>(fname, line_num, col_num));
-                        i += 5;
                         continue;
                     case hash("for"):
                         tarr.push_back(TokenImp<TokenType::KW_FOR>(fname, line_num, col_num));
-                        i += 3;
                         continue;
                     case hash("in"):
                         tarr.push_back(TokenImp<TokenType::KW_IN>(fname, line_num, col_num));
-                        i += 2;
                         continue;
                     case hash("break"):
                         tarr.push_back(TokenImp<TokenType::KW_BREAK>(fname, line_num, col_num));
-                        i += 5;
                         continue;
                     case hash("continue"):
                         tarr.push_back(TokenImp<TokenType::KW_CONTINUE>(fname, line_num, col_num));
-                        i += 8;
                         continue;
                     case hash("if"):
                         tarr.push_back(TokenImp<TokenType::KW_IF>(fname, line_num, col_num));
-                        i += 2;
                         continue;
                     case hash("elif"):
                         tarr.push_back(TokenImp<TokenType::KW_ELIF>(fname, line_num, col_num));
-                        i += 4;
                         continue;
                     case hash("else"):
                         tarr.push_back(TokenImp<TokenType::KW_ELSE>(fname, line_num, col_num));
-                        i += 4;
                         continue;
                     case hash("type"):
                         tarr.push_back(TokenImp<TokenType::KW_TYPE>(fname, line_num, col_num));
-                        i += 4;
                         continue;
                     case hash("var"):
                         tarr.push_back(TokenImp<TokenType::KW_VAR>(fname, line_num, col_num));
-                        i += 3;
                         continue;
                     case hash("fp"):
                         tarr.push_back(TokenImp<TokenType::KW_FP>(fname, line_num, col_num));
-                        i += 2;
                         continue;
                     case hash("bool"):
                         tarr.push_back(TokenImp<TokenType::KW_BOOL>(fname, line_num, col_num));
-                        i += 4;
                         continue;
                     case hash("int"):
                         tarr.push_back(TokenImp<TokenType::KW_INT>(fname, line_num, col_num));
-                        i += 3;
                         continue;
                     case hash("float"):
                         tarr.push_back(TokenImp<TokenType::KW_FLOAT>(fname, line_num, col_num));
-                        i += 5;
                         continue;
                     case hash("str"):
                         tarr.push_back(TokenImp<TokenType::KW_STR>(fname, line_num, col_num));
-                        i += 3;
                         continue;
                     case hash("array"):
                         tarr.push_back(TokenImp<TokenType::KW_ARRAY>(fname, line_num, col_num));
-                        i += 5;
                         continue;
                     case hash("tuple"):
                         tarr.push_back(TokenImp<TokenType::KW_TUPLE>(fname, line_num, col_num));
-                        i += 5;
                         continue;
                     case hash("true"):
                         tarr.push_back(TokenImp<TokenType::KW_TRUE>(fname, line_num, col_num));
-                        i += 4;
                         continue;
                     case hash("false"):
                         tarr.push_back(TokenImp<TokenType::KW_FALSE>(fname, line_num, col_num));
-                        i += 5;
                         continue;
                     case hash("raise"):
                         tarr.push_back(TokenImp<TokenType::KW_RAISE>(fname, line_num, col_num));
-                        i += 5;
                         continue;
                     case hash("export"):
                         tarr.push_back(TokenImp<TokenType::KW_EXPORT>(fname, line_num, col_num));
-                        i += 6;
                         continue;
                     case hash("extern"):
                         tarr.push_back(TokenImp<TokenType::KW_EXTERN>(fname, line_num, col_num));
-                        i += 6;
                         continue;
                     case hash("f16"):
                         tarr.push_back(TokenImp<TokenType::KW_F16>(fname, line_num, col_num));
-                        i += 3;
                         continue;
                     case hash("f32"):
                         tarr.push_back(TokenImp<TokenType::KW_F32>(fname, line_num, col_num));
-                        i += 3;
                         continue;
                     case hash("f64"):
                         tarr.push_back(TokenImp<TokenType::KW_F64>(fname, line_num, col_num));
-                        i += 3;
                         continue;
                     case hash("print"):
                         tarr.push_back(TokenImp<TokenType::KW_PRINT>(fname, line_num, col_num));
-                        i += 5;
                         continue;
                     case hash("and"):
                         tarr.push_back(TokenImp<TokenType::KW_AND>(fname, line_num, col_num));
-                        i += 3;
                         continue;
                     case hash("or"):
                         tarr.push_back(TokenImp<TokenType::KW_OR>(fname, line_num, col_num));
-                        i += 2;
                         continue;
                     case hash("not"):
                         tarr.push_back(TokenImp<TokenType::KW_NOT>(fname, line_num, col_num));
-                        i += 3;
                         continue;
                     }
                     
@@ -955,7 +921,7 @@ namespace nn
 
         bool BracketCounter::in_bracket() const
         {
-            return rbrac == 0 && sbrac == 0 and abrac == 0;
+            return rbrac != 0 || sbrac != 0 || abrac != 0;
         }
 
         IsSameCriteria::IsSameCriteria(TokenType ty) : ty(ty) {}

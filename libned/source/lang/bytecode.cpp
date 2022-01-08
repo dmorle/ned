@@ -26,7 +26,7 @@ namespace nn
     namespace lang
     {
         ByteCodeBody::ByteCodeBody(const Token* ptk) :
-            fname(ptk->fname), line_num(ptk->line_num), col_num(ptk->col_num) {}
+            fname(ptk->fname), line_num(ptk->line_num), col_num(ptk->col_num), body_sz(0) {}
 
         size_t ByteCodeBody::size() const
         {
@@ -79,11 +79,10 @@ namespace nn
             return false;
         }
 
-        bool ByteCodeModule::export_module(Errors& errs, CodeSegPtr& code_segment, DataSegPtr& data_segment)
+        bool ByteCodeModule::export_module(Errors& errs, CodeSegPtr& code_segment, DataSegPtr& data_segment, BlockOffsets& block_offsets)
         {
             // Ordering the blocks and getting the offsets
             std::vector<std::string> block_order;
-            std::map<std::string, size_t> block_offsets;
             size_t code_segment_sz = 0;
             for (const auto& [name, body] : blocks)
             {
@@ -103,10 +102,12 @@ namespace nn
 
             // Constructing the code segment
             code_segment = (CodeSegPtr)std::malloc(code_segment_sz);
-            throw std::bad_alloc();  // I'll be getting rid of exceptions when I get around to creating my own data structures
+            if (!code_segment)
+                throw std::bad_alloc();  // I'll be getting rid of exceptions when I get around to creating my own data structures
             CodeSegPtr buf = code_segment;
             for (const auto& name : block_order)
                 buf = blocks.at(name).to_bytes(errs, block_offsets.at(name), buf);
+            assert(buf - code_segment == code_segment_sz);
 
             // Constructing the data segment
             data_segment = (DataSegPtr)std::malloc(sizeof(Obj) * statics.size());
@@ -245,7 +246,7 @@ namespace nn
                 return body.add_instruction(Brf(tarr[0], tarr[1]->get<TokenType::IDN>().val));
             case hash("new"):
             {
-                if (tarr.size() != 2)
+                if (tarr.size() != 3)
                     return errs.add(tarr[0], "Invalid instruction");
                 size_t addr;
                 return
@@ -388,6 +389,10 @@ namespace nn
                 if (tarr.size() != 1)
                     return errs.add(tarr[0], "Invalid instruction");
                 return body.add_instruction(XInt(tarr[0]));
+            case hash("dsp"):
+                if (tarr.size() != 1)
+                    return errs.add(tarr[0], "Invalid instruction");
+                return body.add_instruction(Dsp(tarr[0]));
             default:
                 return errs.add(tarr[0], "Unrecognized opcode: {}", tarr[0]->get<TokenType::IDN>().val);
             }
@@ -403,8 +408,7 @@ namespace nn
                 int end = tarr.search(IsSameCriteria(TokenType::ENDL), i);
                 if (end < 0)
                     end = tarr.size();
-                else
-                    ret = ret || parsebc_instruction(errs, { tarr, i, end }, mod, body);
+                ret = ret || parsebc_instruction(errs, { tarr, i, end }, mod, body);
                 for (i = end; i < tarr.size() && tarr[i]->is_whitespace(); i++);
             }
             return ret;
@@ -421,8 +425,14 @@ namespace nn
             for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
             while (i < tarr.size())
             {
-                if (tarr[i++]->expect<TokenType::DOT>(errs))
+                if (tarr[i]->expect<TokenType::DOT>(errs))
                     return true;
+                for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+                if (tarr[i]->expect<TokenType::IDN>(errs))
+                    return true;
+                if (strcmp(tarr[i]->get<TokenType::IDN>().val, "proc"))
+                    return errs.add(tarr[i], "Expected keyword 'proc'");
+                for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
                 if (tarr[i]->expect<TokenType::IDN>(errs))
                     return true;
                 std::string name = tarr[i++]->get<TokenType::IDN>().val;
@@ -454,7 +464,7 @@ namespace nn
                 throw std::runtime_error("fread failed");
             }
             pbuf[fsz] = '\0';
-            bool ret = parsebc_module(errs, fname, pbuf, fsz + 1, mod);
+            bool ret = parsebc_module(errs, fname, pbuf, fsz, mod);
             delete[] pbuf;
             return ret;
         }

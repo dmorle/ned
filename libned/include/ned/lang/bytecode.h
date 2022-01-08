@@ -66,7 +66,7 @@ namespace nn
             bool add_block(Errors& errs, const std::string& name, const ByteCodeBody& body);
             bool add_static_obj(Obj obj, size_t& addr);
             bool add_static_ref(const TokenImp<TokenType::IDN>* label, size_t& addr);
-            bool export_module(Errors& errs, CodeSegPtr& code_segment, DataSegPtr& data_segment);
+            bool export_module(Errors& errs, CodeSegPtr& code_segment, DataSegPtr& data_segment, BlockOffsets& block_offsets);
         };
 
         enum class InstructionType : uint8_t
@@ -105,6 +105,7 @@ namespace nn
             XSTR,
             XFLT,
             XINT,
+            DSP,
 
             TEN,
             EBLK,
@@ -221,6 +222,7 @@ namespace nn
             using XStr = Implicit < XSTR >;
             using XFlt = Implicit < XFLT >;
             using XInt = Implicit < XINT >;
+            using Dsp  = Implicit < DSP  >;
         }
         
         bool parsebc_static(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, size_t& addr);
@@ -284,6 +286,7 @@ namespace nn
 * xflt         Converts any object to a float object
 * xint         Converts any object to an int object
 * 
+* dsp          Prints a string at tos to stdout
 * 
 * Deep learning instructions
 * 

@@ -10,64 +10,123 @@ namespace nn
 {
     namespace lang
     {
+        ProgramHeap::~ProgramHeap()
+        {
+            for (auto* ty : bool_types)
+                delete ty;
+            for (auto* ty : fwidth_types)
+                delete ty;
+            for (auto* ty : int_types)
+                delete ty;
+            for (auto* ty : float_types)
+                delete ty;
+            for (auto* ty : str_types)
+                delete ty;
+            for (auto* ty : arr_types)
+                delete ty;
+            for (auto* ty : agg_types)
+                delete ty;
+
+            for (auto* obj : bool_objs)
+                delete obj;
+            for (auto* obj : fwidth_objs)
+                delete obj;
+            for (auto* obj : int_objs)
+                delete obj;
+            for (auto* obj : float_objs)
+                delete obj;
+            for (auto* obj : str_objs)
+                delete obj;
+            for (auto* obj : agg_objs)
+                delete obj;
+            for (auto* obj : ten_objs)
+                delete obj;
+        }
+
         bool ProgramHeap::create_type_bool(Errors& errs, Obj& obj)
         {
-            return true;
+            bool_types.push_back(new BoolType());
+            obj.type_obj = bool_types.back();
+            return false;
         }
 
         bool ProgramHeap::create_type_fwidth(Errors& errs, Obj& obj)
         {
-            return true;
+            fwidth_types.push_back(new FWidthType());
+            obj.type_obj = fwidth_types.back();
+            return false;
         }
 
         bool ProgramHeap::create_type_int(Errors& errs, Obj& obj)
         {
-            return true;
+            int_types.push_back(new IntType());
+            obj.type_obj = int_types.back();
+            return false;
         }
 
         bool ProgramHeap::create_type_float(Errors& errs, Obj& obj)
         {
-            return true;
+            float_types.push_back(new FloatType());
+            obj.type_obj = float_types.back();
+            return false;
         }
 
         bool ProgramHeap::create_type_str(Errors& errs, Obj& obj)
         {
-            return true;
+            str_types.push_back(new StrType());
+            obj.type_obj = str_types.back();
+            return false;
         }
 
         bool ProgramHeap::create_type_arr(Errors& errs, Obj& obj, TypeObj* ty)
         {
-            return true;
+            arr_types.push_back(new ArrType());
+            arr_types.back()->elem_ty = ty;
+            obj.type_obj = arr_types.back();
+            return false;
         }
 
         bool ProgramHeap::create_type_agg(Errors& errs, Obj& obj, std::vector<TypeObj*> tys)
         {
-            return true;
+            agg_types.push_back(new AggType());
+            agg_types.back()->elem_tys = std::move(tys);
+            obj.type_obj = agg_types.back();
+            return false;
         }
 
         bool ProgramHeap::create_obj_bool(Errors& errs, Obj& obj, BoolObj val)
         {
-            return true;
+            bool_objs.push_back(new BoolObj(val));
+            obj.bool_obj = bool_objs.back();
+            return false;
         }
 
         bool ProgramHeap::create_obj_fwidth(Errors& errs, Obj& obj, FWidthObj val)
         {
-            return true;
+            fwidth_objs.push_back(new FWidthObj(val));
+            obj.fwidth_obj = fwidth_objs.back();
+            return false;
         }
 
         bool ProgramHeap::create_obj_int(Errors& errs, Obj& obj, IntObj val)
         {
-            return true;
+            int_objs.push_back(new IntObj(val));
+            obj.int_obj = int_objs.back();
+            return false;
         }
 
         bool ProgramHeap::create_obj_float(Errors& errs, Obj& obj, FloatObj val)
         {
-            return true;
+            float_objs.push_back(new FloatObj(val));
+            obj.float_obj = float_objs.back();
+            return false;
         }
 
         bool ProgramHeap::create_obj_str(Errors& errs, Obj& obj, const StrObj& val)
         {
-            return true;
+            str_objs.push_back(new StrObj(val));
+            obj.str_obj = str_objs.back();
+            return false;
         }
 
         bool ProgramHeap::create_obj_agg(Errors& errs, Obj& obj, const AggObj& val)

@@ -12,6 +12,7 @@ namespace nn
     {
         using CodeSegPtr = uint8_t*;
         using DataSegPtr = Obj*;
+        using BlockOffsets = std::map<std::string, size_t>;
 
         class CallStack
         {
@@ -20,11 +21,12 @@ namespace nn
 
         public:
             bool pop(Errors& errs, Obj& obj);
+            bool del(Errors& errs, size_t i);
             bool get(Errors& errs, size_t i, Obj& obj);
-            bool push(Errors& errs, Obj val);
+            bool push(Errors& errs, Obj obj);
         };
 
-        bool exec(Errors& errs, CallStack& stack, ProgramHeap& heap, CodeSegPtr* code, DataSegPtr* data, size_t pc);
+        bool exec(Errors& errs, CallStack& stack, ProgramHeap& heap, CodeSegPtr code, DataSegPtr data, size_t pc);
     }
 }
 

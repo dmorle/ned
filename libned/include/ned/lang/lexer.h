@@ -100,7 +100,7 @@ namespace nn
         using Errors = ErrorList<Error>;
 
         template<TokenType TY> constexpr const TokenImp<TY>& create_default(Token* ptk);
-        constexpr std::string to_string(const TokenType ty);
+        extern constexpr std::string to_string(TokenType ty);  // Without 'extern', this creates a linker error.  Maybe a linker bug?
         std::string to_string(const Token* ptk);
 
         class Token
@@ -121,7 +121,7 @@ namespace nn
 
             bool is_whitespace() const { return ty == TokenType::INDENT || ty == TokenType::ENDL; }
             template<TokenType TY> TokenImp<TY>& get() { assert(ty != TY); return *reinterpret_cast<TokenImp<TY>*>(this); }
-            template<TokenType TY> const TokenImp<TY>& get() const { assert(ty != TY); return *reinterpret_cast<const TokenImp<TY>*>(this); }
+            template<TokenType TY> const TokenImp<TY>& get() const { assert(ty == TY); return *reinterpret_cast<const TokenImp<TY>*>(this); }
             template<TokenType TY> bool expect(Errors& errs) const {
                 if (ty == TY) return false; return errs.add(this, "Expected {}, found {}", to_string(TY), to_string(ty)); }
         };

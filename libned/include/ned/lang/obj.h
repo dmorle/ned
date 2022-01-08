@@ -85,7 +85,7 @@ namespace nn
         class TypeObj
         {
         protected:
-            ~TypeObj();
+            ~TypeObj() {}
         public:
             virtual bool cpy  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) = 0;
             virtual bool inst (Errors& errs, ProgramHeap& heap, Obj& dst) = 0;

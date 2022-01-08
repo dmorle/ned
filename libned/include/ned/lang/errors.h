@@ -17,6 +17,7 @@ namespace std {
     string format(const string& fmt, const Args&...) { return fmt; }
 }
 #endif
+#include <iostream>
 
 namespace nn
 {
@@ -35,9 +36,18 @@ namespace nn
             template<typename... Args> Error(const std::string& fname, size_t line_num, size_t col_num, const std::string& fmt, const Args&... args);
             template<typename... Args> Error(const Token* ptk, const std::string& fmt, const Args&... args);
             template<typename... Args> Error(const Token& tk, const std::string& fmt, const Args&... args);
+
+            void print()
+            {
+                std::cout
+                    << errmsg
+                    << "\nline: " << line_num
+                    << " column: " << col_num
+                    << " file: " << fname;
+            }
         };
 
-        template<class T>
+        template<typename T>
         class ErrorList
         {
             std::vector<T> errs;
@@ -45,6 +55,16 @@ namespace nn
         public:
             template<typename... Args>
             bool add(const Args&... args) { errs.push_back(T{ args... }); return true; }
+
+            void print()
+            {
+                for (auto& e : errs)
+                {
+                    e.print();
+                    std::cout << "\n\n";
+                }
+                std::cout << std::endl;
+            }
         };
 
         using Errors = ErrorList<Error>;

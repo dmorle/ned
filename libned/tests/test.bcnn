@@ -1,0 +1,12 @@
+.proc test
+	new str "result: "
+	dup 2
+	dup 2
+	new type int
+	add
+	new type int
+	xstr
+	new type str
+	add
+	dsp
+	ret
