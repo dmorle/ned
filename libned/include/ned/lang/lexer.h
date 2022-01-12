@@ -32,6 +32,7 @@ namespace nn
             ARROW,  // ->
             COLON,
             COMMA,
+            CTX,    // !
             ADD,
             SUB,
             STAR,
@@ -81,6 +82,8 @@ namespace nn
             KW_RAISE,
             KW_EXPORT,
             KW_EXTERN,
+            KW_FORWARD,
+            KW_BACKWARD,
             KW_F16,
             KW_F32,
             KW_F64,
@@ -368,7 +371,7 @@ namespace nn
         };
 
         bool lex_buf(Errors& errs, const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num=1, uint32_t line_start=0);
-        bool lex_file(Errors& errs, const char* fname, FILE* pf, TokenArray& tarr);
+        bool lex_file(Errors& errs, const char* fname, TokenArray& tarr);
 
         class BracketCounter
         {

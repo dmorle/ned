@@ -7,41 +7,39 @@
 #include <ned/lang/interp.h>
 
 using namespace nn::lang;
+using namespace nn::core;
 
-// too big to fit on the c++ stack
+// too big to fit on the actual stack
 CallStack stack;
 
 int main()
 {
-    FILE* pf = fopen(TESTS_DIR"test.bcnn", "rb");
     Errors errs;
+    TokenArray tarr;
+    if (lex_file(errs, TESTS_DIR"test.bcnn", tarr))
+    {
+        errs.print();
+        return 1;
+    }
+
     ProgramHeap heap;
     ByteCodeModule mod{ heap };
-    if (parsebc_module(errs, TESTS_DIR"test.bcnn", pf, mod))
+    if (parsebc_module(errs, tarr, mod))
     {
         errs.print();
         return 1;
     }
-    fclose(pf);
-    CodeSegPtr code;
-    DataSegPtr data;
-    BlockOffsets offsets;
+    
+    ByteCode byte_code;
+    Graph graph;
     Obj obj;
 
-    if (mod.export_module(errs, code, data, offsets) ||
-        heap.create_obj_int(errs, obj, 5) ||
+    if (mod.export_module(errs, byte_code) ||
+        heap.create_obj_int(errs, obj, 100000) ||
         stack.push(errs, obj) ||
-        heap.create_obj_int(errs, obj, 3) ||
-        stack.push(errs, obj) ||
-        exec(errs, stack, heap, code, data, offsets.at("test")))
+        exec(errs, stack, heap, byte_code, "test", graph))
     {
         errs.print();
         return 1;
     }
-
-    //lex_file(TESTS_DIR"test.nn", pf, tarr);
-    //AstModule* pmod = new AstModule{ tarr };
-    //EvalCtx* pctx = pmod->eval("model", { create_obj_int(10) });
-    //delete pctx;
-    //delete pmod;
 }

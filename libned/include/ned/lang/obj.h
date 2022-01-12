@@ -19,7 +19,9 @@ namespace nn
         using FloatObj = double;
         using StrObj = std::string;
         using AggObj = std::vector<Obj>;
-        using TenObj = core::Edge;
+        using NodeObj = core::Node;
+        using EdgeObj = core::Edge;
+        using BlockObj = core::Block;
 
         union Obj
         {
@@ -30,7 +32,9 @@ namespace nn
             FloatObj  *float_obj;
             StrObj    *str_obj;
             AggObj    *agg_obj;
-            TenObj    *ten_obj;
+            NodeObj   *node_obj;
+            EdgeObj   *edge_obj;
+            BlockObj  *block_obj;
             uint64_t   ptr;
         };
 
@@ -58,26 +62,25 @@ namespace nn
             std::vector<FloatObj*>   float_objs;
             std::vector<StrObj*>     str_objs;
             std::vector<AggObj*>     agg_objs;
-            std::vector<TenObj*>     ten_objs;
 
         public:
             ~ProgramHeap();
 
-            bool create_type_bool   (Errors& errs, Obj& obj);
-            bool create_type_fwidth (Errors& errs, Obj& obj);
-            bool create_type_int    (Errors& errs, Obj& obj);
-            bool create_type_float  (Errors& errs, Obj& obj);
-            bool create_type_str    (Errors& errs, Obj& obj);
-            bool create_type_arr    (Errors& errs, Obj& obj, TypeObj* ty);
-            bool create_type_agg    (Errors& errs, Obj& obj, std::vector<TypeObj*> tys);
+            bool create_type_bool   (RuntimeErrors& errs, Obj& obj);
+            bool create_type_fwidth (RuntimeErrors& errs, Obj& obj);
+            bool create_type_int    (RuntimeErrors& errs, Obj& obj);
+            bool create_type_float  (RuntimeErrors& errs, Obj& obj);
+            bool create_type_str    (RuntimeErrors& errs, Obj& obj);
+            bool create_type_arr    (RuntimeErrors& errs, Obj& obj, TypeObj* ty);
+            bool create_type_agg    (RuntimeErrors& errs, Obj& obj, std::vector<TypeObj*> tys);
 
-            bool create_obj_bool    (Errors& errs, Obj& obj, BoolObj val);
-            bool create_obj_fwidth  (Errors& errs, Obj& obj, FWidthObj val);
-            bool create_obj_int     (Errors& errs, Obj& obj, IntObj val);
-            bool create_obj_float   (Errors& errs, Obj& obj, FloatObj val);
-            bool create_obj_str     (Errors& errs, Obj& obj, const StrObj& val);
-            bool create_obj_agg     (Errors& errs, Obj& obj, const AggObj& val);
-            bool create_obj_tensor  (Errors& errs, Obj& obj, FWidthObj dty, const std::vector<IntObj>& dims);
+            bool create_obj_bool    (RuntimeErrors& errs, Obj& obj, BoolObj val);
+            bool create_obj_fwidth  (RuntimeErrors& errs, Obj& obj, FWidthObj val);
+            bool create_obj_int     (RuntimeErrors& errs, Obj& obj, IntObj val);
+            bool create_obj_float   (RuntimeErrors& errs, Obj& obj, FloatObj val);
+            bool create_obj_str     (RuntimeErrors& errs, Obj& obj, const StrObj& val);
+            bool create_obj_agg     (RuntimeErrors& errs, Obj& obj, const AggObj& val);
+            bool create_obj_tensor  (RuntimeErrors& errs, Obj& obj, FWidthObj dty, const std::vector<IntObj>& dims);
         };
 
         class CallStack;
@@ -87,142 +90,142 @@ namespace nn
         protected:
             ~TypeObj() {}
         public:
-            virtual bool cpy  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) = 0;
-            virtual bool inst (Errors& errs, ProgramHeap& heap, Obj& dst) = 0;
-            virtual bool set  (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) = 0;
-            virtual bool iadd (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs);
-            virtual bool isub (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs);
-            virtual bool imul (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs);
-            virtual bool idiv (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs);
-            virtual bool imod (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs);
-            virtual bool add  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool sub  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool mul  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool div  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool mod  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool eq   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool ne   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool ge   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool le   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool gt   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool lt   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool land (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool lor  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool idx  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
-            virtual bool xstr (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src);
-            virtual bool xflt (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src);
-            virtual bool xint (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src);
+            virtual bool cpy  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) = 0;
+            virtual bool inst (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst) = 0;
+            virtual bool set  (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) = 0;
+            virtual bool iadd (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs);
+            virtual bool isub (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs);
+            virtual bool imul (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs);
+            virtual bool idiv (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs);
+            virtual bool imod (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs);
+            virtual bool add  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool sub  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool mul  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool div  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool mod  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool eq   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool ne   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool ge   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool le   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool gt   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool lt   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool land (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool lor  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool idx  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src);
+            virtual bool xflt (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src);
+            virtual bool xint (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src);
         };
 
         class BoolType :
             public TypeObj
         {
-            friend bool ProgramHeap::create_type_bool(Errors& errs, Obj& obj);
+            friend bool ProgramHeap::create_type_bool(RuntimeErrors& errs, Obj& obj);
             BoolType() = default;
         public:
-            virtual bool cpy  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
-            virtual bool inst (Errors& errs, ProgramHeap& heap, Obj& dst) override;
-            virtual bool set  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
-            virtual bool eq   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool ne   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool land (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool lor  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool xstr (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cpy  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool inst (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst) override;
+            virtual bool set  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool eq   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool ne   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool land (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool lor  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
         };
 
         class FWidthType :
             public TypeObj
         {
-            friend bool ProgramHeap::create_type_fwidth(Errors& errs, Obj& obj);
+            friend bool ProgramHeap::create_type_fwidth(RuntimeErrors& errs, Obj& obj);
             FWidthType() = default;
         public:
-            virtual bool cpy  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)  override;
-            virtual bool inst (Errors& errs, ProgramHeap& heap, Obj& dst) override;
-            virtual bool set  (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool eq   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool ne   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool xstr (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cpy  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)  override;
+            virtual bool inst (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst) override;
+            virtual bool set  (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool eq   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool ne   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
         };
 
         class IntType :
             public TypeObj
         {
-            friend bool ProgramHeap::create_type_int(Errors& errs, Obj& obj);
+            friend bool ProgramHeap::create_type_int(RuntimeErrors& errs, Obj& obj);
             IntType() = default;
         public:
-            virtual bool cpy  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)  override;
-            virtual bool inst (Errors& errs, ProgramHeap& heap, Obj& dst) override;
-            virtual bool set  (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool iadd (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool isub (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool imul (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool idiv (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool imod (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool add  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool sub  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool mul  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool div  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool mod  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool eq   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool ne   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool ge   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool le   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool gt   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool lt   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool xstr (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
-            virtual bool xflt (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
-            virtual bool xint (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cpy  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)  override;
+            virtual bool inst (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst) override;
+            virtual bool set  (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool iadd (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool isub (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool imul (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool idiv (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool imod (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool add  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool sub  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool mul  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool div  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool mod  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool eq   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool ne   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool ge   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool le   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool gt   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool lt   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool xflt (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool xint (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
         };
 
         class FloatType :
             public TypeObj
         {
-            friend bool ProgramHeap::create_type_float(Errors& errs, Obj& obj);
+            friend bool ProgramHeap::create_type_float(RuntimeErrors& errs, Obj& obj);
             FloatType() = default;
         public:
-            virtual bool cpy  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)  override;
-            virtual bool inst (Errors& errs, ProgramHeap& heap, Obj& dst) override;
-            virtual bool set  (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool iadd (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool isub (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool imul (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool idiv (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool add  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool sub  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool mul  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool div  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool eq   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool ne   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool ge   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool le   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool gt   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool lt   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool xstr (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
-            virtual bool xflt (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
-            virtual bool xint (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cpy  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)  override;
+            virtual bool inst (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst) override;
+            virtual bool set  (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool iadd (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool isub (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool imul (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool idiv (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool add  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool sub  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool mul  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool div  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool eq   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool ne   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool ge   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool le   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool gt   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool lt   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool xflt (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool xint (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
         };
 
         class StrType :
             public TypeObj
         {
-            friend bool ProgramHeap::create_type_str(Errors& errs, Obj& obj);
+            friend bool ProgramHeap::create_type_str(RuntimeErrors& errs, Obj& obj);
             StrType() = default;
         public:
-            virtual bool cpy  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)  override;
-            virtual bool inst (Errors& errs, ProgramHeap& heap, Obj& dst) override;
-            virtual bool set  (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool iadd (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool add  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool eq   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool ne   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool ge   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool le   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool gt   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool lt   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool idx  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool xstr (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
-            virtual bool xflt (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
-            virtual bool xint (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cpy  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)  override;
+            virtual bool inst (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst) override;
+            virtual bool set  (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool iadd (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool add  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool eq   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool ne   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool ge   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool le   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool gt   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool lt   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool idx  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool xflt (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool xint (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
         };
 
         class ArrType :  // arrays only.  inst -> agg
@@ -230,18 +233,18 @@ namespace nn
         {
             TypeObj* elem_ty;
 
-            friend bool ProgramHeap::create_type_arr(Errors& errs, Obj& obj, TypeObj* ty);
+            friend bool ProgramHeap::create_type_arr(RuntimeErrors& errs, Obj& obj, TypeObj* ty);
             ArrType() = default;
         public:
-            virtual bool cpy  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
-            virtual bool inst (Errors& errs, ProgramHeap& heap, Obj& dst) override;
-            virtual bool set  (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool iadd (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool add  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool eq   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool ne   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool idx  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool xstr (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cpy  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool inst (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst) override;
+            virtual bool set  (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool iadd (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool add  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool eq   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool ne   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool idx  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
         };
 
         class AggType :  // Tuples and structs.  inst -> agg
@@ -249,16 +252,16 @@ namespace nn
         {
             std::vector<TypeObj*> elem_tys;
 
-            friend bool ProgramHeap::create_type_agg(Errors& errs, Obj& obj, std::vector<TypeObj*> tys);
+            friend bool ProgramHeap::create_type_agg(RuntimeErrors& errs, Obj& obj, std::vector<TypeObj*> tys);
             AggType() = default;
         public:
-            virtual bool cpy  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)  override;
-            virtual bool inst (Errors& errs, ProgramHeap& heap, Obj& dst) override;
-            virtual bool set  (Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
-            virtual bool eq   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool ne   (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool idx  (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
-            virtual bool xstr (Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cpy  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)  override;
+            virtual bool inst (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst) override;
+            virtual bool set  (RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool eq   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool ne   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool idx  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
         };
     }
 }

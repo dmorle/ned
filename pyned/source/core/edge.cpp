@@ -23,7 +23,7 @@ extern "C" PyObject * EdgeObjectNew(PyTypeObject * type, PyObject * args, PyObje
 extern "C" int EdgeObjectInit(PyObject * self, PyObject * args, PyObject * kwargs)
 {
     // Ignoring all arguments
-    pSelf->pEdge = new (std::nothrow) core::Edge();
+    pSelf->pEdge = new (std::nothrow) core::PartialEdge();
     if (!pSelf->pEdge)
     {
         PyErr_NoMemory();

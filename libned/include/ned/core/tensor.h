@@ -21,7 +21,6 @@ namespace nn
         struct tensor_dsc
         {
             tensor_dty dty = tensor_dty::F32;
-            int32_t rk = -1;  // rk = -1 => placeholder tensor size (only valid during graph construction)
             std::vector<uint32_t> dims = {};
         };
     }

@@ -106,7 +106,6 @@ intr reshape<int *out_shape, fp fty, int *inp_shape>(fty<*inp_shape> inp) -> out
     fp<fty> out
     return out
 
-
 intr concat<int dim, fp fty, int *t1_shape, int *t2_shape>(fty<*t1_shape> t1, fty<*t2_shape> t2) -> out:
     if len(t1_shape) != len(t2_shape):
         raise "Mismatching tensor ranks"
@@ -155,31 +154,42 @@ def conv2d<int K, int M, int N, int C, int H, int W>(tensor<C, H, W> inp):
     return conv2d_intr(inp, xavier<K, C, M, N>())
 
 
-def rnn_cell<int I, int S>(tensor<I> inp, tensor<S> state):
-    tensor combined = concat<1>(reshape<N, -1>(inp), reshape<N, -1>(state))
-    tensor layer1 = relu(linear(combined))
-    tensor output = softmax(linear(layer1))
-    tensor nstate = relu(linear(layer1))
+def rnn_cell<int I, int S>(tensor<I> inp, tensor<S> state) -> state, out:
+    var combined = concat<1>(reshape<N, -1>(inp), reshape<N, -1>(state))
+    var layer1 = relu(linear(combined))
+    var output = softmax(linear(layer1))
+    var nstate = relu(linear(layer1))
     return nstate, output
 
 
-def rnn<int I, int S>(tensor<I> inp):
-    static tensor<S> state
+def rnn<int I, int S>(f32<I> inp) -> out:
+    extern tensor<S> state
     
-    tuple result = rnn_cell<I, S>(inp, state)
-    state = result[0]
-    return result[1]
+    var state, var out = rnn_cell<I, S>(inp, state)
+    return out
 
 
-def model<int G>(tensor<3, 312, 312> img):
-    tensor layer1 = relu(conv2d<8, 3, 3>(img))
-    tensor layer2 = relu(conv2d<16, 3, 3>(layer1))
+def model<int G>(f32<3, 312, 312> img) -> preds:
+    var layer1 = relu(conv2d<8, 3, 3>(img))
+    var layer2 = relu(conv2d<16, 3, 3>(layer1))
 
     tensor<16, 312, 312> tmp = layer2
     for int i in range(G):
         tmp = relu(conv2d<16, 3, 3>(tmp))
     
-    tensor flattened = reshape<N, -1>(tmp);
-    tensor output = rnn<N, flattened.shape[-1], 128>(flattened)
+    var flattened = reshape<N, -1>(tmp);
+    var output = rnn<N, flattened.shape[-1], 128>(flattened)
 
     return output
+
+intr mul_same<fp fty, int *shape>(fty<*shape> lhs, fty<*shape> rhs) -> out:
+    fty<*shape> out
+    return out
+
+def mul<fp fty, int *shape>(fty<*shape> lhs, fty<*shape> rhs) -> out:
+    forward:
+        var out = mul_same(lhs, rhs)
+    backward:
+        lhs = mul_same(rhs, out)
+        rhs = mul_same(lhs, out)
+    return out

@@ -68,6 +68,69 @@ namespace nn
         };
 
         using Errors = ErrorList<Error>;
+
+        class ByteCodeDebugInfo
+        {
+        public:
+            struct Record
+            {
+                size_t addr;
+                std::string fname;
+                size_t line_num, col_num;
+            };
+
+        private:
+            std::vector<Record> instruction_records;
+            friend class ByteCodeBody;
+
+        public:
+            template<typename... Args>
+            bool add_error_at(Errors& errs, size_t pc, Args... args) const
+            {
+                size_t min = 0;
+                size_t max = instruction_records.size();
+                while (true)
+                {
+                    size_t idx = (max + min) / 2;
+                    size_t idx_pc = instruction_records[idx].addr;
+                    if (pc < idx_pc)
+                        max = idx;
+                    else if (idx_pc < pc)
+                        min = idx;
+                    else
+                        return errs.add(
+                            instruction_records[idx].fname,
+                            instruction_records[idx].line_num,
+                            instruction_records[idx].col_num,
+                            args...
+                        )
+                }
+            }
+        };
+
+        class CallStack;
+        class ProgramHeap;
+        struct ByteCode;
+        class RuntimeErrors
+        {
+            Errors& errs;
+            ByteCodeDebugInfo* debug_info;
+            size_t* pc;
+
+            friend bool exec(Errors& errs, CallStack& stack, ProgramHeap& heap, ByteCode& byte_code, std::string entry_point, core::Graph& graph);
+
+        public:
+            RuntimeErrors(Errors& errs) : errs(errs), debug_info(nullptr), pc(nullptr) {}
+            RuntimeErrors(Errors& errs, ByteCodeDebugInfo& debug_info, size_t& pc) : errs(errs), debug_info(&debug_info), pc(&pc) {}
+
+            template<typename... Args>
+            bool add(Args... args)
+            {
+                if (debug_info && pc)
+                    return debug_info->add_error_at(errs, *pc, args...);
+                return errs.add("", 0ULL, 0ULL, args...);
+            }
+        };
     }
 }
 

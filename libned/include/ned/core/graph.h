@@ -7,7 +7,6 @@
 #include <tuple>
 #include <vector>
 #include <string>
-#include <memory>
 
 namespace nn
 {
@@ -15,41 +14,70 @@ namespace nn
 
     namespace core
     {
-        class InvalidGraph :
-            public std::exception
+        enum class EdgeFty
         {
-            InvalidGraph(const std::string& errmsg);
+            F16,
+            F32,
+            F64
+        };
+
+        struct EdgeInfo
+        {
+            EdgeFty fty;
+            std::vector<size_t> dims;
         };
 
         struct Node;
-
         struct Edge
         {
-            tensor_dsc dsc = tensor_dsc{};
-            Node* input = nullptr;
-            int inpid = -1;
-            std::vector<std::pair<Node*, int>> outputs = {};
+            using Connector = struct { Node* node; std::string name; };
+            using Info = struct { EdgeFty fty = EdgeFty::F32; std::vector<size_t> dims; };
+
+            Info info;
+            std::map<std::string, Connector> md_inps;
+            std::map<std::string, std::vector<Connector>> ctx_outs;
             mutable void* opaque = nullptr;
         };
 
         struct Node
         {
             std::string name;
-            std::map<std::string, std::shared_ptr<lang::Obj>> cargs;
-            std::vector<Edge*> inputs;
-            std::vector<Edge*> outputs;
+            std::map<std::string, lang::Obj> cargs;
+            std::map<std::string, Edge*> inps;
+            std::map<std::string, Edge*> outs;
             mutable void* opaque = nullptr;
+        };
+
+        struct IOEdge
+        {
+            Edge* forward;
+            Edge* backward;
+        };
+
+        struct Block
+        {
+            std::string name;
+            std::map<std::string, IOEdge> inps;
+            std::map<std::string, IOEdge> outs;
+            std::map<std::string, IOEdge> weights;  // Local to the block
+            std::map<std::string, IOEdge> exports;  // Local to the block
+            std::map<std::string, Block*> sub_blocks;
         };
 
         struct Graph
         {
-            std::map<std::string, Edge*> inputs;
-            std::vector<Edge*> outputs;
+            Block* model;
+            std::map<std::string, IOEdge> inps;
+            std::map<std::string, IOEdge> outs;
+            std::map<std::string, IOEdge> weights;  // Global across the graph
+            std::map<std::string, IOEdge> exports;  // Global across the graph
+            std::vector<std::string> eval_modes;
         };
 
-        // modifies the given graph to include a gradient. Output gradient edges are returned
-        std::map<std::string, Edge*> generate_grad(Graph* pgraph);
-        void unroll_graph(Graph* pgraph, std::map<std::string, int> inp_counts, Graph& result);
+        size_t fty_size(tensor_dty dty);
+        bool fty_str(tensor_dty dty, std::string& str);
+
+        bool validate_block(const Block& blk);
     }
 }
 

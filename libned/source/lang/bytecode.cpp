@@ -25,6 +25,16 @@ namespace nn
 {
     namespace lang
     {
+        ByteCodeDebugInfo::Record Instruction::create_debug_record(size_t addr) const
+        {
+            return ByteCodeDebugInfo::Record{
+                .addr = addr,
+                .fname = fname,
+                .line_num = line_num,
+                .col_num = col_num
+            };
+        }
+
         ByteCodeBody::ByteCodeBody(const Token* ptk) :
             fname(ptk->fname), line_num(ptk->line_num), col_num(ptk->col_num), body_sz(0) {}
 
@@ -33,17 +43,19 @@ namespace nn
             return body_sz;
         }
 
-        CodeSegPtr ByteCodeBody::to_bytes(Errors& errs, size_t offset, CodeSegPtr buf) const
+        CodeSegPtr ByteCodeBody::to_bytes(Errors& errs, size_t offset, CodeSegPtr base, ByteCodeDebugInfo& debug_info) const
         {
             std::map<std::string, size_t> abs_label_map;
             for (auto& [key, val] : label_map)
                 abs_label_map[key] = offset + val;
             
+            CodeSegPtr buf = base;
             for (const auto& e : instructions)
             {
                 if (e->set_labels(errs, abs_label_map))
                     return nullptr;
                 buf = e->to_bytes(buf);
+                debug_info.instruction_records.push_back(std::move(e->create_debug_record(offset + (buf - base))));
             }
             return buf;
         }
@@ -52,15 +64,15 @@ namespace nn
         {
             if (label_map.contains(lbl->val))
                 return errs.add(lbl, "Label redefinition");
-            label_map[lbl->val] = instructions.size();
+            label_map[lbl->val] = size();
             return false;
         }
 
         bool ByteCodeModule::add_block(Errors& errs, const std::string& name, const ByteCodeBody& body)
         {
-            if (blocks.contains(name))
-                return errs.add(body.fname, body.line_num, body.col_num, "Conflicting procedure name {}", name);
-            blocks.insert({ name, body });
+            if (procs.contains(name))
+                return errs.add(body.fname, body.line_num, body.col_num, "Conflicting procedure name '{}'", name);
+            procs.insert({ name, body });
             return false;
         }
 
@@ -75,43 +87,55 @@ namespace nn
         {
             addr = statics.size();
             statics.push_back({ .ptr = 0 });
-            static_block_refs.push_back({ addr, label });
+            static_proc_refs.push_back({ addr, label->val, label->fname, label->line_num, label->col_num });
             return false;
         }
 
-        bool ByteCodeModule::export_module(Errors& errs, CodeSegPtr& code_segment, DataSegPtr& data_segment, BlockOffsets& block_offsets)
+        bool ByteCodeModule::add_static_ref(const std::string& label, const std::string& fname, size_t line_num, size_t col_num, size_t& addr)
         {
-            // Ordering the blocks and getting the offsets
+            addr = statics.size();
+            statics.push_back({ .ptr = 0 });
+            static_proc_refs.push_back({ addr, label, fname, line_num, col_num });
+            return false;
+        }
+
+        bool ByteCodeModule::export_module(Errors& errs, ByteCode& byte_code)
+        {
+            // Ordering the procs and getting the offsets
             std::vector<std::string> block_order;
             size_t code_segment_sz = 0;
-            for (const auto& [name, body] : blocks)
+            for (const auto& [name, body] : procs)
             {
                 block_order.push_back(name);
-                block_offsets[name] = code_segment_sz;
+                byte_code.proc_offsets[name] = code_segment_sz;
                 code_segment_sz += body.size();
             }
 
             // Replacing the static references
-            for (auto& [addr, label] : static_block_refs)
+            for (const auto& [addr, label, fname, line_num, col_num] : static_proc_refs)
             {
-                if (!blocks.contains(label->val))
-                    return errs.add(label, "Reference to undefined procedure {}", to_string(label));
+                if (!procs.contains(label))
+                    return errs.add(fname, line_num, col_num, "Reference to undefined procedure '{}'", label);
                 assert(0 <= addr && addr < statics.size());
-                statics[addr].ptr = block_offsets.at(label->val);
+                statics[addr].ptr = byte_code.proc_offsets.at(label);
             }
 
             // Constructing the code segment
-            code_segment = (CodeSegPtr)std::malloc(code_segment_sz);
-            if (!code_segment)
+            byte_code.code_segment = (CodeSegPtr)std::malloc(code_segment_sz);
+            if (!byte_code.code_segment)
                 throw std::bad_alloc();  // I'll be getting rid of exceptions when I get around to creating my own data structures
-            CodeSegPtr buf = code_segment;
+            CodeSegPtr buf = byte_code.code_segment;
             for (const auto& name : block_order)
-                buf = blocks.at(name).to_bytes(errs, block_offsets.at(name), buf);
-            assert(buf - code_segment == code_segment_sz);
+            {
+                buf = procs.at(name).to_bytes(errs, byte_code.proc_offsets.at(name), buf, byte_code.debug_info);
+                if (!buf)
+                    return true;
+            }
+            assert(buf - byte_code.code_segment == code_segment_sz);
 
             // Constructing the data segment
-            data_segment = (DataSegPtr)std::malloc(sizeof(Obj) * statics.size());
-            memcpy(data_segment, statics.data(), sizeof(Obj) * statics.size());
+            byte_code.data_segment = (DataSegPtr)std::malloc(sizeof(Obj) * statics.size());
+            memcpy(byte_code.data_segment, statics.data(), sizeof(Obj) * statics.size());
             return false;
         }
 
@@ -393,6 +417,56 @@ namespace nn
                 if (tarr.size() != 1)
                     return errs.add(tarr[0], "Invalid instruction");
                 return body.add_instruction(Dsp(tarr[0]));
+
+            case hash("edg"):
+                if (tarr.size() != 1)
+                    return errs.add(tarr[0], "Invalid instruction");
+                return body.add_instruction(Edg(tarr[0]));
+            case hash("nde"):
+                if (tarr.size() != 1)
+                    return errs.add(tarr[0], "Invalid instruction");
+                return body.add_instruction(Nde(tarr[0]));
+            case hash("blk"):
+                if (tarr.size() != 1)
+                    return errs.add(tarr[0], "Invalid instruction");
+                return body.add_instruction(Blk(tarr[0]));
+            case hash("bksub"):
+                if (tarr.size() != 1)
+                    return errs.add(tarr[0], "Invalid instruction");
+                return body.add_instruction(BkSub(tarr[0]));
+            case hash("ndinp"):
+                if (tarr.size() != 1)
+                    return errs.add(tarr[0], "Invalid instruction");
+                return body.add_instruction(NdInp(tarr[0]));
+            case hash("ndout"):
+                if (tarr.size() != 1)
+                    return errs.add(tarr[0], "Invalid instruction");
+                return body.add_instruction(NdOut(tarr[0]));
+            case hash("bkinp"):
+                if (tarr.size() != 1)
+                    return errs.add(tarr[0], "Invalid instruction");
+                return body.add_instruction(BkInp(tarr[0]));
+            case hash("bkout"):
+                if (tarr.size() != 1)
+                    return errs.add(tarr[0], "Invalid instruction");
+                return body.add_instruction(BkOut(tarr[0]));
+            case hash("pshmd"):
+                if (tarr.size() != 1)
+                    return errs.add(tarr[0], "Invalid instruction");
+                return body.add_instruction(PshMd(tarr[0]));
+            case hash("popmd"):
+                if (tarr.size() != 1)
+                    return errs.add(tarr[0], "Invalid instruction");
+                return body.add_instruction(PopMd(tarr[0]));
+            case hash("ext"):
+                if (tarr.size() != 1)
+                    return errs.add(tarr[0], "Invalid instruction");
+                return body.add_instruction(Ext(tarr[0]));
+            case hash("exp"):
+                if (tarr.size() != 1)
+                    return errs.add(tarr[0], "Invalid instruction");
+                return body.add_instruction(Exp(tarr[0]));
+
             default:
                 return errs.add(tarr[0], "Unrecognized opcode: {}", tarr[0]->get<TokenType::IDN>().val);
             }
@@ -408,18 +482,20 @@ namespace nn
                 int end = tarr.search(IsSameCriteria(TokenType::ENDL), i);
                 if (end < 0)
                     end = tarr.size();
-                ret = ret || parsebc_instruction(errs, { tarr, i, end }, mod, body);
+                if (tarr[i]->ty == TokenType::COLON)
+                {
+                    for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+                    tarr[i]->expect<TokenType::IDN>(errs) || body.add_label(errs, &tarr[i]->get<TokenType::IDN>());
+                }
+                else
+                    ret = ret || parsebc_instruction(errs, { tarr, i, end }, mod, body);
                 for (i = end; i < tarr.size() && tarr[i]->is_whitespace(); i++);
             }
             return ret;
         }
 
-        bool parsebc_module(Errors& errs, const char* fname, char* buf, size_t bufsz, ByteCodeModule& mod)
+        bool parsebc_module(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod)
         {
-            TokenArray tarr;
-            if (lex_buf(errs, fname, buf, bufsz, tarr))
-                return true;
-
             bool ret = false;
             int i = 0;
             for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
@@ -446,26 +522,8 @@ namespace nn
                     ret = true;
                 else
                     ret = ret || mod.add_block(errs, name, body);
-                i = end;
+                for (i = end; i < tarr.size() && tarr[i]->is_whitespace(); i++);
             }
-            return ret;
-        }
-
-        bool parsebc_module(Errors& errs, const char* fname, FILE* pf, ByteCodeModule& mod)
-        {
-            fseek(pf, 0, SEEK_END);
-            size_t fsz = ftell(pf);
-            rewind(pf);
-            char* pbuf = new char[fsz + 1];
-            size_t result = fread(pbuf, 1, fsz, pf);
-            if (result != fsz)
-            {
-                delete[] pbuf;
-                throw std::runtime_error("fread failed");
-            }
-            pbuf[fsz] = '\0';
-            bool ret = parsebc_module(errs, fname, pbuf, fsz, mod);
-            delete[] pbuf;
             return ret;
         }
     }

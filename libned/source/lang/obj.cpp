@@ -1,6 +1,6 @@
 #include <ned/lang/obj.h>
 #include <ned/lang/interp.h>
-#include <ned/core/tensor.h>
+#include <ned/lang/bytecode.h>
 #include <ned/core/graph.h>
 
 #include <string>
@@ -39,46 +39,44 @@ namespace nn
                 delete obj;
             for (auto* obj : agg_objs)
                 delete obj;
-            for (auto* obj : ten_objs)
-                delete obj;
         }
 
-        bool ProgramHeap::create_type_bool(Errors& errs, Obj& obj)
+        bool ProgramHeap::create_type_bool(RuntimeErrors& errs, Obj& obj)
         {
             bool_types.push_back(new BoolType());
             obj.type_obj = bool_types.back();
             return false;
         }
 
-        bool ProgramHeap::create_type_fwidth(Errors& errs, Obj& obj)
+        bool ProgramHeap::create_type_fwidth(RuntimeErrors& errs, Obj& obj)
         {
             fwidth_types.push_back(new FWidthType());
             obj.type_obj = fwidth_types.back();
             return false;
         }
 
-        bool ProgramHeap::create_type_int(Errors& errs, Obj& obj)
+        bool ProgramHeap::create_type_int(RuntimeErrors& errs, Obj& obj)
         {
             int_types.push_back(new IntType());
             obj.type_obj = int_types.back();
             return false;
         }
 
-        bool ProgramHeap::create_type_float(Errors& errs, Obj& obj)
+        bool ProgramHeap::create_type_float(RuntimeErrors& errs, Obj& obj)
         {
             float_types.push_back(new FloatType());
             obj.type_obj = float_types.back();
             return false;
         }
 
-        bool ProgramHeap::create_type_str(Errors& errs, Obj& obj)
+        bool ProgramHeap::create_type_str(RuntimeErrors& errs, Obj& obj)
         {
             str_types.push_back(new StrType());
             obj.type_obj = str_types.back();
             return false;
         }
 
-        bool ProgramHeap::create_type_arr(Errors& errs, Obj& obj, TypeObj* ty)
+        bool ProgramHeap::create_type_arr(RuntimeErrors& errs, Obj& obj, TypeObj* ty)
         {
             arr_types.push_back(new ArrType());
             arr_types.back()->elem_ty = ty;
@@ -86,7 +84,7 @@ namespace nn
             return false;
         }
 
-        bool ProgramHeap::create_type_agg(Errors& errs, Obj& obj, std::vector<TypeObj*> tys)
+        bool ProgramHeap::create_type_agg(RuntimeErrors& errs, Obj& obj, std::vector<TypeObj*> tys)
         {
             agg_types.push_back(new AggType());
             agg_types.back()->elem_tys = std::move(tys);
@@ -94,244 +92,244 @@ namespace nn
             return false;
         }
 
-        bool ProgramHeap::create_obj_bool(Errors& errs, Obj& obj, BoolObj val)
+        bool ProgramHeap::create_obj_bool(RuntimeErrors& errs, Obj& obj, BoolObj val)
         {
             bool_objs.push_back(new BoolObj(val));
             obj.bool_obj = bool_objs.back();
             return false;
         }
 
-        bool ProgramHeap::create_obj_fwidth(Errors& errs, Obj& obj, FWidthObj val)
+        bool ProgramHeap::create_obj_fwidth(RuntimeErrors& errs, Obj& obj, FWidthObj val)
         {
             fwidth_objs.push_back(new FWidthObj(val));
             obj.fwidth_obj = fwidth_objs.back();
             return false;
         }
 
-        bool ProgramHeap::create_obj_int(Errors& errs, Obj& obj, IntObj val)
+        bool ProgramHeap::create_obj_int(RuntimeErrors& errs, Obj& obj, IntObj val)
         {
             int_objs.push_back(new IntObj(val));
             obj.int_obj = int_objs.back();
             return false;
         }
 
-        bool ProgramHeap::create_obj_float(Errors& errs, Obj& obj, FloatObj val)
+        bool ProgramHeap::create_obj_float(RuntimeErrors& errs, Obj& obj, FloatObj val)
         {
             float_objs.push_back(new FloatObj(val));
             obj.float_obj = float_objs.back();
             return false;
         }
 
-        bool ProgramHeap::create_obj_str(Errors& errs, Obj& obj, const StrObj& val)
+        bool ProgramHeap::create_obj_str(RuntimeErrors& errs, Obj& obj, const StrObj& val)
         {
             str_objs.push_back(new StrObj(val));
             obj.str_obj = str_objs.back();
             return false;
         }
 
-        bool ProgramHeap::create_obj_agg(Errors& errs, Obj& obj, const AggObj& val)
+        bool ProgramHeap::create_obj_agg(RuntimeErrors& errs, Obj& obj, const AggObj& val)
         {
             return true;
         }
 
-        bool ProgramHeap::create_obj_tensor(Errors& errs, Obj& obj, FWidthObj dty, const std::vector<IntObj>& dims)
+        bool ProgramHeap::create_obj_tensor(RuntimeErrors& errs, Obj& obj, FWidthObj dty, const std::vector<IntObj>& dims)
         {
             return true;
         }
 
-        bool TypeObj::cpy(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool TypeObj::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return true;
         }
 
-        bool TypeObj::inst(Errors& errs, ProgramHeap& heap, Obj& dst)
+        bool TypeObj::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
         {
             return true;
         }
 
-        bool TypeObj::set(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool TypeObj::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::iadd(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool TypeObj::iadd(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::isub(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool TypeObj::isub(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::imul(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool TypeObj::imul(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::idiv(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool TypeObj::idiv(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::imod(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool TypeObj::imod(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::add(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::add(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::sub(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::sub(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::mul(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::mul(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::div(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::div(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::mod(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::mod(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::eq(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::ne(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::ge(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::ge(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::le(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::le(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::gt(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::gt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::lt(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::lt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::land(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::land(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::lor(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::lor(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::idx(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool TypeObj::idx(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
 
-        bool TypeObj::xstr(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool TypeObj::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return true;
         }
 
-        bool TypeObj::xflt(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool TypeObj::xflt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return true;
         }
 
-        bool TypeObj::xint(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool TypeObj::xint(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return true;
         }
 
-        bool BoolType::cpy(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool BoolType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_bool(errs, dst, *src.bool_obj);
         }
 
-        bool BoolType::inst(Errors& errs, ProgramHeap& heap, Obj& dst)
+        bool BoolType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
         {
             return heap.create_obj_bool(errs, dst, false);
         }
 
-        bool BoolType::set(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool BoolType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             *dst.bool_obj = *src.bool_obj;
             return false;
         }
 
-        bool BoolType::eq(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool BoolType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.bool_obj == *rhs.bool_obj);
         }
 
-        bool BoolType::ne(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool BoolType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.bool_obj != *rhs.bool_obj);
         }
 
-        bool BoolType::land(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool BoolType::land(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.bool_obj && *rhs.bool_obj);
         }
 
-        bool BoolType::lor(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool BoolType::lor(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.bool_obj || *rhs.bool_obj);
         }
 
-        bool BoolType::xstr(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool BoolType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_str(errs, dst, *src.bool_obj ? "true" : "false");
         }
 
-        bool FWidthType::cpy(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool FWidthType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_fwidth(errs, dst, *src.fwidth_obj);
         }
 
-        bool FWidthType::inst(Errors& errs, ProgramHeap& heap, Obj& dst)
+        bool FWidthType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
         {
             return heap.create_obj_fwidth(errs, dst, core::tensor_dty::F32);
         }
 
-        bool FWidthType::set(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool FWidthType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             *dst.fwidth_obj = *src.fwidth_obj;
             return false;
         }
 
-        bool FWidthType::eq(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool FWidthType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.fwidth_obj == *rhs.fwidth_obj);
         }
 
-        bool FWidthType::ne(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool FWidthType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.fwidth_obj != *rhs.fwidth_obj);
         }
 
-        bool FWidthType::xstr(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool FWidthType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             std::string str;
             return
@@ -339,309 +337,309 @@ namespace nn
                 heap.create_obj_str(errs, dst, str);
         }
 
-        bool IntType::cpy(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool IntType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_int(errs, dst, *src.int_obj);
         }
 
-        bool IntType::inst(Errors& errs, ProgramHeap& heap, Obj& dst)
+        bool IntType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
         {
             return heap.create_obj_int(errs, dst, 0);
         }
 
-        bool IntType::set(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool IntType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.int_obj = *rhs.int_obj;
             return false;
         }
 
-        bool IntType::iadd(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool IntType::iadd(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.int_obj += *rhs.int_obj;
             return false;
         }
 
-        bool IntType::isub(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool IntType::isub(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.int_obj -= *rhs.int_obj;
             return false;
         }
 
-        bool IntType::imul(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool IntType::imul(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.int_obj *= *rhs.int_obj;
             return false;
         }
 
-        bool IntType::idiv(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool IntType::idiv(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.int_obj /= *rhs.int_obj;
             return false;
         }
 
-        bool IntType::imod(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool IntType::imod(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.int_obj %= *rhs.int_obj;
             return false;
         }
 
-        bool IntType::add(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool IntType::add(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_int(errs, dst, *lhs.int_obj + *rhs.int_obj);
         }
 
-        bool IntType::sub(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool IntType::sub(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_int(errs, dst, *lhs.int_obj - *rhs.int_obj);
         }
 
-        bool IntType::mul(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool IntType::mul(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_int(errs, dst, *lhs.int_obj * *rhs.int_obj);
         }
 
-        bool IntType::div(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool IntType::div(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_int(errs, dst, *lhs.int_obj / *rhs.int_obj);
         }
 
-        bool IntType::mod(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool IntType::mod(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_int(errs, dst, *lhs.int_obj % *rhs.int_obj);
         }
 
-        bool IntType::eq(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool IntType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.int_obj == *rhs.int_obj);
         }
 
-        bool IntType::ne(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool IntType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.int_obj != *rhs.int_obj);
         }
 
-        bool IntType::ge(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool IntType::ge(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.int_obj >= *rhs.int_obj);
         }
 
-        bool IntType::le(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool IntType::le(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.int_obj <= *rhs.int_obj);
         }
 
-        bool IntType::gt(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool IntType::gt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.int_obj > *rhs.int_obj);
         }
 
-        bool IntType::lt(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool IntType::lt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.int_obj < *rhs.int_obj);
         }
 
-        bool IntType::xstr(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool IntType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             // TODO: implement int to string conversion
             return heap.create_obj_str(errs, dst, std::to_string(*src.int_obj));
         }
 
-        bool IntType::xflt(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool IntType::xflt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_float(errs, dst, (FloatObj)*src.int_obj);
         }
 
-        bool IntType::xint(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool IntType::xint(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_int(errs, dst, *src.int_obj);
         }
         
-        bool FloatType::cpy(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool FloatType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_float(errs, dst, *src.float_obj);
         }
 
-        bool FloatType::inst(Errors& errs, ProgramHeap& heap, Obj& dst)
+        bool FloatType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
         {
             return heap.create_obj_float(errs, dst, 1.0);
         }
 
-        bool FloatType::set(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool FloatType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.float_obj = *rhs.float_obj;
             return false;
         }
 
-        bool FloatType::iadd(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool FloatType::iadd(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.float_obj += *rhs.float_obj;
             return false;
         }
 
-        bool FloatType::isub(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool FloatType::isub(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.float_obj -= *rhs.float_obj;
             return false;
         }
 
-        bool FloatType::imul(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool FloatType::imul(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.float_obj *= *rhs.float_obj;
             return false;
         }
 
-        bool FloatType::idiv(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool FloatType::idiv(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.float_obj /= *rhs.float_obj;
             return false;
         }
 
-        bool FloatType::add(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool FloatType::add(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_float(errs, dst, *lhs.float_obj + *rhs.float_obj);
         }
 
-        bool FloatType::sub(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool FloatType::sub(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_float(errs, dst, *lhs.float_obj - *rhs.float_obj);
         }
 
-        bool FloatType::mul(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool FloatType::mul(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_float(errs, dst, *lhs.float_obj * *rhs.float_obj);
         }
 
-        bool FloatType::div(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool FloatType::div(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_float(errs, dst, *lhs.float_obj / *rhs.float_obj);
         }
 
-        bool FloatType::eq(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool FloatType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.float_obj == *rhs.float_obj);
         }
 
-        bool FloatType::ne(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool FloatType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.float_obj != *rhs.float_obj);
         }
 
-        bool FloatType::ge(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool FloatType::ge(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.float_obj >= *rhs.float_obj);
         }
 
-        bool FloatType::le(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool FloatType::le(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.float_obj <= *rhs.float_obj);
         }
 
-        bool FloatType::gt(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool FloatType::gt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.float_obj > *rhs.float_obj);
         }
 
-        bool FloatType::lt(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool FloatType::lt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.float_obj < *rhs.float_obj);
         }
 
-        bool FloatType::xstr(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool FloatType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             // TODO: implement float to string conversion
             return heap.create_obj_str(errs, dst, std::to_string(*src.float_obj));
         }
 
-        bool FloatType::xflt(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool FloatType::xflt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_float(errs, dst, *src.float_obj);
         }
 
-        bool FloatType::xint(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool FloatType::xint(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_int(errs, dst, (IntObj)*src.float_obj);
         }
 
-        bool StrType::cpy(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool StrType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_str(errs, dst, *src.str_obj);
         }
 
-        bool StrType::inst(Errors& errs, ProgramHeap& heap, Obj& dst)
+        bool StrType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
         {
             return heap.create_obj_str(errs, dst, "");
         }
 
-        bool StrType::set(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool StrType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.str_obj = *rhs.str_obj;
             return false;
         }
 
-        bool StrType::iadd(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool StrType::iadd(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.str_obj += *rhs.str_obj;
             return false;
         }
 
-        bool StrType::add(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool StrType::add(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_str(errs, dst, *lhs.str_obj + *rhs.str_obj);
         }
 
-        bool StrType::eq(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool StrType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.str_obj == *rhs.str_obj);
         }
 
-        bool StrType::ne(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool StrType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.str_obj != *rhs.str_obj);
         }
 
-        bool StrType::ge(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool StrType::ge(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.str_obj >= *rhs.str_obj);
         }
 
-        bool StrType::le(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool StrType::le(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.str_obj <= *rhs.str_obj);
         }
 
-        bool StrType::gt(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool StrType::gt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.str_obj > *rhs.str_obj);
         }
 
-        bool StrType::lt(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool StrType::lt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(errs, dst, *lhs.str_obj < *rhs.str_obj);
         }
 
-        bool StrType::idx(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool StrType::idx(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_str(errs, dst, std::string(1, (*lhs.str_obj)[*rhs.int_obj]));
         }
 
-        bool StrType::xstr(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool StrType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_str(errs, dst, *src.str_obj);
         }
 
-        bool StrType::xflt(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool StrType::xflt(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             // TODO: implement string to float conversion
             return heap.create_obj_float(errs, dst, std::stod(*src.str_obj));
         }
 
-        bool StrType::xint(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool StrType::xint(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             // TODO: implement string to int conversion
             return heap.create_obj_int(errs, dst, std::stoll(*src.str_obj));
         }
         
-        bool ArrType::cpy(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool ArrType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             std::vector<Obj> objs;
             for (const Obj e_src : *src.agg_obj)
@@ -654,24 +652,24 @@ namespace nn
             return heap.create_obj_agg(errs, dst, objs);
         }
 
-        bool ArrType::inst(Errors& errs, ProgramHeap& heap, Obj& dst)
+        bool ArrType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
         {
             return heap.create_obj_agg(errs, dst, {});
         }
 
-        bool ArrType::set(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool ArrType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.agg_obj = *rhs.agg_obj;  // Copies the vector of pointers, not the data in the pointers
             return false;
         }
 
-        bool ArrType::iadd(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool ArrType::iadd(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             lhs.agg_obj->insert(lhs.agg_obj->end(), rhs.agg_obj->begin(), rhs.agg_obj->end());
             return false;
         }
 
-        bool ArrType::add(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool ArrType::add(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             std::vector<Obj> objs;
             objs.insert(objs.end(), lhs.agg_obj->begin(), lhs.agg_obj->end());
@@ -679,7 +677,7 @@ namespace nn
             return heap.create_obj_agg(errs, dst, objs);
         }
 
-        bool ArrType::eq(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool ArrType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             if (lhs.agg_obj->size() != rhs.agg_obj->size())
                 return heap.create_obj_bool(errs, dst, false);
@@ -695,7 +693,7 @@ namespace nn
             return heap.create_obj_bool(errs, dst, true);
         }
 
-        bool ArrType::ne(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool ArrType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             if (lhs.agg_obj->size() != rhs.agg_obj->size())
                 return heap.create_obj_bool(errs, dst, true);
@@ -711,14 +709,19 @@ namespace nn
             return heap.create_obj_bool(errs, dst, false);
         }
 
-        bool ArrType::idx(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool ArrType::idx(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            // TODO: bounds checking
+            IntObj idx = *rhs.int_obj;
+            if (idx < 0)  // Allowing for indexing off the back of the array
+                idx += lhs.agg_obj->size();
+
+            if (idx < 0 || lhs.agg_obj->size() <= idx)
+                return errs.add("Index out of bounds");
             dst = lhs.agg_obj->operator[](*rhs.int_obj);
             return false;
         }
 
-        bool ArrType::xstr(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool ArrType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             if (src.agg_obj->size() == 0)
                 return heap.create_obj_str(errs, dst, "[]");
@@ -740,7 +743,7 @@ namespace nn
             return heap.create_obj_str(errs, dst, ss.str());
         }
 
-        bool AggType::cpy(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool AggType::cpy(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             // This should be an error, not an assert
             assert(elem_tys.size() == 0 || src.agg_obj->size() == elem_tys.size());
@@ -755,7 +758,7 @@ namespace nn
             return heap.create_obj_agg(errs, dst, objs);
         }
 
-        bool AggType::inst(Errors& errs, ProgramHeap& heap, Obj& dst)
+        bool AggType::inst(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst)
         {
             std::vector<Obj> objs;
             for (TypeObj* ty : elem_tys)
@@ -768,15 +771,15 @@ namespace nn
             return heap.create_obj_agg(errs, dst, objs);
         }
 
-        bool AggType::set(Errors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        bool AggType::set(RuntimeErrors& errs, ProgramHeap& heap, Obj& lhs, const Obj rhs)
         {
             *lhs.agg_obj = *rhs.agg_obj;  // Copies the vector of pointers, not the data in the pointers
             return false;
         }
 
-        bool AggType::eq(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool AggType::eq(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            // These should be errors, not asserts
+            // These should be RuntimeErrors, not asserts
             assert(lhs.agg_obj->size() == elem_tys.size());
             assert(rhs.agg_obj->size() == elem_tys.size());
 
@@ -791,7 +794,7 @@ namespace nn
             return heap.create_obj_bool(errs, dst, true);
         }
 
-        bool AggType::ne(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool AggType::ne(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             // This should be an error, not an assert
             assert(lhs.agg_obj->size() == elem_tys.size());
@@ -808,17 +811,21 @@ namespace nn
             return heap.create_obj_bool(errs, dst, false);
         }
 
-        bool AggType::idx(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        bool AggType::idx(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            // This should be an error, not an assert
-            assert(lhs.agg_obj->size() == elem_tys.size());
+            // Tuples are always initialized, and bounds are checked for all aggregate types at compile time
+            // This can only occur in compiled bytecode when a struct that wasn't initialized was dereferenced
+            if (elem_tys.size() == 0)
+                return errs.add("Dereferencing uninitialized struct");
 
-            // TODO: bounds checking
+            // This should never occur from compiled bytecode, only manually written bytecode
+            assert(elem_tys.size() == lhs.agg_obj->size());
+
             dst = lhs.agg_obj->operator[](*rhs.int_obj);
             return false;
         }
 
-        bool AggType::xstr(Errors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
+        bool AggType::xstr(RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src)
         {
             // This should be an error, not an assert
             assert(src.agg_obj->size() == elem_tys.size());

@@ -73,6 +73,8 @@ namespace nn
                 return "colon character ':'";
             case TokenType::COMMA:
                 return "comma character ','";
+            case TokenType::CTX:
+                return "context declaration '!'";
             case TokenType::ADD:
                 return "addition operator '+'";
             case TokenType::SUB:
@@ -167,6 +169,10 @@ namespace nn
                 return "keyword export";
             case TokenType::KW_EXTERN:
                 return "keyword extern";
+            case TokenType::KW_FORWARD:
+                return "keyword forward";
+            case TokenType::KW_BACKWARD:
+                return "keyword backward";
             case TokenType::KW_F16:
                 return "keyword f16";
             case TokenType::KW_F32:
@@ -216,6 +222,8 @@ namespace nn
                 return ":";
             case TokenType::COMMA:
                 return ", ";
+            case TokenType::CTX:
+                return "!";
             case TokenType::ADD:
                 return " + ";
             case TokenType::SUB:
@@ -310,6 +318,10 @@ namespace nn
                 return "export ";
             case TokenType::KW_EXTERN:
                 return "extern ";
+            case TokenType::KW_FORWARD:
+                return "forward";
+            case TokenType::KW_BACKWARD:
+                return "backward";
             case TokenType::KW_F16:
                 return "f16 ";
             case TokenType::KW_F32:
@@ -595,7 +607,8 @@ namespace nn
                         i += 2;
                         continue;
                     }
-                    return errs.add(fname, line_num, i - line_start, "Expected '=' after '!'");
+                    tarr.push_back(TokenImp<TokenType::CTX>(fname, line_num, i - line_start));
+                    break;
                 case '=':
                     use_indents = false;
 
@@ -834,6 +847,12 @@ namespace nn
                     case hash("extern"):
                         tarr.push_back(TokenImp<TokenType::KW_EXTERN>(fname, line_num, col_num));
                         continue;
+                    case hash("forward"):
+                        tarr.push_back(TokenImp<TokenType::KW_FORWARD>(fname, line_num, col_num));
+                        continue;
+                    case hash("backward"):
+                        tarr.push_back(TokenImp<TokenType::KW_BACKWARD>(fname, line_num, col_num));
+                        continue;
                     case hash("f16"):
                         tarr.push_back(TokenImp<TokenType::KW_F16>(fname, line_num, col_num));
                         continue;
@@ -870,14 +889,23 @@ namespace nn
             return false;
         }
 
-        bool lex_file(Errors& errs, const char* fname, FILE* pf, TokenArray& tarr)
+        bool lex_file(Errors& errs, const char* fname, TokenArray& tarr)
         {
             // temp, bad implmentation
+            FILE* pf = fopen(fname, "rb");
+            if (!pf)
+                return errs.add("", 0ULL, 0ULL, "Unable to open file '{}'", fname);
             fseek(pf, 0, SEEK_END);
             size_t fsz = ftell(pf);
             rewind(pf);
             char* pbuf = new char[fsz + 1];
+            if (!pbuf)
+            {
+                fclose(pf);
+                return errs.add("", 0ULL, 0ULL, "Out of memory");
+            }
             size_t result = fread(pbuf, 1, fsz, pf);
+            fclose(pf);
             if (result != fsz)
             {
                 delete[] pbuf;

@@ -23,6 +23,7 @@ namespace nn
 
             Instruction(const Token* ptk) : fname(ptk->fname), line_num(ptk->line_num), col_num(ptk->col_num) {}
         public:
+            ByteCodeDebugInfo::Record create_debug_record(size_t addr) const;
             virtual CodeSegPtr to_bytes(CodeSegPtr buf) const = 0;
             virtual bool set_labels(Errors& errs, const std::map<std::string, size_t>& label_map) = 0;
         };
@@ -30,8 +31,7 @@ namespace nn
         class ByteCodeBody
         {
             std::string fname;
-            size_t line_num;
-            size_t col_num;
+            size_t line_num, col_num;
             friend class ByteCodeModule;
 
             std::vector<Instruction*> instructions;
@@ -41,7 +41,7 @@ namespace nn
         public:
             ByteCodeBody(const Token* ptk);
             size_t size() const;
-            CodeSegPtr to_bytes(Errors& errs, size_t offset, CodeSegPtr buf) const;
+            CodeSegPtr to_bytes(Errors& errs, size_t offset, CodeSegPtr buf, ByteCodeDebugInfo& debug_info) const;
             bool add_label(Errors& errs, const TokenImp<TokenType::IDN>* lbl);
 
             template<typename T>
@@ -53,20 +53,37 @@ namespace nn
             }
         };
 
+        struct ByteCode
+        {
+            CodeSegPtr code_segment;
+            DataSegPtr data_segment;
+            ProcOffsets proc_offsets;
+            ByteCodeDebugInfo debug_info;
+        };
+
         class ByteCodeModule
         {
-            std::map<std::string, ByteCodeBody> blocks;
+            struct ProcRef
+            {
+                size_t addr;
+                std::string proc_name;
+                std::string fname;
+                size_t line_num, col_num;
+            };
+
+            std::map<std::string, ByteCodeBody> procs;
             std::vector<Obj> statics;
-            std::vector<std::tuple<size_t, const TokenImp<TokenType::IDN>*>> static_block_refs;
+            std::vector<ProcRef> static_proc_refs;
             ProgramHeap& heap;
 
             friend bool parsebc_static(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, size_t& obj);
         public:
             ByteCodeModule(ProgramHeap& heap) : heap(heap) {}
             bool add_block(Errors& errs, const std::string& name, const ByteCodeBody& body);
-            bool add_static_obj(Obj obj, size_t& addr);
-            bool add_static_ref(const TokenImp<TokenType::IDN>* label, size_t& addr);
-            bool export_module(Errors& errs, CodeSegPtr& code_segment, DataSegPtr& data_segment, BlockOffsets& block_offsets);
+            bool add_static_obj(Obj obj, size_t& addr);                                // add static object to data_segment
+            bool add_static_ref(const TokenImp<TokenType::IDN>* label, size_t& addr);  // add static Obj{.ptr} to data_segment
+            bool add_static_ref(const std::string& label, const std::string& fname, size_t line_num, size_t col_num, size_t& addr);
+            bool export_module(Errors& errs, ByteCode& byte_code);
         };
 
         enum class InstructionType : uint8_t
@@ -107,13 +124,16 @@ namespace nn
             XINT,
             DSP,
 
-            TEN,
-            EBLK,
-            DBLK,
-            CBLK,
-            IBLK,
-            BINP,
-            BOUT,
+            EDG,
+            NDE,
+            BLK,
+            BKSUB,
+            NDINP,
+            NDOUT,
+            BKINP,
+            BKOUT,
+            PSHMD,
+            POPMD,
             EXT,
             EXP
         };
@@ -188,48 +208,59 @@ namespace nn
             };
 
             using enum ::nn::lang::InstructionType;
-            using Jmp  = Labeled  < JMP  >;
-            using Brt  = Labeled  < BRT  >;
-            using Brf  = Labeled  < BRF  >;
-            using New  = Valued   < NEW  >;
-            using Agg  = Valued   < AGG  >;
-            using Arr  = Implicit < ARR  >;
-            using Aty  = Valued   < ATY  >;
-            using Pop  = Valued   < POP  >;
-            using Dup  = Valued   < DUP  >;
-            using Cpy  = Implicit < CPY  >;
-            using Inst = Implicit < INST >;
-            using Call = Implicit < CALL >;
-            using Ret  = Implicit < RET  >;
-            using Set  = Implicit < SET  >;
-            using IAdd = Implicit < IADD >;
-            using ISub = Implicit < ISUB >;
-            using IMul = Implicit < IMUL >;
-            using IDiv = Implicit < IDIV >;
-            using IMod = Implicit < IMOD >;
-            using Add  = Implicit < ADD  >;
-            using Sub  = Implicit < SUB  >;
-            using Mul  = Implicit < MUL  >;
-            using Div  = Implicit < DIV  >;
-            using Mod  = Implicit < MOD  >;
-            using Eq   = Implicit < EQ   >;
-            using Ne   = Implicit < NE   >;
-            using Ge   = Implicit < GE   >;
-            using Le   = Implicit < LE   >;
-            using Gt   = Implicit < GT   >;
-            using Lt   = Implicit < LT   >;
-            using Idx  = Implicit < IDX  >;
-            using XStr = Implicit < XSTR >;
-            using XFlt = Implicit < XFLT >;
-            using XInt = Implicit < XINT >;
-            using Dsp  = Implicit < DSP  >;
+            using Jmp   = Labeled  < JMP   >;
+            using Brt   = Labeled  < BRT   >;
+            using Brf   = Labeled  < BRF   >;
+            using New   = Valued   < NEW   >;
+            using Agg   = Valued   < AGG   >;
+            using Arr   = Implicit < ARR   >;
+            using Aty   = Valued   < ATY   >;
+            using Pop   = Valued   < POP   >;
+            using Dup   = Valued   < DUP   >;
+            using Cpy   = Implicit < CPY   >;
+            using Inst  = Implicit < INST  >;
+            using Call  = Implicit < CALL  >;
+            using Ret   = Implicit < RET   >;
+            using Set   = Implicit < SET   >;
+            using IAdd  = Implicit < IADD  >;
+            using ISub  = Implicit < ISUB  >;
+            using IMul  = Implicit < IMUL  >;
+            using IDiv  = Implicit < IDIV  >;
+            using IMod  = Implicit < IMOD  >;
+            using Add   = Implicit < ADD   >;
+            using Sub   = Implicit < SUB   >;
+            using Mul   = Implicit < MUL   >;
+            using Div   = Implicit < DIV   >;
+            using Mod   = Implicit < MOD   >;
+            using Eq    = Implicit < EQ    >;
+            using Ne    = Implicit < NE    >;
+            using Ge    = Implicit < GE    >;
+            using Le    = Implicit < LE    >;
+            using Gt    = Implicit < GT    >;
+            using Lt    = Implicit < LT    >;
+            using Idx   = Implicit < IDX   >;
+            using XStr  = Implicit < XSTR  >;
+            using XFlt  = Implicit < XFLT  >;
+            using XInt  = Implicit < XINT  >;
+            using Dsp   = Implicit < DSP   >;
+            using Edg   = Implicit < EDG   >;
+            using Nde   = Implicit < NDE   >;
+            using Blk   = Implicit < BLK   >;
+            using BkSub = Implicit < BKSUB >;
+            using NdInp = Implicit < NDINP >;
+            using NdOut = Implicit < NDOUT >;
+            using BkInp = Implicit < BKINP >;
+            using BkOut = Implicit < BKOUT >;
+            using PshMd = Implicit < PSHMD >;
+            using PopMd = Implicit < POPMD >;
+            using Ext   = Implicit < EXT   >;
+            using Exp   = Implicit < EXP   >;
         }
         
         bool parsebc_static(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, size_t& addr);
         bool parsebc_instruction(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, ByteCodeBody& body);
         bool parsebc_body(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, ByteCodeBody& body);
-        bool parsebc_module(Errors& errs, const char* fname, char* buf, size_t bufsz, ByteCodeModule& mod);
-        bool parsebc_module(Errors& errs, const char* fname, FILE* pf, ByteCodeModule& mod);
+        bool parsebc_module(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod);
     }
 }
 
@@ -251,7 +282,7 @@ namespace nn
 * inst         Creates an instance from the element on the top of the stack, and pops the type
 * 
 * Considers the top element on the stack to be a pointer into the code segment
-* Pops the tos, pushes the current pc onto the stack and sets a new pc
+* Pops the tos, pushes the current pc onto the pc_stack and sets a new pc
 * call
 * 
 * Returns <uint> elements from a code block
@@ -290,18 +321,21 @@ namespace nn
 * 
 * Deep learning instructions
 * 
-* ten <uint>   Creates a new tensor with rank <uint>
+* edg          Creates a new edge
+* nde          Creates a new named node
+* blk          Creates a new named block
+* bksub        Binds a block to a parent block
 * 
-* eblk         Enable deep learning instructions
-* dblk         Disable deep learning instructions
+* ndinp        Sets a named node input to an edge
+* ndout        Sets a named node output to an edge
+* bkinp        Binds a named forward:backward edge pair to a block input
+* bkout        Binds a named forward:backward edge pair to a block output
 * 
-* cblk         Creates a new counpound block context with a name
-* iblk         Creates a new intrinsic block context with a name
-* binp         Marks a tensor as a block input with a name
-* bout         Marks a tensor as a block output with a name
+* pshmd        Pushes a new evaluation mode name onto the mode stack
+* popmd        Pops the top most evalutation mode name off the mode stack
 * 
-* ext          Marks a tensor as a model weight
-* exp          Exports a tensor with a name
+* ext          Marks a named forward:backward edge pair as a block weight
+* exp          Exports a named forward:backward edge pair
 * 
 */
 
