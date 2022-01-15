@@ -102,7 +102,99 @@ const std::vector<std::tuple<OpAssoc, std::vector<TokenType>>> prec_ops = {
 
 bool parse_leaf_mods(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr, std::unique_ptr<AstExpr> lhs)
 {
-    return errs.add(tarr[0], "Parsing leaf mods has not been implemented yet");
+    assert(tarr.size() && !tarr[0]->is_whitespace());
+
+    // Finding the bounds on the sub expression
+    int start, end, i;  // start of subexpr, end of subexpr, beginning of possible next expr
+    switch (tarr[0]->ty)
+    {
+    case TokenType::SQUARE_O:
+        for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
+        end = tarr.search(IsSameCriteria(TokenType::SQUARE_C), start);
+        if (end == -1)
+            return errs.add(tarr[0], "Missing closing ']' in index expression");
+        i = end + 1;
+    case TokenType::DOT:
+        for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
+        end = tarr.search(IsSameCriteria(TokenType::DOT), start);
+        if (end == -1)
+            end = tarr.size();
+        for (const Token& tk : TokenArray{ tarr, start + 1, end })  // making sure there are no more tokens between the identifier and the dot
+            if (!tk.is_whitespace())
+                return errs.add(tk, "Unexpected token after '.'");
+        i = end;
+    case TokenType::IDN:
+        for (const Token& tk : TokenArray{ tarr, 1 })  // making sure there are no more tokens
+            if (!tk.is_whitespace())
+                return errs.add(tk, "Unexpected token after variable declaration");
+        new (&ast_expr.expr_name) AstExprName();
+        ast_expr.ty = ExprType::VAR;
+        ast_expr.expr_name.expr = std::move(lhs);
+        ast_expr.expr_name.val = tarr[0]->get<TokenType::IDN>().val;
+        return false;
+    case TokenType::ANGLE_O:
+        for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
+        end = tarr.search(IsSameCriteria(TokenType::ANGLE_C), start);
+        if (end == -1)
+            return errs.add(tarr[0], "Missing closing '>' in carg expression");
+        i = end + 1;
+    case TokenType::ROUND_O:
+        for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
+        end = tarr.search(IsSameCriteria(TokenType::ROUND_C), start);
+        if (end == -1)
+            return errs.add(tarr[0], "Missing closing ')' in varg expression");
+        i = end + 1;
+    default:
+        return errs.add(tarr[0], "Unexpected token in leafmod expression");
+    }
+
+    if (end == start)
+        return errs.add(tarr[start], "Empty expression");
+    std::unique_ptr<AstExpr> nlhs;
+    AstExpr* pexpr = i == tarr.size() ? &ast_expr : (nlhs = std::make_unique<AstExpr>()).get();
+
+    AstExpr ret_expr;  // helper for calls so that I leverge the tuple parsing code for this
+    switch (tarr[0]->ty)
+    {
+    case TokenType::SQUARE_O:
+        new (&pexpr->expr_binary) AstExprBinaryOp();
+        pexpr->ty = ExprType::BINARY_IDX;
+        pexpr->expr_binary.left = std::move(lhs);
+        pexpr->expr_binary.right = std::make_unique<AstExpr>();
+        if (parse_expr(errs, { tarr, start, end }, *pexpr->expr_binary.right))
+            return true;
+    case TokenType::DOT:
+        new (&pexpr->expr_name) AstExprName();
+        pexpr->ty = ExprType::DOT;
+        pexpr->expr_name.expr = std::move(lhs);
+        pexpr->expr_name.val = tarr[start]->get<TokenType::IDN>().val;
+    case TokenType::ANGLE_O:
+        new (&pexpr->expr_call) AstExprCall();
+        pexpr->ty = ExprType::CARGS_CALL;
+        pexpr->expr_call.callee = std::move(lhs);
+        if (parse_expr(errs, { tarr, start, end }, ret_expr))
+            return true;
+        if (ret_expr.ty == ExprType::LIT_TUPLE)
+            pexpr->expr_call.args = std::move(ret_expr.expr_agg.elems);
+        else
+            pexpr->expr_call.args.push_back(std::move(ret_expr));
+    case TokenType::ROUND_O:
+        new (&pexpr->expr_call) AstExprCall();
+        pexpr->ty = ExprType::VARGS_CALL;
+        pexpr->expr_call.callee = std::move(lhs);
+        if (parse_expr(errs, { tarr, start, end }, ret_expr))
+            return true;
+        if (ret_expr.ty == ExprType::LIT_TUPLE)
+            pexpr->expr_call.args = std::move(ret_expr.expr_agg.elems);
+        else
+            pexpr->expr_call.args.push_back(std::move(ret_expr));
+    default:
+        assert(false);
+    }
+
+    if (i == tarr.size())
+        return false;
+    return parse_leaf_mods(errs, { tarr, i }, ast_expr, std::move(nlhs));
 }
 
 bool parse_leaf_token(Errors& errs, const Token* ptk, AstExpr& ast_expr)
@@ -410,12 +502,16 @@ bool parse_expr_prec<7>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
     else if (tarr[0]->ty == TokenType::KW_FN)
     {
         // Function reference declaration
-        return errs.add(tarr[0], "Function reference parsing has not been implemented");
+        new (&ast_expr.expr_fn_decl) AstFnSig();
+        ast_expr.ty = ExprType::FN_DECL;
+        return parse_signature(errs, tarr, ast_expr.expr_fn_decl);
     }
     else if (tarr[0]->ty == TokenType::KW_DEF)
     {
         // Block reference declaration
-        return errs.add(tarr[0], "Block reference parsing has not been implemented");
+        new (&ast_expr.expr_def_decl) AstBlockSig();
+        ast_expr.ty = ExprType::DEF_DECL;
+        return parse_signature(errs, tarr, ast_expr.expr_def_decl);
     }
     else
     {
@@ -426,8 +522,8 @@ bool parse_expr_prec<7>(Errors& errs, const TokenArray& tarr, AstExpr& ast_expr)
     }
 
     // If execution falls through the above code,
-    // it means lhs and i are initialized and there are leaf mods that need to be parsed
-    // i should be the index immediately after the lhs expression
+    // it means lhs and start are initialized and there are leaf mods that need to be parsed
+    // start should be the index immediately after the lhs expression
     return parse_leaf_mods(errs, { tarr, i }, ast_expr, std::move(lhs));
 }
 
@@ -583,6 +679,19 @@ namespace nn
                 ast_line.line_export.var_name = tarr[i]->get<TokenType::IDN>().val;
                 break;
 
+            case TokenType::KW_EXTERN:
+                for (end = tarr.size() - 1; end > 0 && tarr[end]->is_whitespace(); end--);
+                if (end == 0)
+                    return errs.add(tarr[0], "Expected init specification and variable after 'extern'");
+                if (tarr[end]->expect<TokenType::IDN>(errs))
+                    return true;
+                new (&ast_line.line_extern) AstLineExtern();
+                ast_line.ty = LineType::EXTERN;
+                ast_line.line_extern.var_name = tarr[end]->get<TokenType::IDN>().val;
+                if (parse_expr(errs, { tarr, 1, end }, ast_line.line_extern.init_expr))
+                    return errs.add(tarr[1], "Invalid syntax in weight init expression");
+                break;
+
             case TokenType::KW_RAISE:
                 new (&ast_line.line_func) AstLineUnaryFunc();
                 ast_line.ty = LineType::RAISE;
@@ -616,7 +725,9 @@ namespace nn
                 if (parse_expr(errs, { tarr, i + 1, end }, ast_line.line_branch.cond))
                     return errs.add(tarr[i], "Invalid syntax in if condition");
 
-                for (end++; tarr[end]->ty == TokenType::INDENT; end++);
+                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                if (end == tarr.size())
+                    return errs.add(tarr[end - 1], "Missing body of evaluation mode block");
                 if (tarr[end]->expect<TokenType::ENDL>(errs) ||
                     parse_lines<AstLine, parse_line>(errs, tarr, end, indent_level + 1, ast_line.line_branch.body))
                     return true;
@@ -634,23 +745,27 @@ namespace nn
                 if (parse_expr(errs, { tarr, i + 1, end }, ast_line.line_branch.cond))
                     return errs.add(tarr[i], "Invalid syntax in elif condition");
 
-                for (end++; tarr[end]->ty == TokenType::INDENT; end++);
+                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                if (end == tarr.size())
+                    return errs.add(tarr[end - 1], "Missing body of evaluation mode block");
                 if (tarr[end]->expect<TokenType::ENDL>(errs) ||
                     parse_lines<AstLine, parse_line>(errs, tarr, end, indent_level + 1, ast_line.line_branch.body))
                     return true;
                 break;
 
             case TokenType::KW_ELSE:
-                new (&ast_line.line_else) AstLineElse();
+                new (&ast_line.line_block) AstLineBlock();
                 ast_line.ty = LineType::ELSE;
                 
                 for (end = i + 1; tarr[i]->is_whitespace(); i++);
                 if (tarr[end]->expect<TokenType::COLON>(errs))
                     return true;
 
-                for (end++; tarr[end]->ty == TokenType::INDENT; end++);
+                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                if (end == tarr.size())
+                    return errs.add(tarr[end - 1], "Missing body of evaluation mode block");
                 if (tarr[end]->expect<TokenType::ENDL>(errs) ||
-                    parse_lines<AstLine, parse_line>(errs, tarr, end, indent_level + 1, ast_line.line_else.body))
+                    parse_lines<AstLine, parse_line>(errs, tarr, end, indent_level + 1, ast_line.line_block.body))
                     return true;
                 break;
 
@@ -666,7 +781,9 @@ namespace nn
                 if (parse_expr(errs, { tarr, i + 1, end }, ast_line.line_branch.cond))
                     return errs.add(tarr[i], "Invalid syntax in while condition");
 
-                for (end++; tarr[end]->ty == TokenType::INDENT; end++);
+                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                if (end == tarr.size())
+                    return errs.add(tarr[end - 1], "Missing body of evaluation mode block");
                 if (tarr[end]->expect<TokenType::ENDL>(errs) ||
                     parse_lines<AstLine, parse_line>(errs, tarr, end, indent_level + 1, ast_line.line_branch.body))
                     return true;
@@ -693,9 +810,63 @@ namespace nn
                 if (parse_expr(errs, { tarr, i + 1, end }, ast_line.line_for.iter))
                     return errs.add(tarr[i], "Invalid syntax in for loop iterator");
                 
-                for (end++; tarr[end]->ty == TokenType::INDENT; end++);
+                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                if (end == tarr.size())
+                    return errs.add(tarr[end - 1], "Missing body of evaluation mode block");
                 if (tarr[end]->expect<TokenType::ENDL>(errs) ||
                     parse_lines<AstLine, parse_line>(errs, tarr, end, indent_level + 1, ast_line.line_branch.body))
+                    return true;
+                break;
+
+            case TokenType::MODE:
+                new (&ast_line.line_label) AstLineLabel();
+                ast_line.ty = LineType::EVALMODE;
+
+                for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+                if (tarr[i]->expect<TokenType::IDN>(errs))
+                    return true;
+                ast_line.line_label.label = tarr[i]->get<TokenType::IDN>().val;
+                for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+                if (tarr[i]->expect<TokenType::COLON>(errs))
+                    return true;
+
+                for (i++; i < tarr.size() && tarr[i]->ty == TokenType::INDENT; i++);
+                if (i == tarr.size())
+                    return errs.add(tarr[i - 1], "Missing body of evaluation mode block");
+                if (tarr[i]->expect<TokenType::ENDL>(errs) ||
+                    parse_lines<AstLine, parse_line>(errs, tarr, i, indent_level + 1, ast_line.line_label.body))
+                    return true;
+                break;
+
+            case TokenType::KW_FORWARD:
+                new (&ast_line.line_block) AstLineBlock();
+                ast_line.ty = LineType::FORWARD;
+
+                for (end = i + 1; tarr[i]->is_whitespace(); i++);
+                if (tarr[end]->expect<TokenType::COLON>(errs))
+                    return errs.add(tarr[i], "Missing ':' in forward block");
+
+                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                if (end == tarr.size())
+                    return errs.add(tarr[end - 1], "Missing body of evaluation mode block");
+                if (tarr[end]->expect<TokenType::ENDL>(errs) ||
+                    parse_lines<AstLine, parse_line>(errs, tarr, end, indent_level + 1, ast_line.line_block.body))
+                    return true;
+                break;
+
+            case TokenType::KW_BACKWARD:
+                new (&ast_line.line_block) AstLineBlock();
+                ast_line.ty = LineType::BACKWARD;
+
+                for (end = i + 1; tarr[i]->is_whitespace(); i++);
+                if (tarr[end]->expect<TokenType::COLON>(errs))
+                    return errs.add(tarr[i], "Missing ':' in backward block");
+
+                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                if (end == tarr.size())
+                    return errs.add(tarr[end - 1], "Missing body of evaluation mode block");
+                if (tarr[end]->expect<TokenType::ENDL>(errs) ||
+                    parse_lines<AstLine, parse_line>(errs, tarr, end, indent_level + 1, ast_line.line_block.body))
                     return true;
                 break;
             }
@@ -731,18 +902,17 @@ namespace nn
             ast_struct_sig.name = tarr[i]->get<TokenType::IDN>().val;
             for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
             if (i == tarr.size())
-                return errs.add(tarr[tarr.size() - 1], "Unexpected end of signature after name");
+                return false;
 
             // Parsing out the cargs from the struct definition
-            if (tarr[i]->ty == TokenType::ANGLE_O)
-            {
-                i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(errs, tarr, i, ast_struct_sig.cargs);
-                if (i == -1)
-                    return true;
-                for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-                if (i == tarr.size())
-                    return errs.add(tarr[tarr.size() - 1], "Unexpected end of signature after cargs");
-            }
+            if (tarr[i]->expect<TokenType::ANGLE_O>(errs))
+                return true;
+            i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(errs, tarr, i, ast_struct_sig.cargs);
+            if (i == -1)
+                return errs.add(tarr[0], "Error parsing struct cargs");
+            for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (i != tarr.size())
+                return errs.add(tarr[i], "Unexpected token after struct cargs");
             return false;
         }
 
@@ -790,6 +960,7 @@ namespace nn
             // commas are valid operators in expression parsing resulting in a tuple
             // so I can reuse the expression parsing I already wrote to parse all the rets in the signature
             // then if a tuple is returned, I can just flatten it.  Otherwise, theres a single ret.
+            // This has the added value of allowing for bracketed return values, which is needed for function references
             AstExpr ret_expr;
             if (parse_expr(errs, { tarr, i }, ret_expr))
                 return true;
@@ -842,21 +1013,37 @@ namespace nn
             for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
             if (i == tarr.size())
                 return errs.add(tarr[tarr.size() - 1], "Expected an indentifier after '->'");
+            int end = tarr.size();
+            if (tarr[i]->ty == TokenType::ROUND_O)  // Allowing for bracketed rets (mainly for block references)
+            {
+                end = tarr.search(IsSameCriteria(TokenType::ROUND_C), ++i);
+                if (end == -1)
+                    return errs.add(tarr[i], "Missing closing ')' for block return values");
+                // making sure everything past the ')' is whitespace
+                for (const Token& tk : TokenArray(tarr, end))
+                    if (!tk.is_whitespace())
+                        return errs.add(tk, "Unexpected token after block return values");
+                for (i++; i < end && tarr[i]->is_whitespace(); i++);  // catching up start
+                if (i == end)  // no return values: "-> ()"
+                    return false;
+            }
             if (tarr[i]->expect<TokenType::IDN>(errs))
                 return true;
             ast_block_sig.rets.push_back(tarr[i]->get<TokenType::IDN>().val);
             for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
 
             // Parsing out all the other rets
-            while (i < tarr.size())
+            while (i < end)
             {
                 if (tarr[i]->expect<TokenType::COMMA>(errs))
                     return true;
-                for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+                for (i++; i < end && tarr[i]->is_whitespace(); i++);
+                if (i == end)
+                    return errs.add(tarr[i - 1], "Expected identifier after ',' in block return values");
                 if (tarr[i]->expect<TokenType::IDN>(errs))
                     return true;
                 ast_block_sig.rets.push_back(tarr[i]->get<TokenType::IDN>().val);
-                for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+                for (i++; i < end && tarr[i]->is_whitespace(); i++);
             }
             return false;
         }
@@ -879,15 +1066,10 @@ namespace nn
             for (i++; tarr[i]->ty == TokenType::INDENT; i++);  // one token past the last tab after the ':'
             if (tarr[i]->expect<TokenType::ENDL>(errs))
                 return true;
-            if (parse_lines<AstLine, parse_line>(errs, tarr, i, 1, ast_code_block.body))
+            if (parse_lines<AstLine, parse_line>(errs, tarr, i, indent_level, ast_code_block.body))
                 return true;
             ast_code_block.signature = signature;  // All the signature structs are movable
             return false;
-        }
-
-        bool parse_namespace(Errors& errs, const TokenArray& tarr, AstNamespace& ast_namespace, int indent_level)
-        {
-
         }
 
         bool parse_import(Errors& errs, const TokenArray& tarr, AstImport& ast_import)
@@ -916,7 +1098,115 @@ namespace nn
 
         bool parse_init(Errors& errs, const TokenArray& tarr, AstInit& ast_init)
         {
+            assert(tarr.size() > 0);
 
+            // Setup and getting the name of the struct definition
+            int i = 0;
+            for (; tarr[i]->is_whitespace(); i++);
+            if (tarr[i]->expect<TokenType::IDN>(errs))
+                return true;
+            ast_init.name = tarr[i]->get<TokenType::IDN>().val;
+            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (i == tarr.size())
+                return false;  // No cargs needed for init
+
+            // Parsing out the init cargs
+            if (tarr[i]->expect<TokenType::ANGLE_O>(errs))
+                return errs.add(tarr[i], "Unexpected token after init declaration");
+            i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(errs, tarr, i, ast_init.cargs);
+            if (i == -1)
+                return errs.add(tarr[0], "Error parsing init cargs");
+            for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (i != tarr.size())
+                return errs.add(tarr[i], "Unexpected token after init cargs");
+            return false;
+        }
+
+        bool parse_namespace(Errors& errs, const TokenArray& tarr, AstNamespace& ast_namespace, int indent_level)
+        {
+            for (int i = 0; i < tarr.size(); i++)
+            {
+                if (tarr[i]->ty == TokenType::ENDL || tarr[i]->ty == TokenType::INDENT)
+                    continue;
+
+                int end;
+                switch (tarr[i]->ty)
+                {
+                case TokenType::KW_IMPORT:
+                    errs.add(tarr[i], "imports are not allowed within a namespace");
+                    i = tarr.search(IsSameCriteria(TokenType::ENDL), i);
+                    continue;
+                case TokenType::KW_NAMESPACE:
+                    i++;
+                    end = tarr.search(LineEndCriteria(indent_level), i);
+                    if (end == i)
+                        return errs.add(tarr[i], "Expected identifier after 'namespace'");
+                    if (end < 0)
+                        end = tarr.size();
+                    ast_namespace.namespaces.push_back(AstNamespace());
+                    if (parse_namespace(errs, { tarr, i, end }, ast_namespace.namespaces.back(), indent_level + 1))
+                        ast_namespace.namespaces.pop_back();
+                    continue;
+                case TokenType::KW_STRUCT:
+                    i++;
+                    end = tarr.search(LineEndCriteria(indent_level), i);
+                    if (end == i)
+                        return errs.add(tarr[i], "Expected identifier after 'struct'");
+                    if (end < 0)
+                        end = tarr.size();
+                    ast_namespace.structs.push_back(AstStruct());
+                    if (parse_code_block(errs, { tarr, i, end }, ast_namespace.structs.back(), indent_level + 1))
+                        ast_namespace.structs.pop_back();
+                    continue;
+                case TokenType::KW_FN:
+                    i++;
+                    end = tarr.search(LineEndCriteria(indent_level), i);
+                    if (end == i)
+                        return errs.add(tarr[i], "Expected identifier after 'fn'");
+                    if (end < 0)
+                        end = tarr.size();
+                    ast_namespace.funcs.push_back(AstFn());
+                    if (parse_code_block(errs, { tarr, i, end }, ast_namespace.funcs.back(), indent_level + 1))
+                        ast_namespace.funcs.pop_back();
+                    continue;
+                case TokenType::KW_DEF:
+                    i++;
+                    end = tarr.search(LineEndCriteria(indent_level), i);
+                    if (end == i)
+                        return errs.add(tarr[i], "Expected identifier after 'def'");
+                    if (end < 0)
+                        end = tarr.size();
+                    ast_namespace.defs.push_back(AstBlock());
+                    if (parse_code_block(errs, { tarr, i, end }, ast_namespace.defs.back(), indent_level + 1))
+                        ast_namespace.defs.pop_back();
+                    continue;
+                case TokenType::KW_INTR:
+                    i++;
+                    end = tarr.search(LineEndCriteria(indent_level), i);
+                    if (end == i)
+                        return errs.add(tarr[i], "Expected identifier after 'intr'");
+                    if (end < 0)
+                        end = tarr.size();
+                    ast_namespace.intrs.push_back(AstBlock());
+                    if (parse_code_block(errs, { tarr, i, end }, ast_namespace.intrs.back(), indent_level + 1))
+                        ast_namespace.intrs.pop_back();
+                    continue;
+                case TokenType::KW_INIT:
+                    i++;
+                    end = tarr.search(IsSameCriteria(TokenType::ENDL), i);
+                    if (end == i)
+                        return errs.add(tarr[i], "Expected identifier after 'init'");
+                    if (end < 0)
+                        end = tarr.size();
+                    ast_namespace.inits.push_back(AstInit());
+                    if (parse_init(errs, { tarr, i, end }, ast_namespace.inits.back()))
+                        ast_namespace.inits.pop_back();
+                    continue;
+                default:
+                    return errs.add(tarr[i], "Invalid token in namespace");
+                }
+            }
+            return false;
         }
 
         bool parse_module(Errors& errs, const TokenArray& tarr, AstModule& ast_module)
@@ -950,7 +1240,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.namespaces.push_back(AstNamespace());
-                    if (parse_namespace(errs, { tarr, i, end }, ast_module.namespaces.back(), 0))
+                    if (parse_namespace(errs, { tarr, i, end }, ast_module.namespaces.back(), 1))
                         ast_module.namespaces.pop_back();
                     continue;
                 case TokenType::KW_STRUCT:
@@ -961,7 +1251,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.structs.push_back(AstStruct());
-                    if (parse_code_block(errs, { tarr, i, end }, ast_module.structs.back(), 0))
+                    if (parse_code_block(errs, { tarr, i, end }, ast_module.structs.back(), 1))
                         ast_module.structs.pop_back();
                     continue;
                 case TokenType::KW_FN:
@@ -972,7 +1262,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.funcs.push_back(AstFn());
-                    if (parse_code_block(errs, { tarr, i, end }, ast_module.funcs.back(), 0))
+                    if (parse_code_block(errs, { tarr, i, end }, ast_module.funcs.back(), 1))
                         ast_module.funcs.pop_back();
                     continue;
                 case TokenType::KW_DEF:
@@ -983,7 +1273,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.defs.push_back(AstBlock());
-                    if (parse_code_block(errs, { tarr, i, end }, ast_module.defs.back(), 0))
+                    if (parse_code_block(errs, { tarr, i, end }, ast_module.defs.back(), 1))
                         ast_module.defs.pop_back();
                     continue;
                 case TokenType::KW_INTR:
@@ -994,7 +1284,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.intrs.push_back(AstBlock());
-                    if (parse_code_block(errs, { tarr, i, end }, ast_module.intrs.back(), 0))
+                    if (parse_code_block(errs, { tarr, i, end }, ast_module.intrs.back(), 1))
                         ast_module.intrs.pop_back();
                     continue;
                 case TokenType::KW_INIT:
@@ -1002,8 +1292,14 @@ namespace nn
                     end = tarr.search(IsSameCriteria(TokenType::ENDL), i);
                     if (end == i)
                         return errs.add(tarr[i], "Expected identifier after 'init'");
+                    if (end < 0)
+                        end = tarr.size();
+                    ast_module.inits.push_back(AstInit());
+                    if (parse_init(errs, { tarr, i, end }, ast_module.inits.back()))
+                        ast_module.inits.pop_back();
+                    continue;
                 default:
-                    return errs.add(tarr[i], "Invalid token");
+                    return errs.add(tarr[i], "Invalid token in module");
                 }
             }
             return false;
@@ -1026,9 +1322,9 @@ namespace nn
             case ExprType::LIT_TUPLE:
                 new (&expr_agg) decltype(expr_agg)(std::move(expr.expr_agg));
                 break;
-            case ExprType::UNARY_NOT:
             case ExprType::UNARY_POS:
             case ExprType::UNARY_NEG:
+            case ExprType::UNARY_NOT:
             case ExprType::UNARY_UNPACK:
                 new (&expr_unary) decltype(expr_unary)(std::move(expr.expr_unary));
                 break;
@@ -1091,9 +1387,9 @@ namespace nn
             case ExprType::LIT_TUPLE:
                 new (&expr_agg) decltype(expr_agg)(std::move(expr.expr_agg));
                 break;
-            case ExprType::UNARY_NOT:
             case ExprType::UNARY_POS:
             case ExprType::UNARY_NEG:
+            case ExprType::UNARY_NOT:
             case ExprType::UNARY_UNPACK:
                 new (&expr_unary) decltype(expr_unary)(std::move(expr.expr_unary));
                 break;
@@ -1152,9 +1448,9 @@ namespace nn
             case ExprType::LIT_TUPLE:
                 expr_agg.~AstExprAggLit();
                 break;
-            case ExprType::UNARY_NOT:
             case ExprType::UNARY_POS:
             case ExprType::UNARY_NEG:
+            case ExprType::UNARY_NOT:
             case ExprType::UNARY_UNPACK:
                 expr_unary.~AstExprUnaryOp();
                 break;
@@ -1209,6 +1505,9 @@ namespace nn
             case LineType::EXPORT:
                 new (&line_export) decltype(line_export)(std::move(line.line_export));
                 break;
+            case LineType::EXTERN:
+                new (&line_extern) decltype(line_extern)(std::move(line.line_extern));
+                break;
             case LineType::RAISE:
             case LineType::PRINT:
             case LineType::RETURN:
@@ -1220,13 +1519,18 @@ namespace nn
                 new (&line_branch) decltype(line_branch)(std::move(line.line_branch));
                 break;
             case LineType::ELSE:
-                new (&line_else) decltype(line_else)(std::move(line.line_else));
+            case LineType::FORWARD:
+            case LineType::BACKWARD:
+                new (&line_block) decltype(line_block)(std::move(line.line_block));
                 break;
             case LineType::FOR:
                 new (&line_for) decltype(line_for)(std::move(line.line_for));
                 break;
             case LineType::EXPR:
                 new (&line_expr) decltype(line_expr)(std::move(line.line_expr));
+                break;
+            case LineType::EVALMODE:
+                new (&line_label) decltype(line_label)(std::move(line.line_label));
                 break;
             default:
                 assert(false);
@@ -1246,6 +1550,9 @@ namespace nn
             case LineType::EXPORT:
                 new (&line_export) decltype(line_export)(std::move(line.line_export));
                 break;
+            case LineType::EXTERN:
+                new (&line_extern) decltype(line_extern)(std::move(line.line_extern));
+                break;
             case LineType::RAISE:
             case LineType::PRINT:
             case LineType::RETURN:
@@ -1257,13 +1564,18 @@ namespace nn
                 new (&line_branch) decltype(line_branch)(std::move(line.line_branch));
                 break;
             case LineType::ELSE:
-                new (&line_else) decltype(line_else)(std::move(line.line_else));
+            case LineType::FORWARD:
+            case LineType::BACKWARD:
+                new (&line_block) decltype(line_block)(std::move(line.line_block));
                 break;
             case LineType::FOR:
                 new (&line_for) decltype(line_for)(std::move(line.line_for));
                 break;
             case LineType::EXPR:
                 new (&line_expr) decltype(line_expr)(std::move(line.line_expr));
+                break;
+            case LineType::EVALMODE:
+                new (&line_label) decltype(line_label)(std::move(line.line_label));
                 break;
             default:
                 assert(false);
@@ -1290,13 +1602,18 @@ namespace nn
                 line_branch.~AstLineBranch();
                 break;
             case LineType::ELSE:
-                line_else.~AstLineElse();
+            case LineType::FORWARD:
+            case LineType::BACKWARD:
+                line_block.~AstLineBlock();
                 break;
             case LineType::FOR:
                 line_for.~AstLineFor();
                 break;
             case LineType::EXPR:
                 line_expr.~AstLineExpr();
+                break;
+            case LineType::EVALMODE:
+                line_label.~AstLineLabel();
                 break;
             default:
                 assert(false);

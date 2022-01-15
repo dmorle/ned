@@ -73,7 +73,7 @@ namespace nn
                 return "colon character ':'";
             case TokenType::COMMA:
                 return "comma character ','";
-            case TokenType::CTX:
+            case TokenType::MODE:
                 return "context declaration '!'";
             case TokenType::ADD:
                 return "addition operator '+'";
@@ -226,7 +226,7 @@ namespace nn
                 return ":";
             case TokenType::COMMA:
                 return ", ";
-            case TokenType::CTX:
+            case TokenType::MODE:
                 return "!";
             case TokenType::ADD:
                 return " + ";
@@ -616,7 +616,7 @@ namespace nn
                         i += 2;
                         continue;
                     }
-                    tarr.push_back(TokenImp<TokenType::CTX>(fname, line_num, i - line_start));
+                    tarr.push_back(TokenImp<TokenType::MODE>(fname, line_num, i - line_start));
                     break;
                 case '=':
                     use_indents = false;

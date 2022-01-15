@@ -173,6 +173,7 @@ namespace nn
             BREAK,
             CONTINUE,
             EXPORT,
+            EXTERN,
             RAISE,
             PRINT,
             RETURN,
@@ -181,13 +182,22 @@ namespace nn
             ELSE,
             WHILE,
             FOR,
-            EXPR
+            EXPR,
+            FORWARD,
+            BACKWARD,
+            EVALMODE
         };
 
         // An export statement needs a name associated with it
         struct AstLineExport
         {
             std::string var_name;
+        };
+
+        struct AstLineExtern
+        {
+            std::string var_name;
+            AstExpr init_expr;
         };
 
         // raise / return / print statement
@@ -203,8 +213,15 @@ namespace nn
             std::vector<AstLine> body;
         };
 
-        // else statement
-        struct AstLineElse
+        // eval mode labeled block
+        struct AstLineLabel
+        {
+            std::string label;
+            std::vector<AstLine> body;
+        };
+
+        // else / forward / backward statement
+        struct AstLineBlock
         {
             std::vector<AstLine> body;
         };
@@ -237,11 +254,13 @@ namespace nn
             union
             {
                 AstLineExport     line_export;
+                AstLineExtern     line_extern;
                 AstLineUnaryFunc  line_func;
                 AstLineBranch     line_branch;
-                AstLineElse       line_else;
+                AstLineBlock      line_block;
                 AstLineFor        line_for;
                 AstLineExpr       line_expr;
+                AstLineLabel      line_label;
             };
 
             AstLine() {}

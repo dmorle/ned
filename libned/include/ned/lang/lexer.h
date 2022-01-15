@@ -32,7 +32,7 @@ namespace nn
             ARROW,  // ->
             COLON,
             COMMA,
-            CTX,    // !
+            MODE,    // !
             ADD,
             SUB,
             STAR,
@@ -456,7 +456,7 @@ namespace nn
         *           print "true"
         *       return
         * Given the TokenArray as follows:
-        *   tab
+        *   tab         <- Doesn't matter if this token is here, it will always parse at least until the first endl
         *   if
         *   (
         *   endl
