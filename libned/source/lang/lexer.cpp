@@ -48,7 +48,7 @@ namespace nn
             switch (ty)
             {
             case TokenType::INVALID:
-                return "INVALID TOKEN - PARSER BUG";
+                return "INVALID TOKEN - LEXER BUG";
             case TokenType::INDENT:
                 return "indent '\\t'";
             case TokenType::ENDL:
@@ -113,6 +113,8 @@ namespace nn
                 return "string literal";
             case TokenType::IDN:
                 return "identifier";
+            case TokenType::KW_NAMESPACE:
+                return "keyword namespace";
             case TokenType::KW_STRUCT:
                 return "keyword struct";
             case TokenType::KW_DEF:
@@ -121,6 +123,8 @@ namespace nn
                 return "keyword intr";
             case TokenType::KW_FN:
                 return "keyword fn";
+            case TokenType::KW_INIT:
+                return "keyword init";
             case TokenType::KW_RETURN:
                 return "keyword return";
             case TokenType::KW_IMPORT:
@@ -188,7 +192,7 @@ namespace nn
             case TokenType::KW_NOT:
                 return "not";
             default:
-                return "UNKNOWN TOKEN - PARSER BUG";
+                return "UNKNOWN TOKEN - LEXER BUG";
             }
         }
 
@@ -262,6 +266,8 @@ namespace nn
                 return std::string("\"") + static_cast<const TokenImp<TokenType::LIT_STR>*>(ptk)->val + "\"";
             case TokenType::IDN:
                 return std::string(static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val) + " ";
+            case TokenType::KW_NAMESPACE:
+                return "namespace ";
             case TokenType::KW_STRUCT:
                 return "struct ";
             case TokenType::KW_DEF:
@@ -270,6 +276,8 @@ namespace nn
                 return "intr ";
             case TokenType::KW_FN:
                 return "fn ";
+            case TokenType::KW_INIT:
+                return "init ";
             case TokenType::KW_RETURN:
                 return "return ";
             case TokenType::KW_IMPORT:
@@ -457,7 +465,7 @@ namespace nn
         }
 #endif
 
-        bool lex_buf(Errors& errs, const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num, uint32_t line_start)
+        bool lex_buf(Errors& errs, const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num, int32_t line_start)
         {
             bool use_indents = true;
 
@@ -487,6 +495,7 @@ namespace nn
                 case '\t':
                     if (use_indents)
                         tarr.push_back(TokenImp<TokenType::INDENT>(fname, line_num, i - line_start));
+                    line_start -= 4 - (i - line_start) % 4;  // Its a bit hacky, but it works
                     break;
                 case '\r':
                 case '\v':
@@ -763,6 +772,9 @@ namespace nn
                     // checking for keywords
                     switch (hash(idn_buf))
                     {
+                    case hash("namespace"):
+                        tarr.push_back(TokenImp<TokenType::KW_NAMESPACE>(fname, line_num, col_num));
+                        continue;
                     case hash("struct"):
                         tarr.push_back(TokenImp<TokenType::KW_STRUCT>(fname, line_num, col_num));
                         continue;

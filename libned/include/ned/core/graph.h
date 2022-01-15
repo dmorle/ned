@@ -1,7 +1,8 @@
 #ifndef NED_GRAPH_H
 #define NED_GRAPH_H
 
-#include <ned/core/tensor.h>
+#include <ned/core/config.h>
+#include <ned/core/init.h>
 
 #include <map>
 #include <tuple>
@@ -14,26 +15,12 @@ namespace nn
 
     namespace core
     {
-        enum class EdgeFty
-        {
-            F16,
-            F32,
-            F64
-        };
-
-        struct EdgeInfo
-        {
-            EdgeFty fty;
-            std::vector<size_t> dims;
-        };
-
         struct Node;
         struct Edge
         {
             using Connector = struct { Node* node; std::string name; };
-            using Info = struct { EdgeFty fty = EdgeFty::F32; std::vector<size_t> dims; };
 
-            Info info;
+            EdgeInfo info;
             std::map<std::string, Connector> md_inps;
             std::map<std::string, std::vector<Connector>> ctx_outs;
             mutable void* opaque = nullptr;
@@ -42,7 +29,7 @@ namespace nn
         struct Node
         {
             std::string name;
-            std::map<std::string, lang::Obj> cargs;
+            std::map<std::string, std::unique_ptr<Config>> configs;
             std::map<std::string, Edge*> inps;
             std::map<std::string, Edge*> outs;
             mutable void* opaque = nullptr;
@@ -54,13 +41,21 @@ namespace nn
             Edge* backward;
         };
 
+        struct Parameter
+        {
+            Edge* forward;
+            Edge* backward;
+            InitData init;
+            void* data = nullptr;
+        };
+
         struct Block
         {
             std::string name;
             std::map<std::string, IOEdge> inps;
             std::map<std::string, IOEdge> outs;
-            std::map<std::string, IOEdge> weights;  // Local to the block
             std::map<std::string, IOEdge> exports;  // Local to the block
+            std::map<std::string, Parameter> weights;  // Local to the block
             std::map<std::string, Block*> sub_blocks;
         };
 
@@ -74,10 +69,7 @@ namespace nn
             std::vector<std::string> eval_modes;
         };
 
-        size_t fty_size(tensor_dty dty);
-        bool fty_str(tensor_dty dty, std::string& str);
-
-        bool validate_block(const Block& blk);
+        void initialize_weights(Graph& graph);
     }
 }
 

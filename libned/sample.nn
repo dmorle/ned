@@ -120,39 +120,59 @@ intr concat<int dim, fp fty, int *t1_shape, int *t2_shape>(fty<*t1_shape> t1, ft
     fty<*t1_shape> out
     return out
 
-
 intr relu<fp fty, int *shape>(fty<*shape> t1) -> out:
     fty<*shape> out
     return out
-
 
 intr softmax<int *shape>(tensor<*shape> t1):
     tensor<*shape> out
     return out
 
-
 intr matmul<int N, int M, int S>(tensor<N, S> t1, tensor<S, M> t2):
     tensor<N, M> out
     return out
-
 
 intr conv2d_intr<int C, int H, int W, int K, int M, int N>(tensor<C, H, W> inp, tensor<K, C, M, N> kernel):
     tensor<K, H, W> out
     return out
 
+intr transpose<fp fty, int M, int N>(fty<M, N> inp) -> out:
+    fty<N, M> out
+    return out
+
+init xavier
+init zeros
+init normal<float mean, float variance>
+
+def matmul<fp fty, int M, int S, int N>(fty<M, S> t1, fty<S, N> t2):
+    fty<M, N> out
+    forward:
+        out = matmul(t1, t2)
+    backward:
+        t1 = matmul(out, transpose(t2))
+        t2 = matmul(transpose(t1), out)
+    return out
+
+def transpose<fp fty, int M, int N>(fty<M, N> inp) -> out:
+    fty<N, M> out
+    forward:
+        out = transpose(inp)
+    backward:
+        inp = transpose(out)
+    return out
 
 def xavier<int *shape>():
     tensor<*shape> param
     return param
 
-
-def linear<int N, int M>(tensor<N> inp):
-    return matmul(xavier<M, N>(), reshape<N, 1>(inp)) + xavier<N>()
-
+def linear<fp fty, int N, int M>(fty<N> inp) -> out:
+    extern xavier fty<M, N> w
+    extern xavier fty<M> b
+    var out = reshape<M>(matmul(w, reshape<N, 1>(inp))) + b
+    return add_same(reshape<M>(matmul(w, reshape<N, 1>(inp))), b)
 
 def conv2d<int K, int M, int N, int C, int H, int W>(tensor<C, H, W> inp):
     return conv2d_intr(inp, xavier<K, C, M, N>())
-
 
 def rnn_cell<int I, int S>(tensor<I> inp, tensor<S> state) -> state, out:
     var combined = concat<1>(reshape<N, -1>(inp), reshape<N, -1>(state))
@@ -161,13 +181,11 @@ def rnn_cell<int I, int S>(tensor<I> inp, tensor<S> state) -> state, out:
     var nstate = relu(linear(layer1))
     return nstate, output
 
-
 def rnn<int I, int S>(f32<I> inp) -> out:
     extern tensor<S> state
     
     var state, var out = rnn_cell<I, S>(inp, state)
     return out
-
 
 def model<int G>(f32<3, 312, 312> img) -> preds:
     var layer1 = relu(conv2d<8, 3, 3>(img))

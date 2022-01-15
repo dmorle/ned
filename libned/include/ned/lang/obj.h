@@ -115,6 +115,7 @@ namespace nn
             virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src);
             virtual bool xflt (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src);
             virtual bool xint (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src);
+            virtual bool cfg  (RuntimeErrors& errs, core::Config*& cfg, const Obj src);
         };
 
         class BoolType :
@@ -131,6 +132,7 @@ namespace nn
             virtual bool land (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool lor  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cfg  (RuntimeErrors& errs, core::Config*& cfg, const Obj src) override;
         };
 
         class FWidthType :
@@ -145,6 +147,7 @@ namespace nn
             virtual bool eq   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool ne   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cfg  (RuntimeErrors& errs, core::Config*& cfg, const Obj src) override;
         };
 
         class IntType :
@@ -175,6 +178,7 @@ namespace nn
             virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xflt (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xint (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cfg  (RuntimeErrors& errs, core::Config*& cfg, const Obj src) override;
         };
 
         class FloatType :
@@ -203,6 +207,7 @@ namespace nn
             virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xflt (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xint (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cfg  (RuntimeErrors& errs, core::Config*& cfg, const Obj src) override;
         };
 
         class StrType :
@@ -226,6 +231,7 @@ namespace nn
             virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xflt (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xint (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cfg  (RuntimeErrors& errs, core::Config*& cfg, const Obj src) override;
         };
 
         class ArrType :  // arrays only.  inst -> agg
@@ -245,6 +251,7 @@ namespace nn
             virtual bool ne   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool idx  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cfg  (RuntimeErrors& errs, core::Config*& cfg, const Obj src) override;
         };
 
         class AggType :  // Tuples and structs.  inst -> agg
@@ -262,6 +269,7 @@ namespace nn
             virtual bool ne   (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool idx  (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool xstr (RuntimeErrors& errs, ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool cfg  (RuntimeErrors& errs, core::Config*& cfg, const Obj src) override;
         };
     }
 }

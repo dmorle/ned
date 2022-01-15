@@ -1,34 +1,34 @@
-#include <ned/core/tensor.h>
+#include <ned/core/config.h>
 
 namespace nn
 {
     namespace core
     {
-        size_t dtype_size(tensor_dty dty)
+        size_t fty_size(EdgeFty fty)
         {
-            switch (dty)
+            switch (fty)
             {
-            case tensor_dty::F16:
+            case EdgeFty::F16:
                 return 2;
-            case tensor_dty::F32:
+            case EdgeFty::F32:
                 return 4;
-            case tensor_dty::F64:
+            case EdgeFty::F64:
                 return 8;
             }
             return -1;
         }
 
-        bool dtype_str(tensor_dty dty, std::string& str)
+        bool fty_str(EdgeFty fty, std::string& str)
         {
-            switch (dty)
+            switch (fty)
             {
-            case tensor_dty::F16:
+            case EdgeFty::F16:
                 str = "f16";
                 return false;
-            case tensor_dty::F32:
+            case EdgeFty::F32:
                 str = "f32";
                 return false;
-            case tensor_dty::F64:
+            case EdgeFty::F64:
                 str = "f64";
                 return false;;
             }

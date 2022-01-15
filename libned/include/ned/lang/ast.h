@@ -273,14 +273,33 @@ namespace nn
             std::vector<std::string> imp;
         };
 
+        struct AstInit
+        {
+            std::string name;
+            std::vector<AstArgDecl> cargs;
+        };
+
+        struct AstNamespace
+        {
+            std::string name;
+            std::vector<AstNamespace> namespaces;
+            std::vector<AstStruct>    structs;
+            std::vector<AstFn>        funcs;
+            std::vector<AstBlock>     defs;
+            std::vector<AstBlock>     intrs;
+            std::vector<AstInit>      inits;
+        };
+
         struct AstModule
         {
             std::string fname;
-            std::vector<AstImport> imports;
-            std::vector<AstStruct> structs;
-            std::vector<AstFn>     funcs;
-            std::vector<AstBlock>  defs;
-            std::vector<AstBlock>  intrs;
+            std::vector<AstImport>    imports;
+            std::vector<AstNamespace> namespaces;
+            std::vector<AstStruct>    structs;
+            std::vector<AstFn>        funcs;
+            std::vector<AstBlock>     defs;
+            std::vector<AstBlock>     intrs;
+            std::vector<AstInit>      inits;
         };
 
         // parse_* functions return true on failure, false on success
@@ -294,8 +313,9 @@ namespace nn
         bool parse_struct_sig (Errors& errs, const TokenArray& tarr, AstStructSig&);
 
         template<CodeBlockSig SIG> bool parse_signature  (Errors& errs, const TokenArray& tarr, SIG& sig);
-        template<CodeBlockSig SIG> bool parse_code_block (Errors& errs, const TokenArray& tarr, AstCodeBlock<SIG>&);
+        template<CodeBlockSig SIG> bool parse_code_block (Errors& errs, const TokenArray& tarr, AstCodeBlock<SIG>&, int indent_level);
 
+        bool parse_namespace  (Errors& errs, const TokenArray& tarr, AstNamespace&, int indent_level);
         bool parse_import     (Errors& errs, const TokenArray& tarr, AstImport&);
         bool parse_module     (Errors& errs, const TokenArray& tarr, AstModule&);
     }

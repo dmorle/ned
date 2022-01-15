@@ -54,10 +54,12 @@ namespace nn
             LIT_FLOAT,
             LIT_STR,
             IDN,
+            KW_NAMESPACE,
             KW_STRUCT,
             KW_DEF,
             KW_INTR,
             KW_FN,
+            KW_INIT,
             KW_RETURN,
             KW_IMPORT,
             KW_WHILE,
@@ -370,7 +372,7 @@ namespace nn
             size_t* offsets = nullptr;
         };
 
-        bool lex_buf(Errors& errs, const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num=1, uint32_t line_start=0);
+        bool lex_buf(Errors& errs, const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num=1, int32_t line_start=0);
         bool lex_file(Errors& errs, const char* fname, TokenArray& tarr);
 
         class BracketCounter

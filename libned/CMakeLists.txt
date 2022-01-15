@@ -3,7 +3,10 @@ include_directories("include")
 add_library(
     libned STATIC
 
-    "source/core/tensor.cpp"
+    "source/util/libs.cpp"
+
+    "source/core/config.cpp"
+    "source/core/setup.cpp"
     "source/core/graph.cpp"
 
     "source/lang/ast.cpp"
@@ -14,7 +17,10 @@ add_library(
     "source/lang/obj.cpp"
     "source/lang/typing.cpp"
 
-    "include/ned/core/tensor.h"
+    "include/ned/util/libs.h"
+
+    "include/ned/core/config.h"
+    "include/ned/core/setup.h"
     "include/ned/core/graph.h"
     
     "include/ned/lang/ast.h"

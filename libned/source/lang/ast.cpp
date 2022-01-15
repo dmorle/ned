@@ -862,7 +862,7 @@ namespace nn
         }
 
         template<CodeBlockSig SIG>
-        bool parse_code_block(Errors& errs, const TokenArray& tarr, AstCodeBlock<SIG>& ast_code_block)
+        bool parse_code_block(Errors& errs, const TokenArray& tarr, AstCodeBlock<SIG>& ast_code_block, int indent_level)
         {
             assert(tarr.size() > 0);
 
@@ -885,9 +885,10 @@ namespace nn
             return false;
         }
 
-        template<> bool parse_code_block<AstStructSig>(Errors&, const TokenArray&, AstCodeBlock<AstStructSig>&);
-        template<> bool parse_code_block<AstFnSig>    (Errors&, const TokenArray&, AstCodeBlock<AstFnSig>&    );
-        template<> bool parse_code_block<AstBlockSig> (Errors&, const TokenArray&, AstCodeBlock<AstBlockSig>& );
+        bool parse_namespace(Errors& errs, const TokenArray& tarr, AstNamespace& ast_namespace, int indent_level)
+        {
+
+        }
 
         bool parse_import(Errors& errs, const TokenArray& tarr, AstImport& ast_import)
         {
@@ -913,6 +914,11 @@ namespace nn
             return false;
         }
 
+        bool parse_init(Errors& errs, const TokenArray& tarr, AstInit& ast_init)
+        {
+
+        }
+
         bool parse_module(Errors& errs, const TokenArray& tarr, AstModule& ast_module)
         {
             ast_module.fname = tarr[0]->fname;
@@ -936,6 +942,17 @@ namespace nn
                     if (!parse_import(errs, { tarr, i, end }, ast_module.imports.back()))
                         ast_module.imports.pop_back();
                     continue;
+                case TokenType::KW_NAMESPACE:
+                    i++;
+                    end = tarr.search(LineEndCriteria(0), i);
+                    if (end == i)
+                        return errs.add(tarr[i], "Expected identifier after 'namespace'");
+                    if (end < 0)
+                        end = tarr.size();
+                    ast_module.namespaces.push_back(AstNamespace());
+                    if (parse_namespace(errs, { tarr, i, end }, ast_module.namespaces.back(), 0))
+                        ast_module.namespaces.pop_back();
+                    continue;
                 case TokenType::KW_STRUCT:
                     i++;
                     end = tarr.search(LineEndCriteria(0), i);
@@ -944,7 +961,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.structs.push_back(AstStruct());
-                    if (parse_code_block(errs, { tarr, i, end }, ast_module.structs.back()))
+                    if (parse_code_block(errs, { tarr, i, end }, ast_module.structs.back(), 0))
                         ast_module.structs.pop_back();
                     continue;
                 case TokenType::KW_FN:
@@ -955,7 +972,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.funcs.push_back(AstFn());
-                    if (parse_code_block(errs, { tarr, i, end }, ast_module.funcs.back()))
+                    if (parse_code_block(errs, { tarr, i, end }, ast_module.funcs.back(), 0))
                         ast_module.funcs.pop_back();
                     continue;
                 case TokenType::KW_DEF:
@@ -966,7 +983,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.defs.push_back(AstBlock());
-                    if (parse_code_block(errs, { tarr, i, end }, ast_module.defs.back()))
+                    if (parse_code_block(errs, { tarr, i, end }, ast_module.defs.back(), 0))
                         ast_module.defs.pop_back();
                     continue;
                 case TokenType::KW_INTR:
@@ -977,9 +994,14 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.intrs.push_back(AstBlock());
-                    if (parse_code_block(errs, { tarr, i, end }, ast_module.intrs.back()))
+                    if (parse_code_block(errs, { tarr, i, end }, ast_module.intrs.back(), 0))
                         ast_module.intrs.pop_back();
                     continue;
+                case TokenType::KW_INIT:
+                    i++;
+                    end = tarr.search(IsSameCriteria(TokenType::ENDL), i);
+                    if (end == i)
+                        return errs.add(tarr[i], "Expected identifier after 'init'");
                 default:
                     return errs.add(tarr[i], "Invalid token");
                 }
