@@ -45,7 +45,7 @@ namespace nn
         {
             Edge* forward;
             Edge* backward;
-            InitData init;
+            Init* init;
             void* data = nullptr;
         };
 
@@ -56,6 +56,7 @@ namespace nn
             std::map<std::string, IOEdge> outs;
             std::map<std::string, IOEdge> exports;  // Local to the block
             std::map<std::string, Parameter> weights;  // Local to the block
+            Block* parent;  // null if its the root block
             std::map<std::string, Block*> sub_blocks;
         };
 

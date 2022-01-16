@@ -19,14 +19,14 @@ namespace nn
 			FAILURE   // indicates the correct function was called, but weight initialization failed
 		};
 
-		struct InitData
+		struct Init
 		{
 			std::string name;
-			std::map<std::string, std::unique_ptr<Config>> configs;
+			std::vector<core::Config*> configs;
 		};
 
 		void load_inits(std::vector<std::string> search_paths);
-		void* generate_weight(InitData& init, EdgeInfo& info);
+		void* generate_weight(Init& init, EdgeInfo& info);
 	}
 }
 

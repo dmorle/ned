@@ -5,6 +5,7 @@
 #include <ned/lang/obj.h>
 
 #include <array>
+#include <vector>
 
 namespace nn
 {
@@ -19,25 +20,28 @@ namespace nn
         {
             std::vector<core::Edge*> edge_buffer;
             std::vector<core::Node*> node_buffer;
+            std::vector<core::Init*> init_buffer;
             std::vector<core::Block*> block_buffer;
 
             std::map<std::string, core::IOEdge> exports;
+            core::Block* root;
 
         public:
-            GraphBuilder() {}
+            GraphBuilder(const std::string& name);
+            Obj get_root();
 
-            bool create_edge(core::Edge* pedge);
-            bool create_node(const std::string& name, core::Node* pnode);
-            bool create_block(const std::string& name, core::Block* pblock);
+            bool create_edge(Obj& edge);
+            bool create_node(Obj& node, const std::string& name);
+            bool create_init(Obj& init, const std::string& name, const std::vector<core::Config*> cfgs);
+            bool create_block(Obj& block, const std::string& name, core::Block* parent);
             
-            static bool set_child(core::Block* pparent, core::Block* pchild);
-            static bool set_ndinp(core::Node* pnode, core::Edge* pedge, const std::string& name);
-            static bool set_ndout(core::Node* pnode, core::Edge* pedge, const std::string& name);
-            static bool set_bkinp(core::Block* pblock, core::Edge* pforward, core::Edge* pbackward, const std::string& name);
-            static bool set_bkout(core::Block* pblock, core::Edge* pforward, core::Edge* pbackward, const std::string& name);
+            static bool set_ndinp(const std::string& name, core::Node* pnode, core::Edge* pedge);
+            static bool set_ndout(const std::string& name, core::Node* pnode, core::Edge* pedge);
+            static bool set_bkinp(const std::string& name, core::Block* pblock, core::Edge* pforward, core::Edge* pbackward);
+            static bool set_bkout(const std::string& name, core::Block* pblock, core::Edge* pforward, core::Edge* pbackward);
 
-            static bool set_weight(core::Block* pblock, core::Edge* pforward, core::Edge* pbackward, const std::string& name);
-            static bool set_export(core::Edge* pforward, core::Edge* pbackward, const std::string& name);
+            bool add_extern(const std::string& name, core::Block* pblock, core::Edge* pforward, core::Edge* pbackward, core::Init* pinit);
+            bool add_export(const std::string& name, core::Edge* pforward, core::Edge* pbackward);
 
             bool export_graph(core::Graph& graph);
         };

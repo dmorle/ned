@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <string>
-#include <memory>
 
 namespace nn
 {
@@ -38,42 +37,51 @@ namespace nn
         struct Config
         {
             ConfigType ty;
-        };
-
-        struct FtyConfig :
-            public Config
-        {
-            EdgeFty val;
+            Config(ConfigType ty) : ty(ty) {}
+            virtual ~Config() {}
         };
 
         struct BoolConfig :
             public Config
         {
             bool val;
+            BoolConfig(bool val) : Config(ConfigType::BOOL), val(val) {}
+        };
+
+        struct FtyConfig :
+            public Config
+        {
+            EdgeFty val;
+            FtyConfig(EdgeFty val) : Config(ConfigType::FTY), val(val) {}
         };
 
         struct IntConfig :
             public Config
         {
             int64_t val;
+            IntConfig(int64_t val) : Config(ConfigType::INT), val(val) {}
         };
 
         struct FloatConfig :
             public Config
         {
             double val;
+            FloatConfig(double val) : Config(ConfigType::FLOAT), val(val) {}
         };
 
         struct StringConfig :
             public Config
         {
             std::string val;
+            StringConfig(const std::string& val) : Config(ConfigType::STRING), val(val) {}
         };
 
         struct ListConfig :
             public Config
         {
-            std::vector<std::unique_ptr<Config>> val;
+            std::vector<Config*> val;
+            ListConfig(const std::vector<Config*>& val) : Config(ConfigType::LIST), val(val) {}
+            ~ListConfig() { for (Config* cfg : val) delete cfg; }
         };
     }
 }

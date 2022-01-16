@@ -27,7 +27,7 @@
 .proc test
 	# print("result: " + factorial(n))
 	new str "result: "
-	dup 1
+	dup 2
 	new proc factorial
 	call
 	pop 1

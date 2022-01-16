@@ -145,8 +145,8 @@ namespace nn
 
             EDG,
             NDE,
+            INI,
             BLK,
-            BKSUB,
             NDINP,
             NDOUT,
             BKINP,
@@ -264,8 +264,8 @@ namespace nn
             using Dsp   = Implicit < DSP   >;
             using Edg   = Implicit < EDG   >;
             using Nde   = Implicit < NDE   >;
+            using Ini   = Implicit < INI   >;
             using Blk   = Implicit < BLK   >;
-            using BkSub = Implicit < BKSUB >;
             using NdInp = Implicit < NDINP >;
             using NdOut = Implicit < NDOUT >;
             using BkInp = Implicit < BKINP >;
@@ -342,8 +342,8 @@ namespace nn
 * 
 * edg          Creates a new edge
 * nde          Creates a new named node
-* blk          Creates a new named block
-* bksub        Binds a block to a parent block
+* ini          Creates a weight initializer object out of a name and any number of cargs
+* blk          Creates a new named block with a given parent
 * 
 * ndinp        Sets a named node input to an edge
 * ndout        Sets a named node output to an edge

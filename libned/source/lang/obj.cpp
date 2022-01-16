@@ -103,7 +103,7 @@ namespace nn
         bool ProgramHeap::create_obj_fwidth(Obj& obj, FtyObj val)
         {
             fty_objs.push_back(new FtyObj(val));
-            obj.fwidth_obj = fty_objs.back();
+            obj.fty_obj = fty_objs.back();
             return false;
         }
 
@@ -304,9 +304,15 @@ namespace nn
             return heap.create_obj_str(dst, *src.bool_obj ? "true" : "false");
         }
 
+        bool BoolType::cfg(core::Config*& cfg, const Obj src)
+        {
+            cfg = new core::BoolConfig(*src.bool_obj);
+            return false;
+        }
+
         bool FtyType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            return heap.create_obj_fwidth(dst, *src.fwidth_obj);
+            return heap.create_obj_fwidth(dst, *src.fty_obj);
         }
 
         bool FtyType::inst(ProgramHeap& heap, Obj& dst)
@@ -316,26 +322,32 @@ namespace nn
 
         bool FtyType::set(ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            *dst.fwidth_obj = *src.fwidth_obj;
+            *dst.fty_obj = *src.fty_obj;
             return false;
         }
 
         bool FtyType::eq(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            return heap.create_obj_bool(dst, *lhs.fwidth_obj == *rhs.fwidth_obj);
+            return heap.create_obj_bool(dst, *lhs.fty_obj == *rhs.fty_obj);
         }
 
         bool FtyType::ne(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
-            return heap.create_obj_bool(dst, *lhs.fwidth_obj != *rhs.fwidth_obj);
+            return heap.create_obj_bool(dst, *lhs.fty_obj != *rhs.fty_obj);
         }
 
         bool FtyType::xstr(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             std::string str;
             return
-                core::fty_str(*src.fwidth_obj, str) ||
+                core::fty_str(*src.fty_obj, str) ||
                 heap.create_obj_str(dst, str);
+        }
+
+        bool FtyType::cfg(core::Config*& cfg, const Obj src)
+        {
+            cfg = new core::FtyConfig(*src.fty_obj);
+            return false;
         }
 
         bool IntType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
@@ -454,6 +466,12 @@ namespace nn
         {
             return heap.create_obj_int(dst, *src.int_obj);
         }
+
+        bool IntType::cfg(core::Config*& cfg, const Obj src)
+        {
+            cfg = new core::IntConfig(*src.int_obj);
+            return false;
+        }
         
         bool FloatType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
         {
@@ -561,6 +579,12 @@ namespace nn
             return heap.create_obj_int(dst, (IntObj)*src.float_obj);
         }
 
+        bool FloatType::cfg(core::Config*& cfg, const Obj src)
+        {
+            cfg = new core::FloatConfig(*src.float_obj);
+            return false;
+        }
+
         bool StrType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_str(dst, *src.str_obj);
@@ -640,6 +664,12 @@ namespace nn
             return heap.create_obj_int(dst, std::stoll(*src.str_obj));
         }
         
+        bool StrType::cfg(core::Config*& cfg, const Obj src)
+        {
+            cfg = new core::StringConfig(*src.str_obj);
+            return false;
+        }
+
         bool ArrType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             std::vector<Obj> objs;
@@ -744,6 +774,24 @@ namespace nn
             return heap.create_obj_str(dst, ss.str());
         }
 
+        bool ArrType::cfg(core::Config*& cfg, const Obj src)
+        {
+            std::vector<core::Config*> configs(src.agg_obj->size());
+            for (Obj e : *src.agg_obj)
+            {
+                core::Config* elem_cfg;
+                if (elem_ty->cfg(elem_cfg, e))
+                {
+                    for (core::Config* cfg : configs)
+                        delete cfg;
+                    return true;
+                }
+                configs.push_back(elem_cfg);
+            }
+            cfg = new core::ListConfig(configs);
+            return false;
+        }
+
         bool AggType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             // This should be an error, not an assert
@@ -828,11 +876,11 @@ namespace nn
 
         bool AggType::xstr(ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            // This should be an error, not an assert
-            assert(src.agg_obj->size() == elem_tys.size());
-
-            if (src.agg_obj->size() == 0)
+            if (src.agg_obj->size() == 0)  // Uninitialized struct members of structs
                 return heap.create_obj_str(dst, "()");
+
+            if (src.agg_obj->size() != elem_tys.size())
+                return error::runtime("type object mismatch in aggregate object");
 
             Obj str;
             if (elem_tys[0]->xstr(heap, str, src.agg_obj->operator[](0)))
@@ -848,6 +896,31 @@ namespace nn
             }
             ss << ')';
             return heap.create_obj_str(dst, ss.str());
+        }
+
+        bool AggType::cfg(core::Config*& cfg, const Obj src)
+        {
+            if (src.agg_obj->size() != elem_tys.size())
+            {
+                if (src.agg_obj->size() == 0)  // Probably an uninitialized struct
+                    return error::runtime("type object mismatch in aggregate object - likely an uninitialized compound struct");
+                return error::runtime("type object mismatch in aggregate object");
+            }
+
+            std::vector<core::Config*> configs(src.agg_obj->size());
+            for (size_t i = 0; i < src.agg_obj->size(); i++)
+            {
+                core::Config* elem_cfg;
+                if (elem_tys[i]->cfg(elem_cfg, src.agg_obj->operator[](i)))
+                {
+                    for (core::Config* cfg : configs)
+                        delete cfg;
+                    return true;
+                }
+                configs.push_back(elem_cfg);
+            }
+            cfg = new core::ListConfig(configs);
+            return false;
         }
     }
 }

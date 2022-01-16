@@ -24,32 +24,103 @@ namespace nn
 
         // graph builder operations
 
-        bool GraphBuilder::create_edge(core::Edge* pedge)
+        GraphBuilder::GraphBuilder(const std::string& name)
         {
-            pedge = new core::Edge();
-            edge_buffer.push_back(pedge);
+            root = new core::Block();
+            root->name = name;
+            root->parent = nullptr;
+        }
+
+        Obj GraphBuilder::get_root()
+        {
+            return Obj{ .block_obj = root };
+        }
+
+        bool GraphBuilder::create_edge(Obj& edge)
+        {
+            edge.edge_obj = new core::Edge();
+            edge_buffer.push_back(edge.edge_obj);
             return false;
         }
 
-        bool GraphBuilder::create_node(const std::string& name, core::Node* pnode)
+        bool GraphBuilder::create_node(Obj& node, const std::string& name)
         {
-            pnode = new core::Node();
-            pnode->name = name;
-            node_buffer.push_back(pnode);
+            node.node_obj = new core::Node();
+            node.node_obj->name = name;
+            node_buffer.push_back(node.node_obj);
             return false;
         }
 
-        bool GraphBuilder::create_block(const std::string& name, core::Block* pblock)
+        bool GraphBuilder::create_init(Obj& init, const std::string& name, const std::vector<core::Config*> cfgs)
         {
-            pblock = new core::Block();
-            pblock->name = name;
-            block_buffer.push_back(pblock);
+            init.init_obj = new core::Init();
+            init.init_obj->name = name;
+            init.init_obj->configs = cfgs;
+            init_buffer.push_back(init.init_obj);
             return false;
         }
 
-        bool GraphBuilder::set_child(core::Block* pparent, core::Block* pchild)
+        bool GraphBuilder::create_block(Obj& block, const std::string& name, core::Block* parent)
         {
-            return error::runtime("GraphBuilder::set_child has not been implemented");
+            block.block_obj = new core::Block();
+            block.block_obj->name = name;
+            block.block_obj->parent = parent;
+            block_buffer.push_back(block.block_obj);
+            return false;
+        }
+
+        bool GraphBuilder::set_ndinp(const std::string& name, core::Node* pnode, core::Edge* pedge)
+        {
+            if (pnode->inps.contains(name))
+                return error::runtime("Attempted to bind node input '%' multiple times", name);
+            pnode->inps[name] = pedge;
+            return false;
+        }
+
+        bool GraphBuilder::set_ndout(const std::string& name, core::Node* pnode, core::Edge* pedge)
+        {
+            if (pnode->outs.contains(name))
+                return error::runtime("Attempted to bind node output '%' multiple times", name);
+            pnode->outs[name] = pedge;
+            return false;
+        }
+
+        bool GraphBuilder::set_bkinp(const std::string& name, core::Block* pblock, core::Edge* pforward, core::Edge* pbackward)
+        {
+            if (pblock->inps.contains(name))
+                return error::runtime("Attempted to bind block input '%' multiple times", name);
+            pblock->inps[name] = { pforward, pbackward };
+            return false;
+        }
+
+        bool GraphBuilder::set_bkout(const std::string& name, core::Block* pblock, core::Edge* pforward, core::Edge* pbackward)
+        {
+            if (pblock->outs.contains(name))
+                return error::runtime("Attempted to bind block output '%' multiple times", name);
+            pblock->outs[name] = { pforward, pbackward };
+            return false;
+        }
+
+        bool GraphBuilder::add_extern(const std::string& name, core::Block* pblock, core::Edge* pforward, core::Edge* pbackward, core::Init* pinit)
+        {
+            if (pblock->weights.contains(name))
+                return error::runtime("Attempted to overwrite block weight '%'", name);
+            pblock->weights[name] = { pforward, pbackward, pinit, nullptr };
+            return false;
+        }
+
+        bool GraphBuilder::add_export(const std::string& name, core::Edge* pforward, core::Edge* pbackward)
+        {
+            if (exports.contains(name))
+                return error::runtime("Attempted to overwrite model export '%'", name);
+            exports[name] = { pforward, pbackward };
+            return false;
+        }
+
+        bool GraphBuilder::export_graph(core::Graph& graph)
+        {
+            // TODO: implement graph exporting
+            return error::runtime("Graph exporting has not been implemented yet...");
         }
 
         // stack operations
@@ -484,79 +555,101 @@ namespace nn
 
         inline bool exec_edg(CallStack& stack)
         {
-            Obj edge{};
+            Obj edge;
             return
-                pbuilder->create_edge(edge.edge_obj) ||
+                pbuilder->create_edge(edge) ||
                 stack.push(edge);
         }
 
         inline bool exec_nde(CallStack& stack)
         {
-            Obj name, node{};
+            Obj name, node;
             return
                 stack.pop(name) ||
-                pbuilder->create_node(*name.str_obj, node.node_obj) ||
+                pbuilder->create_node(node, *name.str_obj) ||
                 stack.push(node);
+        }
+
+        inline bool exec_ini(CallStack& stack)
+        {
+            Obj name, argnum;
+            if (stack.pop(name) ||
+                stack.pop(argnum)
+                ) return true;
+
+            Obj type, val;
+            std::vector<core::Config*> cfgs;
+            for (int i = 0; i < *argnum.int_obj; i++)
+            {
+                core::Config* cfg;
+                if (stack.pop(type) ||
+                    stack.pop(val) ||
+                    type.type_obj->cfg(cfg, val)
+                    )
+                {
+                    for (core::Config* e : cfgs)
+                        delete e;
+                    return true;
+                }
+                cfgs.push_back(cfg);
+            }
+
+            Obj init;
+            return
+                pbuilder->create_init(init, *name.str_obj, cfgs) ||
+                stack.push(init);
         }
 
         inline bool exec_blk(CallStack& stack)
         {
-            Obj name, block{};
+            Obj name, parent, block;
             return
                 stack.pop(name) ||
-                pbuilder->create_block(*name.str_obj, block.block_obj) ||
-                stack.push(block);
-        }
-
-        inline bool exec_bksub(CallStack& stack)
-        {
-            Obj child, parent;
-            return
-                stack.pop(child) ||
                 stack.pop(parent) ||
-                pbuilder->set_child(parent.block_obj, child.block_obj);
+                pbuilder->create_block(block, *name.str_obj, parent.block_obj) ||
+                stack.push(block);
         }
 
         inline bool exec_ndinp(CallStack& stack)
         {
-            Obj edge, name, node;
+            Obj name, node, edge;
             return
                 stack.pop(edge) ||
                 stack.pop(name) ||
                 stack.pop(node) ||
-                pbuilder->set_ndinp(node.node_obj, edge.edge_obj, *name.str_obj);
+                pbuilder->set_ndinp(*name.str_obj, node.node_obj, edge.edge_obj);
         }
 
         inline bool exec_ndout(CallStack& stack)
         {
-            Obj edge, name, node;
+            Obj name, node, edge;
             return
-                stack.pop(edge) ||
                 stack.pop(name) ||
                 stack.pop(node) ||
-                pbuilder->set_ndout(node.node_obj, edge.edge_obj, *name.str_obj);
+                stack.pop(edge) ||
+                pbuilder->set_ndout(*name.str_obj, node.node_obj, edge.edge_obj);
         }
 
         inline bool exec_bkinp(CallStack& stack)
         {
-            Obj forward, backward, name, block;
+            Obj name, block, forward, backward;
             return
-                stack.pop(forward) ||
-                stack.pop(backward) ||
                 stack.pop(name) ||
                 stack.pop(block) ||
-                pbuilder->set_bkinp(block.block_obj, forward.edge_obj, backward.edge_obj, *name.str_obj);
+                stack.pop(forward) ||
+                stack.pop(backward) ||
+                pbuilder->set_bkinp(*name.str_obj, block.block_obj, forward.edge_obj, backward.edge_obj);
         }
 
         inline bool exec_bkout(CallStack& stack)
         {
-            Obj forward, backward, name, block;
+            Obj name, block, forward, backward;
             return
-                stack.pop(forward) ||
-                stack.pop(backward) ||
                 stack.pop(name) ||
                 stack.pop(block) ||
-                pbuilder->set_bkout(block.block_obj, forward.edge_obj, backward.edge_obj, *name.str_obj);
+                stack.pop(forward) ||
+                stack.pop(backward) ||
+                pbuilder->set_bkout(*name.str_obj, block.block_obj, forward.edge_obj, backward.edge_obj);
         }
 
         inline bool exec_pshmd(CallStack& stack)
@@ -575,29 +668,30 @@ namespace nn
 
         inline bool exec_ext(CallStack& stack)
         {
-            Obj forward, backward, name, block;
+            Obj name, block, forward, backward, init;
             return
-                stack.pop(forward) ||
-                stack.pop(backward) ||
                 stack.pop(name) ||
                 stack.pop(block) ||
-                pbuilder->set_weight(block.block_obj, forward.edge_obj, backward.edge_obj, *name.str_obj);
+                stack.pop(forward) ||
+                stack.pop(backward) ||
+                stack.pop(init) ||
+                pbuilder->add_extern(*name.str_obj, block.block_obj, forward.edge_obj, backward.edge_obj, init.init_obj);
         }
 
         inline bool exec_exp(CallStack& stack)
         {
-            Obj forward, backward, name;
+            Obj name, forward, backward;
             return
+                stack.pop(name) ||
                 stack.pop(forward) ||
                 stack.pop(backward) ||
-                stack.pop(name) ||
-                pbuilder->set_export(forward.edge_obj, backward.edge_obj, *name.str_obj);
+                pbuilder->add_export(*name.str_obj, forward.edge_obj, backward.edge_obj);
         }
 
         bool exec(CallStack& stack, ProgramHeap& heap, ByteCode& byte_code, std::string entry_point, core::Graph& graph)
 		{
             if (!byte_code.proc_offsets.contains(entry_point))
-                return error::runtime("", 0ULL, 0ULL, "Unable to find entry point '%'", entry_point);
+                return error::runtime("Unable to find entry point '%'", entry_point);
 
             // Initializing the interpreter state
             pc = byte_code.proc_offsets.at(entry_point);
@@ -605,14 +699,12 @@ namespace nn
             data = byte_code.data_segment;
             complete = false;
             pc_stack.clear();
-
-            GraphBuilder builder;
+            GraphBuilder builder(entry_point);
             pbuilder = &builder;
             md_stack.clear();
-
             error::bind_runtime_context(byte_code.debug_info, pc);
-
-            // TODO: setup the stack with the input edges
+            if (stack.push(pbuilder->get_root()))
+                return true;
 
             InstructionType ty;
             while (!complete)
@@ -774,10 +866,6 @@ namespace nn
                     if (exec_blk(stack))
                         goto runtime_error;
                     break;
-                case InstructionType::BKSUB:
-                    if (exec_bksub(stack))
-                        goto runtime_error;
-                    break;
                 case InstructionType::NDINP:
                     if (exec_ndinp(stack))
                         goto runtime_error;
@@ -802,6 +890,10 @@ namespace nn
                     if (exec_popmd(stack))
                         goto runtime_error;
                     break;
+                case InstructionType::INI:
+                    if (exec_ini(stack))
+                        goto runtime_error;
+                    break;
                 case InstructionType::EXT:
                     if (exec_ext(stack))
                         goto runtime_error;
@@ -816,7 +908,7 @@ namespace nn
                     goto runtime_error;
                 }
             }
-			return false;
+            return pbuilder->export_graph(graph);
 
         runtime_error:
             // TODO: unwind the call stack with location info

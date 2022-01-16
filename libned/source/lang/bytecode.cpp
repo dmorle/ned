@@ -444,14 +444,14 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(Nde(tarr[0]));
+            case hash("ini"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Ini(tarr[0]));
             case hash("blk"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(Blk(tarr[0]));
-            case hash("bksub"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(BkSub(tarr[0]));
             case hash("ndinp"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");

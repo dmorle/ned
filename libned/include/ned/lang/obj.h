@@ -21,19 +21,21 @@ namespace nn
         using AggObj = std::vector<Obj>;
         using NodeObj = core::Node;
         using EdgeObj = core::Edge;
+        using InitObj = core::Init;
         using BlockObj = core::Block;
 
         union Obj
         {
             TypeObj  *type_obj;
             BoolObj  *bool_obj;
-            FtyObj   *fwidth_obj;
+            FtyObj   *fty_obj;
             IntObj   *int_obj;
             FloatObj *float_obj;
             StrObj   *str_obj;
             AggObj   *agg_obj;
             NodeObj  *node_obj;
             EdgeObj  *edge_obj;
+            InitObj  *init_obj;
             BlockObj *block_obj;
             uint64_t  ptr;
         };
@@ -115,7 +117,7 @@ namespace nn
             virtual bool xstr (ProgramHeap& heap, Obj& dst, const Obj src);
             virtual bool xflt (ProgramHeap& heap, Obj& dst, const Obj src);
             virtual bool xint (ProgramHeap& heap, Obj& dst, const Obj src);
-            virtual bool cfg  (core::Config*& cfg, const Obj src);
+            virtual bool cfg  (core::Config*& cfg, const Obj src) = 0;
         };
 
         class BoolType :
