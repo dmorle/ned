@@ -1,8 +1,7 @@
-#ifndef NED_ERRORS_H
-#error errors.h must be included before lexer.h
-#endif
 #ifndef NED_LEXER_H
 #define NED_LEXER_H
+
+#include <ned/errors.h>
 
 #include <vector>
 #include <string>
@@ -99,11 +98,6 @@ namespace nn
         template<TokenType T>
         class TokenImp;
 
-        class Error;
-        template<typename T>
-        class ErrorList;
-        using Errors = ErrorList<Error>;
-
         template<TokenType TY> constexpr const TokenImp<TY>& create_default(Token* ptk);
         extern constexpr std::string to_string(TokenType ty);  // Without 'extern', this creates a linker error.  Maybe a linker bug?
         std::string to_string(const Token* ptk);
@@ -127,8 +121,8 @@ namespace nn
             bool is_whitespace() const { return ty == TokenType::INDENT || ty == TokenType::ENDL; }
             template<TokenType TY> TokenImp<TY>& get() { assert(ty != TY); return *reinterpret_cast<TokenImp<TY>*>(this); }
             template<TokenType TY> const TokenImp<TY>& get() const { assert(ty == TY); return *reinterpret_cast<const TokenImp<TY>*>(this); }
-            template<TokenType TY> bool expect(Errors& errs) const {
-                if (ty == TY) return false; return errs.add(this, "Expected {}, found {}", to_string(TY), to_string(ty)); }
+            template<TokenType TY> bool expect() const {
+                if (ty == TY) return false; return error::syntax(this, "Expected %, found %", to_string(TY), to_string(ty)); }
         };
 
         template<TokenType T>
@@ -372,8 +366,8 @@ namespace nn
             size_t* offsets = nullptr;
         };
 
-        bool lex_buf(Errors& errs, const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num=1, int32_t line_start=0);
-        bool lex_file(Errors& errs, const char* fname, TokenArray& tarr);
+        bool lex_buf(const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num=1, int32_t line_start=0);
+        bool lex_file(const char* fname, TokenArray& tarr);
 
         class BracketCounter
         {

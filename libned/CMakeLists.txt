@@ -3,6 +3,8 @@ include_directories("include")
 add_library(
     libned STATIC
 
+    "source/errors.cpp"
+
     "source/util/libs.cpp"
 
     "source/core/config.cpp"
@@ -11,11 +13,12 @@ add_library(
 
     "source/lang/ast.cpp"
     "source/lang/bytecode.cpp"
-    "source/lang/errors.cpp"
     "source/lang/interp.cpp"
     "source/lang/lexer.cpp"
     "source/lang/obj.cpp"
     "source/lang/typing.cpp"
+
+    "include/ned/errors.h"
 
     "include/ned/util/libs.h"
 
@@ -25,7 +28,6 @@ add_library(
     
     "include/ned/lang/ast.h"
     "include/ned/lang/bytecode.h"
-    "include/ned/lang/errors.h"
     "include/ned/lang/interp.h"
     "include/ned/lang/lexer.h"
     "include/ned/lang/obj.h"

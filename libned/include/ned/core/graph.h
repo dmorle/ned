@@ -2,7 +2,7 @@
 #define NED_GRAPH_H
 
 #include <ned/core/config.h>
-#include <ned/core/init.h>
+#include <ned/core/setup.h>
 
 #include <map>
 #include <tuple>

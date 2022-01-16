@@ -1,7 +1,7 @@
 #ifndef NED_AST_H
 #define NED_AST_H
 
-#include <ned/lang/errors.h>
+#include <ned/lang/lexer.h>
 
 #include <vector>
 #include <string>
@@ -108,12 +108,12 @@ namespace nn
         // Linear aggregate types (array, tuple)
         struct AstExprAggLit
         {
-            std::vector<AstExpr> elems = {};
+            std::vector<AstExpr> elems;
         };
 
         struct AstExprUnaryOp
         {
-            std::unique_ptr<AstExpr> expr = nullptr;
+            std::unique_ptr<AstExpr> expr;
         };
 
         struct AstExprBinaryOp
@@ -124,13 +124,13 @@ namespace nn
 
         struct AstExprName
         {
-            std::unique_ptr<AstExpr> expr = nullptr;
+            std::unique_ptr<AstExpr> expr;
             std::string val = "";
         };
 
         struct AstExprCall
         {
-            std::unique_ptr<AstExpr> callee = nullptr;
+            std::unique_ptr<AstExpr> callee;
             std::vector<AstExpr> args = {};
 
         };
@@ -323,20 +323,21 @@ namespace nn
 
         // parse_* functions return true on failure, false on success
 
-        bool parse_expr       (Errors& errs, const TokenArray& tarr, AstExpr&);
+        bool parse_expr       (const TokenArray& tarr, AstExpr&);
 
-        bool parse_line       (Errors& errs, const TokenArray& tarr, AstLine&, int indent_level);
+        bool parse_line       (const TokenArray& tarr, AstLine&, int indent_level);
 
-        bool parse_arg_decl   (Errors& errs, const TokenArray& tarr, AstArgDecl&);
+        bool parse_arg_decl   (const TokenArray& tarr, AstArgDecl&);
 
-        bool parse_struct_sig (Errors& errs, const TokenArray& tarr, AstStructSig&);
+        bool parse_struct_sig (const TokenArray& tarr, AstStructSig&);
 
-        template<CodeBlockSig SIG> bool parse_signature  (Errors& errs, const TokenArray& tarr, SIG& sig);
-        template<CodeBlockSig SIG> bool parse_code_block (Errors& errs, const TokenArray& tarr, AstCodeBlock<SIG>&, int indent_level);
+        template<CodeBlockSig SIG> bool parse_signature  (const TokenArray& tarr, SIG& sig);
+        template<CodeBlockSig SIG> bool parse_code_block (const TokenArray& tarr, AstCodeBlock<SIG>&, int indent_level);
 
-        bool parse_namespace  (Errors& errs, const TokenArray& tarr, AstNamespace&, int indent_level);
-        bool parse_import     (Errors& errs, const TokenArray& tarr, AstImport&);
-        bool parse_module     (Errors& errs, const TokenArray& tarr, AstModule&);
+        bool parse_namespace  (const TokenArray& tarr, AstNamespace&, int indent_level);
+        bool parse_import     (const TokenArray& tarr, AstImport&);
+        bool parse_init       (const TokenArray& tarr, AstInit&);
+        bool parse_module     (const TokenArray& tarr, AstModule&);
     }
 }
 

@@ -1,7 +1,8 @@
 #ifndef NED_BYTECODE_H
 #define NED_BYTECODE_H
 
-#include <ned/lang/errors.h>
+#include <ned/errors.h>
+#include <ned/lang/lexer.h>
 #include <ned/lang/obj.h>
 #include <ned/lang/interp.h>
 
@@ -15,6 +16,24 @@ namespace nn
 {
     namespace lang
     {
+        class ByteCodeDebugInfo
+        {
+        public:
+            struct Record
+            {
+                size_t addr;
+                std::string fname;
+                size_t line_num, col_num;
+            };
+
+        private:
+            std::vector<Record> instruction_records;
+            friend class ByteCodeBody;
+
+        public:
+            const Record& at(size_t pc) const;
+        };
+
         class Instruction
         {
         protected:
@@ -25,7 +44,7 @@ namespace nn
         public:
             ByteCodeDebugInfo::Record create_debug_record(size_t addr) const;
             virtual CodeSegPtr to_bytes(CodeSegPtr buf) const = 0;
-            virtual bool set_labels(Errors& errs, const std::map<std::string, size_t>& label_map) = 0;
+            virtual bool set_labels(const std::map<std::string, size_t>& label_map) = 0;
         };
         
         class ByteCodeBody
@@ -41,8 +60,8 @@ namespace nn
         public:
             ByteCodeBody(const Token* ptk);
             size_t size() const;
-            CodeSegPtr to_bytes(Errors& errs, size_t offset, CodeSegPtr buf, ByteCodeDebugInfo& debug_info) const;
-            bool add_label(Errors& errs, const TokenImp<TokenType::IDN>* lbl);
+            CodeSegPtr to_bytes(size_t offset, CodeSegPtr buf, ByteCodeDebugInfo& debug_info) const;
+            bool add_label(const TokenImp<TokenType::IDN>* lbl);
 
             template<typename T>
             bool add_instruction(const T& inst)
@@ -76,14 +95,14 @@ namespace nn
             std::vector<ProcRef> static_proc_refs;
             ProgramHeap& heap;
 
-            friend bool parsebc_static(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, size_t& obj);
+            friend bool parsebc_static(const TokenArray& tarr, ByteCodeModule& mod, size_t& obj);
         public:
             ByteCodeModule(ProgramHeap& heap) : heap(heap) {}
-            bool add_block(Errors& errs, const std::string& name, const ByteCodeBody& body);
+            bool add_block(const std::string& name, const ByteCodeBody& body);
             bool add_static_obj(Obj obj, size_t& addr);                                // add static object to data_segment
             bool add_static_ref(const TokenImp<TokenType::IDN>* label, size_t& addr);  // add static Obj{.ptr} to data_segment
             bool add_static_ref(const std::string& label, const std::string& fname, size_t line_num, size_t col_num, size_t& addr);
-            bool export_module(Errors& errs, ByteCode& byte_code);
+            bool export_module(ByteCode& byte_code);
         };
 
         enum class InstructionType : uint8_t
@@ -150,10 +169,10 @@ namespace nn
                 Labeled(const Token* ptk, std::string label) : Instruction(ptk), label(label) {}
                 static constexpr size_t size = sizeof(InstructionType) + sizeof(size_t);
 
-                virtual bool set_labels(Errors& errs, const std::map<std::string, size_t>& label_map) override
+                virtual bool set_labels(const std::map<std::string, size_t>& label_map) override
                 {
                     if (!label_map.contains(label))
-                        return errs.add(fname, line_num, col_num, "Unresolved reference to label '{}'", label);
+                        return error::syntax(fname, line_num, col_num, "Unresolved reference to label '%'", label);
                     label_ptr = label_map.at(label);
                     return false;
                 }
@@ -177,7 +196,7 @@ namespace nn
                 Valued(const Token* ptk, size_t val) : Instruction(ptk), val(val) {}
                 static constexpr size_t size = sizeof(InstructionType) + sizeof(size_t);
 
-                virtual bool set_labels(Errors&, const std::map<std::string, size_t>&) override { return false; }
+                virtual bool set_labels(const std::map<std::string, size_t>&) override { return false; }
 
                 virtual CodeSegPtr to_bytes(CodeSegPtr buf) const override
                 {
@@ -197,7 +216,7 @@ namespace nn
                 Implicit(const Token* ptk) : Instruction(ptk) {}
                 static constexpr size_t size = sizeof(InstructionType);
 
-                virtual bool set_labels(Errors&, const std::map<std::string, size_t>&) override { return false; }
+                virtual bool set_labels(const std::map<std::string, size_t>&) override { return false; }
 
                 virtual CodeSegPtr to_bytes(CodeSegPtr buf) const override
                 {
@@ -257,10 +276,10 @@ namespace nn
             using Exp   = Implicit < EXP   >;
         }
         
-        bool parsebc_static(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, size_t& addr);
-        bool parsebc_instruction(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, ByteCodeBody& body);
-        bool parsebc_body(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod, ByteCodeBody& body);
-        bool parsebc_module(Errors& errs, const TokenArray& tarr, ByteCodeModule& mod);
+        bool parsebc_static(const TokenArray& tarr, ByteCodeModule& mod, size_t& addr);
+        bool parsebc_instruction(const TokenArray& tarr, ByteCodeModule& mod, ByteCodeBody& body);
+        bool parsebc_body(const TokenArray& tarr, ByteCodeModule& mod, ByteCodeBody& body);
+        bool parsebc_module(const TokenArray& tarr, ByteCodeModule& mod);
     }
 }
 

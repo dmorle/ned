@@ -1,4 +1,4 @@
-#include <ned/lang/errors.h>
+#include <ned/lang/lexer.h>
 
 #include <stdexcept>
 #include <cassert>
@@ -465,7 +465,7 @@ namespace nn
         }
 #endif
 
-        bool lex_buf(Errors& errs, const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num, int32_t line_start)
+        bool lex_buf(const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num, int32_t line_start)
         {
             bool use_indents = true;
 
@@ -638,7 +638,7 @@ namespace nn
                     for (i += 1; i < bufsz && sidx < 256 && buf[i] != '"'; i++, sidx++)
                         tk.val[sidx] = buf[i];
                     if (i >= bufsz)
-                        return errs.add(tk, "Missing closing '\"' for string literal");
+                        return error::syntax(tk, "Missing closing '\"' for string literal");
                     if (sidx == 256)
                         throw std::overflow_error("buffer overflow for string literal during lexing");
                     assert(buf[i] == '"');
@@ -685,7 +685,7 @@ namespace nn
                         }
                     }
                     if (i >= bufsz)
-                        return errs.add(fname, line_num, col_num, "Unexpected EOF while lexing integral type");
+                        return error::syntax(fname, line_num, col_num, "Unexpected EOF while lexing integral type");
                     if (is_numeric(buf[i]))
                     {
                         int64_t ival = 0;
@@ -759,7 +759,7 @@ namespace nn
 
                     // Only indentifiers and keywords are left
                     if (!is_idnstart(buf[i]))
-                        return errs.add(fname, line_num, col_num, "Unexpected character '{}'", buf[i]);
+                        return error::syntax(fname, line_num, col_num, "Unexpected character '%'", buf[i]);
                     
                     char idn_buf[64];
                     int iidx = 0;
@@ -901,12 +901,12 @@ namespace nn
             return false;
         }
 
-        bool lex_file(Errors& errs, const char* fname, TokenArray& tarr)
+        bool lex_file(const char* fname, TokenArray& tarr)
         {
             // temp, bad implmentation
             FILE* pf = fopen(fname, "rb");
             if (!pf)
-                return errs.add("", 0ULL, 0ULL, "Unable to open file '{}'", fname);
+                return error::general("Unable to open file '%'", fname);
             fseek(pf, 0, SEEK_END);
             size_t fsz = ftell(pf);
             rewind(pf);
@@ -914,18 +914,18 @@ namespace nn
             if (!pbuf)
             {
                 fclose(pf);
-                return errs.add("", 0ULL, 0ULL, "Out of memory");
+                return error::general("Out of memory");
             }
             size_t result = fread(pbuf, 1, fsz, pf);
             fclose(pf);
             if (result != fsz)
             {
                 delete[] pbuf;
-                errs.add("", 0ULL, 0ULL, "Unable to read file");
+                error::general("Unable to read file '%'", fname);
                 return true;
             }
             pbuf[fsz] = '\0';
-            bool ret = lex_buf(errs, fname, pbuf, fsz, tarr);
+            bool ret = lex_buf(fname, pbuf, fsz, tarr);
             delete[] pbuf;
             return ret;
         }
