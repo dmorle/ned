@@ -56,6 +56,9 @@ namespace nn
         ByteCodeBody::ByteCodeBody(const Token* ptk) :
             fname(ptk->fname), line_num(ptk->line_num), col_num(ptk->col_num), body_sz(0) {}
 
+        ByteCodeBody::ByteCodeBody(const AstNodeInfo& info) :
+            fname(info.fname), line_num(info.line_start), col_num(info.col_start), body_sz(0) {}
+
         size_t ByteCodeBody::size() const
         {
             return body_sz;

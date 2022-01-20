@@ -3,6 +3,7 @@
 
 #include <ned/errors.h>
 #include <ned/lang/lexer.h>
+#include <ned/lang/ast.h>
 #include <ned/lang/obj.h>
 #include <ned/lang/interp.h>
 
@@ -41,6 +42,7 @@ namespace nn
             size_t line_num, col_num;
 
             Instruction(const Token* ptk) : fname(ptk->fname), line_num(ptk->line_num), col_num(ptk->col_num) {}
+            Instruction(const AstNodeInfo& info) : fname(info.fname), line_num(info.line_start), col_num(info.col_start) {}
         public:
             ByteCodeDebugInfo::Record create_debug_record(size_t addr) const;
             virtual CodeSegPtr to_bytes(CodeSegPtr buf) const = 0;
@@ -59,6 +61,7 @@ namespace nn
 
         public:
             ByteCodeBody(const Token* ptk);
+            ByteCodeBody(const AstNodeInfo& info);
             size_t size() const;
             CodeSegPtr to_bytes(size_t offset, CodeSegPtr buf, ByteCodeDebugInfo& debug_info) const;
             bool add_label(const TokenImp<TokenType::IDN>* lbl);
@@ -167,6 +170,7 @@ namespace nn
                 size_t label_ptr = 0;
             public:
                 Labeled(const Token* ptk, std::string label) : Instruction(ptk), label(label) {}
+                Labeled(const AstNodeInfo& info, std::string label) : Instruction(info), label(label) {}
                 static constexpr size_t size = sizeof(InstructionType) + sizeof(size_t);
 
                 virtual bool set_labels(const std::map<std::string, size_t>& label_map) override
@@ -194,6 +198,7 @@ namespace nn
                 size_t val;
             public:
                 Valued(const Token* ptk, size_t val) : Instruction(ptk), val(val) {}
+                Valued(const AstNodeInfo& info, size_t val) : Instruction(info), val(val) {}
                 static constexpr size_t size = sizeof(InstructionType) + sizeof(size_t);
 
                 virtual bool set_labels(const std::map<std::string, size_t>&) override { return false; }
@@ -214,6 +219,7 @@ namespace nn
             {
             public:
                 Implicit(const Token* ptk) : Instruction(ptk) {}
+                Implicit(const AstNodeInfo& info) : Instruction(info) {}
                 static constexpr size_t size = sizeof(InstructionType);
 
                 virtual bool set_labels(const std::map<std::string, size_t>&) override { return false; }

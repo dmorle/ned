@@ -11,6 +11,15 @@ namespace nn
 {
     namespace lang
     {
+        struct AstNodeInfo
+        {
+            std::string fname;
+            uint32_t line_start;
+            uint32_t line_end;
+            uint32_t col_start;
+            uint32_t col_end;
+        };
+
         struct AstExpr;
         enum class ExprType
         {
@@ -137,11 +146,7 @@ namespace nn
 
         struct AstExpr
         {
-            std::string fname;
-            uint32_t line_start;
-            uint32_t line_end;
-            uint32_t col_start;
-            uint32_t col_end;
+            AstNodeInfo node_info;
 
             ExprType ty = ExprType::INVALID;
             union
@@ -243,11 +248,7 @@ namespace nn
         // Generic base class for all types of lines of code
         struct AstLine
         {
-            std::string fname;
-            uint32_t line_start;
-            uint32_t line_end;
-            uint32_t col_start;
-            uint32_t col_end;
+            AstNodeInfo node_info;
 
             // This thing's value will determine which union element will be accessed
             LineType ty = LineType::INVALID;
@@ -280,6 +281,7 @@ namespace nn
         struct AstCodeBlock
         {
             SIG signature;
+            AstNodeInfo node_info;
             std::vector<AstLine> body;
         };
 
@@ -289,6 +291,7 @@ namespace nn
 
         struct AstImport
         {
+            AstNodeInfo node_info;
             std::vector<std::string> imp;
         };
 

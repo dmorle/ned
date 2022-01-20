@@ -628,11 +628,13 @@ namespace nn
         bool parse_expr(const TokenArray& tarr, AstExpr& ast_expr)
         {
             assert(tarr.size() > 0);
-            ast_expr.fname = tarr[0]->fname;
-            ast_expr.line_start = tarr[0]->line_num;
-            ast_expr.line_end = tarr[tarr.size() - 1]->line_num;
-            ast_expr.col_start = tarr[0]->col_num;
-            ast_expr.col_end = tarr[tarr.size() - 1]->col_num;
+            ast_expr.node_info = {
+                .fname = tarr[0]->fname,
+                .line_start = tarr[0]->line_num,
+                .line_end = tarr[tarr.size() - 1]->line_num,
+                .col_start = tarr[0]->col_num,
+                .col_end = tarr[tarr.size() - 1]->col_num
+            };
             
             int i = 0;
             for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
@@ -646,11 +648,13 @@ namespace nn
         bool parse_line(const TokenArray& tarr, AstLine& ast_line, int indent_level)
         {
             assert(tarr.size() > 0);
-            ast_line.fname = tarr[0]->fname;
-            ast_line.line_start = tarr[0]->line_num;
-            ast_line.line_end = tarr[tarr.size() - 1]->line_num;
-            ast_line.col_start = tarr[0]->col_num;
-            ast_line.col_end = tarr[tarr.size() - 1]->col_num;
+            ast_line.node_info = {
+                .fname = tarr[0]->fname,
+                .line_start = tarr[0]->line_num,
+                .line_end = tarr[tarr.size() - 1]->line_num,
+                .col_start = tarr[0]->col_num,
+                .col_end = tarr[tarr.size() - 1]->col_num
+            };
 
             int i = 0;
             for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
@@ -1055,6 +1059,13 @@ namespace nn
         bool parse_code_block(const TokenArray& tarr, AstCodeBlock<SIG>& ast_code_block, int indent_level)
         {
             assert(tarr.size() > 0);
+            ast_code_block.node_info = {
+                .fname = tarr[0]->fname,
+                .line_start = tarr[0]->line_num,
+                .line_end = tarr[tarr.size() - 1]->line_num,
+                .col_start = tarr[0]->col_num,
+                .col_end = tarr[tarr.size() - 1]->col_num
+            };
 
             // Splitting the code block between the signature and the body
             int i = tarr.search(IsSameCriteria(TokenType::COLON));
@@ -1077,6 +1088,15 @@ namespace nn
 
         bool parse_import(const TokenArray& tarr, AstImport& ast_import)
         {
+            assert(tarr.size() > 0);
+            ast_import.node_info = {
+                .fname = tarr[0]->fname,
+                .line_start = tarr[0]->line_num,
+                .line_end = tarr[tarr.size() - 1]->line_num,
+                .col_start = tarr[0]->col_num,
+                .col_end = tarr[tarr.size() - 1]->col_num
+            };
+
             bool expect_idn = true;
             for (auto& tk : tarr)
             {

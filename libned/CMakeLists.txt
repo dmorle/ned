@@ -16,7 +16,7 @@ add_library(
     "source/lang/interp.cpp"
     "source/lang/lexer.cpp"
     "source/lang/obj.cpp"
-    "source/lang/typing.cpp"
+    "source/lang/compiler.cpp"
 
     "include/ned/errors.h"
 
@@ -31,7 +31,7 @@ add_library(
     "include/ned/lang/interp.h"
     "include/ned/lang/lexer.h"
     "include/ned/lang/obj.h"
-    "include/ned/lang/typing.h"
+    "include/ned/lang/compiler.h"
 )
 
 set_property(TARGET libned PROPERTY LINKER_LANGUAGE CXX)

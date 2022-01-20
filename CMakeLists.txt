@@ -11,7 +11,6 @@ if(NOT DEFINED CMAKE_CUDA_STANDARD)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 endif()
 
-message(${CMAKE_CXX_FLAGS_DEBUG})
 if (MSVC)
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         set(CMAKE_CXX_FLAGS_DEBUG "/MTd /Zi /Ob0 /Od /RTC1")
@@ -19,7 +18,6 @@ if (MSVC)
         set(CMAKE_CXX_FLAGS_DEBUG "/MT /Zi /Ob0 /Od /RTC1")
     endif ()
 endif ()
-message(${CMAKE_CXX_FLAGS_DEBUG})
 
 # Include sub-projects.
 add_subdirectory ("libned")
