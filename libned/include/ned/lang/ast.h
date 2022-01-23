@@ -34,6 +34,8 @@ namespace nn
             UNARY_NEG,
             UNARY_NOT,
             UNARY_UNPACK,
+            UNARY_REF,
+            UNARY_CONST,
             BINARY_ADD,
             BINARY_SUB,
             BINARY_MUL,
@@ -71,6 +73,7 @@ namespace nn
             bool is_packed = false;
             std::unique_ptr<AstExpr> type_expr;  // The expression that was used to define the passed type
             std::string var_name;
+            std::unique_ptr<AstExpr> default_expr;
         };
 
         // Top level structure definition (struct)
@@ -165,9 +168,9 @@ namespace nn
                 AstBlockSig expr_def_decl;
             };
 
-            AstExpr() {}
+            AstExpr();
             AstExpr(AstExpr&&);
-            AstExpr& operator=(AstExpr&&);
+            AstExpr& operator=(AstExpr&&) noexcept;
             ~AstExpr();
         };
 
@@ -264,9 +267,9 @@ namespace nn
                 AstLineLabel      line_label;
             };
 
-            AstLine() {}
+            AstLine();
             AstLine(AstLine&& line);
-            AstLine& operator=(AstLine&& line);
+            AstLine& operator=(AstLine&& line) noexcept;
             ~AstLine();
         };
 

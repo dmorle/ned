@@ -553,6 +553,14 @@ namespace nn
             return false;
         }
 
+        inline bool exec_err(CallStack& stack)
+        {
+            Obj obj;
+            if (stack.pop(obj))
+                return true;
+            return error::runtime(*obj.str_obj);
+        }
+
         inline bool exec_edg(CallStack& stack)
         {
             Obj edge;
@@ -851,6 +859,10 @@ namespace nn
                     break;
                 case InstructionType::DSP:
                     if (exec_dsp(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::ERR:
+                    if (exec_err(stack))
                         goto runtime_error;
                     break;
 

@@ -117,6 +117,7 @@ bool parse_leaf_mods(const TokenArray& tarr, AstExpr& ast_expr, std::unique_ptr<
         if (end == -1)
             return error::syntax(tarr[0], "Missing closing ']' in index expression");
         i = end + 1;
+        break;
     case TokenType::DOT:
         for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
         end = tarr.search(IsSameCriteria(TokenType::DOT), start);
@@ -126,6 +127,7 @@ bool parse_leaf_mods(const TokenArray& tarr, AstExpr& ast_expr, std::unique_ptr<
             if (!tk.is_whitespace())
                 return error::syntax(tk, "Unexpected token after '.'");
         i = end;
+        break;
     case TokenType::IDN:
         for (const Token& tk : TokenArray{ tarr, 1 })  // making sure there are no more tokens
             if (!tk.is_whitespace())
@@ -141,12 +143,14 @@ bool parse_leaf_mods(const TokenArray& tarr, AstExpr& ast_expr, std::unique_ptr<
         if (end == -1)
             return error::syntax(tarr[0], "Missing closing '>' in carg expression");
         i = end + 1;
+        break;
     case TokenType::ROUND_O:
         for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
         end = tarr.search(IsSameCriteria(TokenType::ROUND_C), start);
         if (end == -1)
             return error::syntax(tarr[0], "Missing closing ')' in varg expression");
         i = end + 1;
+        break;
     default:
         return error::syntax(tarr[0], "Unexpected token in leafmod expression");
     }
@@ -166,11 +170,13 @@ bool parse_leaf_mods(const TokenArray& tarr, AstExpr& ast_expr, std::unique_ptr<
         pexpr->expr_binary.right = std::make_unique<AstExpr>();
         if (parse_expr({ tarr, start, end }, *pexpr->expr_binary.right))
             return true;
+        break;
     case TokenType::DOT:
         new (&pexpr->expr_name) AstExprName();
         pexpr->ty = ExprType::DOT;
         pexpr->expr_name.expr = std::move(lhs);
         pexpr->expr_name.val = tarr[start]->get<TokenType::IDN>().val;
+        break;
     case TokenType::ANGLE_O:
         new (&pexpr->expr_call) AstExprCall();
         pexpr->ty = ExprType::CARGS_CALL;
@@ -181,6 +187,7 @@ bool parse_leaf_mods(const TokenArray& tarr, AstExpr& ast_expr, std::unique_ptr<
             pexpr->expr_call.args = std::move(ret_expr.expr_agg.elems);
         else
             pexpr->expr_call.args.push_back(std::move(ret_expr));
+        break;
     case TokenType::ROUND_O:
         new (&pexpr->expr_call) AstExprCall();
         pexpr->ty = ExprType::VARGS_CALL;
@@ -191,6 +198,7 @@ bool parse_leaf_mods(const TokenArray& tarr, AstExpr& ast_expr, std::unique_ptr<
             pexpr->expr_call.args = std::move(ret_expr.expr_agg.elems);
         else
             pexpr->expr_call.args.push_back(std::move(ret_expr));
+        break;
     default:
         assert(false);
     }
@@ -230,10 +238,6 @@ bool parse_leaf_token(const Token* ptk, AstExpr& ast_expr)
         return false;
     case TokenType::KW_TYPE:
         ast_expr.expr_kw = ExprKW::TYPE;
-        ast_expr.ty = ExprType::KW;
-        return false;
-    case TokenType::KW_VAR:
-        ast_expr.expr_kw = ExprKW::VAR;
         ast_expr.ty = ExprType::KW;
         return false;
     case TokenType::KW_FP:
@@ -522,6 +526,7 @@ bool parse_expr_prec<7>(const TokenArray& tarr, AstExpr& ast_expr)
         lhs = std::make_unique<AstExpr>();
         if (parse_leaf_token(tarr[0], *lhs))
             return true;
+        i = 1;
     }
 
     // If execution falls through the above code,
@@ -580,6 +585,26 @@ bool parse_expr_prec<6>(const TokenArray& tarr, AstExpr& ast_expr)
             return true;
         new (&ast_expr.expr_unary) AstExprUnaryOp();
         ast_expr.ty = ExprType::UNARY_NOT;
+        ast_expr.expr_unary.expr = std::move(pexpr);
+        return false;
+    case TokenType::KW_REF:
+        if (tarr.size() < 2)
+            return error::syntax(tarr[0], "Dangling operator");
+        pexpr = std::make_unique<AstExpr>();
+        if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
+            return true;
+        new (&ast_expr.expr_unary) AstExprUnaryOp();
+        ast_expr.ty = ExprType::UNARY_REF;
+        ast_expr.expr_unary.expr = std::move(pexpr);
+        return false;
+    case TokenType::KW_CONST:
+        if (tarr.size() < 2)
+            return error::syntax(tarr[0], "Dangling operator");
+        pexpr = std::make_unique<AstExpr>();
+        if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
+            return true;
+        new (&ast_expr.expr_unary) AstExprUnaryOp();
+        ast_expr.ty = ExprType::UNARY_CONST;
         ast_expr.expr_unary.expr = std::move(pexpr);
         return false;
     }
@@ -734,7 +759,7 @@ namespace nn
 
                 for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
                 if (end == tarr.size())
-                    return error::syntax(tarr[end - 1], "Missing body of evaluation mode block");
+                    return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
                 if (tarr[end]->expect<TokenType::ENDL>() ||
                     parse_lines<AstLine, parse_line>(tarr, end, indent_level + 1, ast_line.line_branch.body))
                     return true;
@@ -754,7 +779,7 @@ namespace nn
 
                 for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
                 if (end == tarr.size())
-                    return error::syntax(tarr[end - 1], "Missing body of evaluation mode block");
+                    return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
                 if (tarr[end]->expect<TokenType::ENDL>() ||
                     parse_lines<AstLine, parse_line>(tarr, end, indent_level + 1, ast_line.line_branch.body))
                     return true;
@@ -770,7 +795,7 @@ namespace nn
 
                 for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
                 if (end == tarr.size())
-                    return error::syntax(tarr[end - 1], "Missing body of evaluation mode block");
+                    return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
                 if (tarr[end]->expect<TokenType::ENDL>() ||
                     parse_lines<AstLine, parse_line>(tarr, end, indent_level + 1, ast_line.line_block.body))
                     return true;
@@ -790,7 +815,7 @@ namespace nn
 
                 for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
                 if (end == tarr.size())
-                    return error::syntax(tarr[end - 1], "Missing body of evaluation mode block");
+                    return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
                 if (tarr[end]->expect<TokenType::ENDL>() ||
                     parse_lines<AstLine, parse_line>(tarr, end, indent_level + 1, ast_line.line_branch.body))
                     return true;
@@ -819,7 +844,7 @@ namespace nn
                 
                 for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
                 if (end == tarr.size())
-                    return error::syntax(tarr[end - 1], "Missing body of evaluation mode block");
+                    return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
                 if (tarr[end]->expect<TokenType::ENDL>() ||
                     parse_lines<AstLine, parse_line>(tarr, end, indent_level + 1, ast_line.line_branch.body))
                     return true;
@@ -839,7 +864,7 @@ namespace nn
 
                 for (i++; i < tarr.size() && tarr[i]->ty == TokenType::INDENT; i++);
                 if (i == tarr.size())
-                    return error::syntax(tarr[i - 1], "Missing body of evaluation mode block");
+                    return error::syntax(tarr[(size_t)i - 1], "Missing body of evaluation mode block");
                 if (tarr[i]->expect<TokenType::ENDL>() ||
                     parse_lines<AstLine, parse_line>(tarr, i, indent_level + 1, ast_line.line_label.body))
                     return true;
@@ -855,7 +880,7 @@ namespace nn
 
                 for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
                 if (end == tarr.size())
-                    return error::syntax(tarr[end - 1], "Missing body of evaluation mode block");
+                    return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
                 if (tarr[end]->expect<TokenType::ENDL>() ||
                     parse_lines<AstLine, parse_line>(tarr, end, indent_level + 1, ast_line.line_block.body))
                     return true;
@@ -871,7 +896,7 @@ namespace nn
 
                 for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
                 if (end == tarr.size())
-                    return error::syntax(tarr[end - 1], "Missing body of evaluation mode block");
+                    return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
                 if (tarr[end]->expect<TokenType::ENDL>() ||
                     parse_lines<AstLine, parse_line>(tarr, end, indent_level + 1, ast_line.line_block.body))
                     return true;
@@ -882,19 +907,53 @@ namespace nn
 
         bool parse_arg_decl(const TokenArray& tarr, AstArgDecl& ast_arg_decl)
         {
+            // handling default values
+            int i = tarr.search(IsSameCriteria(TokenType::ASSIGN));
+            if (i != -1)
+            {
+                i++;
+                if (i == tarr.size())
+                    return error::syntax(tarr[tarr.size() - 1], "Expected expression after '='");
+                ast_arg_decl.default_expr = std::make_unique<AstExpr>();
+                if (parse_expr({ tarr, i }, *ast_arg_decl.default_expr))
+                    return true;
+                i--;
+            }
+            else
+            {
+                ast_arg_decl.default_expr = nullptr;
+                i = tarr.size();
+            }
+
             // TODO: figure out how to handle fn and def references
-            int i = tarr.size() - 1;
-            for (; tarr[i]->is_whitespace(); i--);
+
+            for (i--; tarr[i]->is_whitespace(); i--);
             if (tarr[i]->expect<TokenType::IDN>())
                 return true;
             ast_arg_decl.var_name = tarr[i]->get<TokenType::IDN>().val;
-            for (i--; tarr[i]->is_whitespace(); i--);
+            for (i--; i >= 0 && tarr[i]->is_whitespace(); i--);
+            if (i == -1)
+            {
+                // deduce type from default_expr in the compiler
+                ast_arg_decl.type_expr = nullptr;
+                return false;
+            }
+
+            // checking for a packed argument
             if (tarr[i]->ty == TokenType::STAR)
+            {
                 ast_arg_decl.is_packed = true;
-            else
-                i++;
+                for (i--; i >= 0 && tarr[i]->is_whitespace(); i--);
+                if (i == -1)
+                {
+                    // deduce type from default_expr in the compiler
+                    ast_arg_decl.type_expr = nullptr;
+                    return false;
+                }
+            }
+
             ast_arg_decl.type_expr = std::make_unique<AstExpr>();
-            return parse_expr({ tarr, 0, i }, *ast_arg_decl.type_expr);
+            return parse_expr({ tarr, 0, i + 1 }, *ast_arg_decl.type_expr);
         }
 
         bool parse_signature(const TokenArray& tarr, AstStructSig& ast_struct_sig)
@@ -1046,7 +1105,7 @@ namespace nn
                     return true;
                 for (i++; i < end && tarr[i]->is_whitespace(); i++);
                 if (i == end)
-                    return error::syntax(tarr[i - 1], "Expected identifier after ',' in block return values");
+                    return error::syntax(tarr[(size_t)i - 1], "Expected identifier after ',' in block return values");
                 if (tarr[i]->expect<TokenType::IDN>())
                     return true;
                 ast_block_sig.rets.push_back(tarr[i]->get<TokenType::IDN>().val);
@@ -1330,6 +1389,8 @@ namespace nn
 
         // From this point onward, the actual code ends and we enter c++ land
 
+        AstExpr::AstExpr() {}
+
         AstExpr::AstExpr(AstExpr&& expr)
         {
             ty = expr.ty;
@@ -1337,6 +1398,11 @@ namespace nn
 
             switch (ty)
             {
+            case ExprType::INVALID:
+            case ExprType::LIT_BOOL:
+            case ExprType::LIT_INT:
+            case ExprType::LIT_FLOAT:
+                break;
             case ExprType::LIT_STRING:
             case ExprType::VAR:
                 new (&expr_string) decltype(expr_string)(std::move(expr.expr_string));
@@ -1349,6 +1415,8 @@ namespace nn
             case ExprType::UNARY_NEG:
             case ExprType::UNARY_NOT:
             case ExprType::UNARY_UNPACK:
+            case ExprType::UNARY_REF:
+            case ExprType::UNARY_CONST:
                 new (&expr_unary) decltype(expr_unary)(std::move(expr.expr_unary));
                 break;
             case ExprType::BINARY_ADD:
@@ -1392,7 +1460,7 @@ namespace nn
             }
         }
 
-        AstExpr& AstExpr::operator=(AstExpr&& expr)
+        AstExpr& AstExpr::operator=(AstExpr&& expr) noexcept
         {
             if (&expr == this)
                 return *this;
@@ -1402,6 +1470,11 @@ namespace nn
 
             switch (ty)
             {
+            case ExprType::INVALID:
+            case ExprType::LIT_BOOL:
+            case ExprType::LIT_INT:
+            case ExprType::LIT_FLOAT:
+                break;
             case ExprType::LIT_STRING:
             case ExprType::VAR:
                 new (&expr_string) decltype(expr_string)(std::move(expr.expr_string));
@@ -1414,6 +1487,8 @@ namespace nn
             case ExprType::UNARY_NEG:
             case ExprType::UNARY_NOT:
             case ExprType::UNARY_UNPACK:
+            case ExprType::UNARY_REF:
+            case ExprType::UNARY_CONST:
                 new (&expr_unary) decltype(expr_unary)(std::move(expr.expr_unary));
                 break;
             case ExprType::BINARY_ADD:
@@ -1463,6 +1538,11 @@ namespace nn
         {
             switch (ty)
             {
+            case ExprType::INVALID:
+            case ExprType::LIT_BOOL:
+            case ExprType::LIT_INT:
+            case ExprType::LIT_FLOAT:
+                break;
             case ExprType::LIT_STRING:
             case ExprType::VAR:
                 expr_string.~basic_string();
@@ -1475,6 +1555,8 @@ namespace nn
             case ExprType::UNARY_NEG:
             case ExprType::UNARY_NOT:
             case ExprType::UNARY_UNPACK:
+            case ExprType::UNARY_REF:
+            case ExprType::UNARY_CONST:
                 expr_unary.~AstExprUnaryOp();
                 break;
             case ExprType::BINARY_ADD:
@@ -1518,6 +1600,8 @@ namespace nn
             }
         }
 
+        AstLine::AstLine() {}
+
         AstLine::AstLine(AstLine&& line)
         {
             ty = line.ty;
@@ -1525,6 +1609,10 @@ namespace nn
 
             switch (ty)
             {
+            case LineType::INVALID:
+            case LineType::BREAK:
+            case LineType::CONTINUE:
+                break;
             case LineType::EXPORT:
                 new (&line_export) decltype(line_export)(std::move(line.line_export));
                 break;
@@ -1560,7 +1648,7 @@ namespace nn
             }
         }
 
-        AstLine& AstLine::operator=(AstLine&& line)
+        AstLine& AstLine::operator=(AstLine&& line) noexcept
         {
             if (&line == this)
                 return *this;
@@ -1570,6 +1658,10 @@ namespace nn
 
             switch (ty)
             {
+            case LineType::INVALID:
+            case LineType::BREAK:
+            case LineType::CONTINUE:
+                break;
             case LineType::EXPORT:
                 new (&line_export) decltype(line_export)(std::move(line.line_export));
                 break;
@@ -1611,6 +1703,10 @@ namespace nn
         {
             switch (ty)
             {
+            case LineType::INVALID:
+            case LineType::BREAK:
+            case LineType::CONTINUE:
+                break;
             case LineType::EXPORT:
                 line_export.~AstLineExport();
                 break;

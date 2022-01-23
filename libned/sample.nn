@@ -83,13 +83,13 @@ intr const_intr<fp fout, float val>() -> out:
     return fout<>
 
 intr reshape<int *out_shape, fp fty, int *inp_shape>(fty<*inp_shape> inp) -> out:
-    var inp_size = 1
-    for var dim_size in inp_shape:
+    inp_size = 1
+    for dim_size in inp_shape:
         inp_size *= dim_size
 
-    int out_size = 1
-    int unknown_idx = -1
-    for int i in range(out_shape.length):
+    out_size = 1
+    unknown_idx = -1
+    for i in range(out_shape.length):
         if out_shape[i] == -1:
             if unknown_idx != -1:
                 raise "Multiple -1 values in output shape"

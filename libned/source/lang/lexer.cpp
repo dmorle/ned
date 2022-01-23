@@ -147,8 +147,6 @@ namespace nn
                 return "keyword else";
             case TokenType::KW_TYPE:
                 return "keyword type";
-            case TokenType::KW_VAR:
-                return "keyword var";
             case TokenType::KW_FP:
                 return "keyword fp";
             case TokenType::KW_BOOL:
@@ -163,6 +161,10 @@ namespace nn
                 return "keyword array";
             case TokenType::KW_TUPLE:
                 return "keyword tuple";
+            case TokenType::KW_REF:
+                return "keyword ref";
+            case TokenType::KW_CONST:
+                return "keyword const";
             case TokenType::KW_TRUE:
                 return "keyword true";
             case TokenType::KW_FALSE:
@@ -300,8 +302,6 @@ namespace nn
                 return "else ";
             case TokenType::KW_TYPE:
                 return "type ";
-            case TokenType::KW_VAR:
-                return "var ";
             case TokenType::KW_FP:
                 return "fp ";
             case TokenType::KW_BOOL:
@@ -316,6 +316,10 @@ namespace nn
                 return "array ";
             case TokenType::KW_TUPLE:
                 return "tuple ";
+            case TokenType::KW_REF:
+                return "ref ";
+            case TokenType::KW_CONST:
+                return "const ";
             case TokenType::KW_TRUE:
                 return "true ";
             case TokenType::KW_FALSE:
@@ -820,9 +824,6 @@ namespace nn
                     case hash("type"):
                         tarr.push_back(TokenImp<TokenType::KW_TYPE>(fname, line_num, col_num));
                         continue;
-                    case hash("var"):
-                        tarr.push_back(TokenImp<TokenType::KW_VAR>(fname, line_num, col_num));
-                        continue;
                     case hash("fp"):
                         tarr.push_back(TokenImp<TokenType::KW_FP>(fname, line_num, col_num));
                         continue;
@@ -843,6 +844,12 @@ namespace nn
                         continue;
                     case hash("tuple"):
                         tarr.push_back(TokenImp<TokenType::KW_TUPLE>(fname, line_num, col_num));
+                        continue;
+                    case hash("ref"):
+                        tarr.push_back(TokenImp<TokenType::KW_REF>(fname, line_num, col_num));
+                        continue;
+                    case hash("const"):
+                        tarr.push_back(TokenImp<TokenType::KW_CONST>(fname, line_num, col_num));
                         continue;
                     case hash("true"):
                         tarr.push_back(TokenImp<TokenType::KW_TRUE>(fname, line_num, col_num));

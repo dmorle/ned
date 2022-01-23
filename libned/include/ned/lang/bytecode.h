@@ -64,7 +64,8 @@ namespace nn
             ByteCodeBody(const AstNodeInfo& info);
             size_t size() const;
             CodeSegPtr to_bytes(size_t offset, CodeSegPtr buf, ByteCodeDebugInfo& debug_info) const;
-            bool add_label(const TokenImp<TokenType::IDN>* lbl);
+            bool add_label(const TokenImp<TokenType::IDN>* lbl);  // used by the bytecode assembler
+            bool add_label(const AstNodeInfo& info, const std::string& lbl);  // used by the compiler
 
             template<typename T>
             bool add_instruction(const T& inst)
@@ -96,15 +97,14 @@ namespace nn
             std::map<std::string, ByteCodeBody> procs;
             std::vector<Obj> statics;
             std::vector<ProcRef> static_proc_refs;
-            ProgramHeap& heap;
 
-            friend bool parsebc_static(const TokenArray& tarr, ByteCodeModule& mod, size_t& obj);
         public:
+            ProgramHeap& heap;
             ByteCodeModule(ProgramHeap& heap) : heap(heap) {}
             bool add_block(const std::string& name, const ByteCodeBody& body);
             bool add_static_obj(Obj obj, size_t& addr);                                // add static object to data_segment
             bool add_static_ref(const TokenImp<TokenType::IDN>* label, size_t& addr);  // add static Obj{.ptr} to data_segment
-            bool add_static_ref(const std::string& label, const std::string& fname, size_t line_num, size_t col_num, size_t& addr);
+            bool add_static_ref(const AstNodeInfo& info, const std::string& label, size_t& addr);
             bool export_module(ByteCode& byte_code);
         };
 
@@ -145,6 +145,7 @@ namespace nn
             XFLT,
             XINT,
             DSP,
+            ERR,
 
             EDG,
             NDE,
@@ -268,6 +269,7 @@ namespace nn
             using XFlt  = Implicit < XFLT  >;
             using XInt  = Implicit < XINT  >;
             using Dsp   = Implicit < DSP   >;
+            using Err   = Implicit < ERR   >;
             using Edg   = Implicit < EDG   >;
             using Nde   = Implicit < NDE   >;
             using Ini   = Implicit < INI   >;
@@ -343,6 +345,7 @@ namespace nn
 * xint         Converts any object to an int object
 * 
 * dsp          Prints a string at tos to stdout
+* err          Raises a runtime error
 * 
 * Deep learning instructions
 * 

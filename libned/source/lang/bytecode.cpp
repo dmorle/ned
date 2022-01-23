@@ -84,8 +84,16 @@ namespace nn
         bool ByteCodeBody::add_label(const TokenImp<TokenType::IDN>* lbl)
         {
             if (label_map.contains(lbl->val))
-                return error::syntax(lbl, "Label redefinition");
+                return error::syntax(lbl, "Label % redefinition", lbl->val);
             label_map[lbl->val] = size();
+            return false;
+        }
+
+        bool ByteCodeBody::add_label(const AstNodeInfo& info, const std::string& lbl)
+        {
+            if (label_map.contains(lbl))
+                return error::compiler(info, "Internal error: label % redefinition", lbl);
+            label_map[lbl] = size();
             return false;
         }
 
@@ -112,11 +120,11 @@ namespace nn
             return false;
         }
 
-        bool ByteCodeModule::add_static_ref(const std::string& label, const std::string& fname, size_t line_num, size_t col_num, size_t& addr)
+        bool ByteCodeModule::add_static_ref(const AstNodeInfo& info, const std::string& label, size_t& addr)
         {
             addr = statics.size();
             statics.push_back({ .ptr = 0 });
-            static_proc_refs.push_back({ addr, label, fname, line_num, col_num });
+            static_proc_refs.push_back({ addr, label, info.fname, info.line_start, info.col_start });
             return false;
         }
 
@@ -438,6 +446,10 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(Dsp(tarr[0]));
+            case hash("err"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Err(tarr[0]));
 
             case hash("edg"):
                 if (tarr.size() != 1)
