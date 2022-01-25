@@ -151,8 +151,15 @@ namespace nn
             NDE,
             INI,
             BLK,
+            TSR,
+            FWD,
+            BWD,
+            NDCFG,
+            BKCFG,
+            INCFG,
             NDINP,
             NDOUT,
+            BKPRT,
             BKINP,
             BKOUT,
             PSHMD,
@@ -274,8 +281,15 @@ namespace nn
             using Nde   = Implicit < NDE   >;
             using Ini   = Implicit < INI   >;
             using Blk   = Implicit < BLK   >;
+            using Tsr   = Implicit < TSR   >;
+            using Fwd   = Implicit < FWD   >;
+            using Bwd   = Implicit < BWD   >;
+            using NdCfg = Implicit < NDCFG >;
+            using BkCfg = Implicit < BKCFG >;
+            using InCfg = Implicit < INCFG >;
             using NdInp = Implicit < NDINP >;
             using NdOut = Implicit < NDOUT >;
+            using BkPrt = Implicit < BKPRT >;
             using BkInp = Implicit < BKINP >;
             using BkOut = Implicit < BKOUT >;
             using PshMd = Implicit < PSHMD >;
@@ -351,18 +365,28 @@ namespace nn
 * 
 * edg          Creates a new edge
 * nde          Creates a new named node
-* ini          Creates a weight initializer object out of a name and any number of cargs
+* ini          Creates a new named weight initializer
 * blk          Creates a new named block with a given parent
+* tsr          Creates a new tensor from a forward:backward edge pair
+* 
+* fwd          Extracts the forward edge from a tensor
+* bwd          Extracts the backward edge from a tensor
+* 
+* ndcfg        Adds a named configuration to a node
+* bkcfg        Adds a named configuration to a block
+* incfg        Adds a named configuration to a weight initializer
 * 
 * ndinp        Sets a named node input to an edge
 * ndout        Sets a named node output to an edge
-* bkinp        Binds a named forward:backward edge pair to a block input
-* bkout        Binds a named forward:backward edge pair to a block output
+* 
+* bkprt        Binds a block to a block's parent
+* bkinp        Binds a name and tensor to a block input
+* bkout        Binds a name and tensor to a block output
 * 
 * pshmd        Pushes a new evaluation mode name onto the mode stack
 * popmd        Pops the top most evalutation mode name off the mode stack
 * 
-* ext          Marks a named forward:backward edge pair as a block weight
+* ext          Adds a named tensor and initializer to a block as a parameter
 * exp          Exports a named forward:backward edge pair
 * 
 */

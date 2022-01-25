@@ -21,6 +21,8 @@ namespace nn
             std::vector<size_t> dims;
         };
 
+        bool operator==(const EdgeInfo& ei1, const EdgeInfo& ei2);
+
         size_t fty_size(EdgeFty fty);
         bool fty_str(EdgeFty fty, std::string& str);
 

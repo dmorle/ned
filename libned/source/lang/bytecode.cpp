@@ -467,6 +467,30 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(Blk(tarr[0]));
+            case hash("tsr"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Tsr(tarr[0]));
+            case hash("fwd"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Fwd(tarr[0]));
+            case hash("bwd"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Bwd(tarr[0]));
+            case hash("ndcfg"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(NdCfg(tarr[0]));
+            case hash("bkcfg"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(BkCfg(tarr[0]));
+            case hash("incfg"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(InCfg(tarr[0]));
             case hash("ndinp"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");

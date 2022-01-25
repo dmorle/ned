@@ -24,48 +24,45 @@ namespace nn
 
         // graph builder operations
 
-        GraphBuilder::GraphBuilder(const std::string& name)
-        {
-            root = new core::Block();
-            root->name = name;
-            root->parent = nullptr;
-        }
+        GraphBuilder::GraphBuilder() {}
 
-        Obj GraphBuilder::get_root()
+        bool GraphBuilder::get_forward(Obj& obj, core::Tensor* pten)
         {
-            return Obj{ .block_obj = root };
-        }
-
-        bool GraphBuilder::create_edge(Obj& edge)
-        {
-            edge.edge_obj = new core::Edge();
-            edge_buffer.push_back(edge.edge_obj);
+            obj.edge_obj = pten->forward;
+            if (obj.edge_obj)
+                return error::runtime("Attempted to retrieve the uninitialized forward edge of a tensor");
             return false;
         }
 
-        bool GraphBuilder::create_node(Obj& node, const std::string& name)
+        bool GraphBuilder::get_backward(Obj& obj, core::Tensor* pten)
         {
-            node.node_obj = new core::Node();
-            node.node_obj->name = name;
-            node_buffer.push_back(node.node_obj);
+            obj.edge_obj = pten->backward;
+            if (obj.edge_obj)
+                return error::runtime("Attempted to retrieve the uninitialized backward edge of a tensor");
             return false;
         }
 
-        bool GraphBuilder::create_init(Obj& init, const std::string& name, const std::vector<core::Config*> cfgs)
+        bool GraphBuilder::add_ndcfg(const std::string& name, core::Node* pnode, core::Config* pconfig)
         {
-            init.init_obj = new core::Init();
-            init.init_obj->name = name;
-            init.init_obj->configs = cfgs;
-            init_buffer.push_back(init.init_obj);
+            if (pnode->configs.contains(name))
+                return error::runtime("Attempted to overwrite node configuration '%'", name);
+            pnode->configs[name] = std::unique_ptr<core::Config>(pconfig);
             return false;
         }
 
-        bool GraphBuilder::create_block(Obj& block, const std::string& name, core::Block* parent)
+        bool GraphBuilder::add_bkcfg(const std::string& name, core::Block* pblock, core::Config* pconfig)
         {
-            block.block_obj = new core::Block();
-            block.block_obj->name = name;
-            block.block_obj->parent = parent;
-            block_buffer.push_back(block.block_obj);
+            if (pblock->configs.contains(name))
+                return error::runtime("Attempted to overwrite block configuration '%'", name);
+            pblock->configs[name] = std::unique_ptr<core::Config>(pconfig);
+            return false;
+        }
+
+        bool GraphBuilder::add_incfg(const std::string& name, core::Init* pinit, core::Config* pconfig)
+        {
+            if (pinit->configs.contains(name))
+                return error::runtime("Attempted to overwrite init configuration '%'", name);
+            pinit->configs[name] = std::unique_ptr<core::Config>(pconfig);
             return false;
         }
 
@@ -85,35 +82,68 @@ namespace nn
             return false;
         }
 
-        bool GraphBuilder::set_bkinp(const std::string& name, core::Block* pblock, core::Edge* pforward, core::Edge* pbackward)
+        bool GraphBuilder::set_bkinp(const std::string& name, core::Block* pblock, core::Tensor* pten)
         {
             if (pblock->inps.contains(name))
                 return error::runtime("Attempted to bind block input '%' multiple times", name);
-            pblock->inps[name] = { pforward, pbackward };
+            if (!pten->forward)
+                return error::runtime("Attempted to bind block input '%' to a tensor with an uninitialized forward edge", name);
+            if (!pten->backward)
+                return error::runtime("Attempted to bind block input '%' to a tensor with an uninitialized backward edge", name);
+            pblock->inps[name] = { pten->forward, pten->backward };
             return false;
         }
 
-        bool GraphBuilder::set_bkout(const std::string& name, core::Block* pblock, core::Edge* pforward, core::Edge* pbackward)
+        bool GraphBuilder::set_bkout(const std::string& name, core::Block* pblock, core::Tensor* pten)
         {
             if (pblock->outs.contains(name))
                 return error::runtime("Attempted to bind block output '%' multiple times", name);
-            pblock->outs[name] = { pforward, pbackward };
+            if (!pten->forward)
+                return error::runtime("Attempted to bind block output '%' to a tensor with an uninitialized forward edge", name);
+            if (!pten->backward)
+                return error::runtime("Attempted to bind block output '%' to a tensor with an uninitialized backward edge", name);
+            pblock->outs[name] = { pten->forward, pten->backward };
             return false;
         }
 
-        bool GraphBuilder::add_extern(const std::string& name, core::Block* pblock, core::Edge* pforward, core::Edge* pbackward, core::Init* pinit)
+        bool GraphBuilder::set_bkprt(core::Block* pblock, core::Block* pparent)
+        {
+            if (pblock->parent)
+                return error::runtime("Attempted to set a block's parent when it has already been set");
+            else if (pblock == root)
+                return error::runtime("Attempted to set the root block's parent");
+
+            pblock->parent = pparent;
+            if (pparent)
+                return false;
+
+            if (root)
+                return error::runtime("Attempted to set a block as the root, when a root was already set");
+            root = pblock;
+            return false;
+        }
+
+        bool GraphBuilder::add_extern(const std::string& name, core::Block* pblock, core::Tensor* pten, core::Init* pinit)
         {
             if (pblock->weights.contains(name))
                 return error::runtime("Attempted to overwrite block weight '%'", name);
-            pblock->weights[name] = { pforward, pbackward, pinit, nullptr };
+            if (!pten->forward)
+                return error::runtime("Attempted to extern a tensor with an uninitialized forward edge");
+            if (!pten->backward)
+                return error::runtime("Attempted to extern a tensor with an uninitialized backward edge");
+            pblock->weights[name] = { pten->forward, pten->backward, pinit, nullptr };
             return false;
         }
 
-        bool GraphBuilder::add_export(const std::string& name, core::Edge* pforward, core::Edge* pbackward)
+        bool GraphBuilder::add_export(const std::string& name, core::Tensor* pten)
         {
             if (exports.contains(name))
                 return error::runtime("Attempted to overwrite model export '%'", name);
-            exports[name] = { pforward, pbackward };
+            if (!pten->forward)
+                return error::runtime("Attempted to export a tensor with an uninitialized forward edge");
+            if (!pten->backward)
+                return error::runtime("Attempted to export a tensor with an uninitialized backward edge");
+            exports[name] = { pten->forward, pten->backward };
             return false;
         }
 
@@ -561,103 +591,175 @@ namespace nn
             return error::runtime(*obj.str_obj);
         }
 
-        inline bool exec_edg(CallStack& stack)
+        inline bool exec_edg(CallStack& stack, ProgramHeap& heap)
         {
-            Obj edge;
+            Obj argnum;
+            if (stack.pop(argnum))
+                return true;
+            std::vector<IntObj> dims{ *argnum.int_obj };
+            for (IntObj i = 0; i < *argnum.int_obj; i++)
+            {
+                Obj dim;
+                if (stack.pop(dim))
+                    return true;
+                dims.push_back(*dim.int_obj);
+            }
+            Obj obj, fty;
             return
-                pbuilder->create_edge(edge) ||
-                stack.push(edge);
+                stack.pop(fty) ||
+                heap.create_obj_edge(obj, *fty.fty_obj, dims) ||
+                stack.push(obj);
         }
 
-        inline bool exec_nde(CallStack& stack)
+        inline bool exec_nde(CallStack& stack, ProgramHeap& heap)
         {
-            Obj name, node;
+            Obj obj, name;
             return
                 stack.pop(name) ||
-                pbuilder->create_node(node, *name.str_obj) ||
+                heap.create_obj_node(obj, *name.str_obj) ||
+                stack.push(obj);
+        }
+
+        inline bool exec_ini(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj obj, name;
+            return
+                stack.pop(name) ||
+                heap.create_obj_init(obj, *name.str_obj) ||
+                stack.push(obj);
+        }
+
+        inline bool exec_blk(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj obj, name;
+            return
+                stack.pop(name) ||
+                heap.create_obj_block(obj, *name.str_obj) ||
+                stack.push(obj);
+        }
+
+        inline bool exec_tsr(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj obj, forward, backward;
+            return
+                stack.pop(backward) ||
+                stack.pop(forward) ||
+                heap.create_obj_tensor(obj, forward.edge_obj, backward.edge_obj) ||
+                stack.push(obj);
+        }
+
+        inline bool exec_fwd(CallStack& stack)
+        {
+            Obj obj, ten;
+            return
+                stack.pop(obj) ||
+                pbuilder->get_forward(obj, ten.tensor_obj) ||
+                stack.push(obj);
+        }
+
+        inline bool exec_bwd(CallStack& stack)
+        {
+            Obj obj, ten;
+            return
+                stack.pop(obj) ||
+                pbuilder->get_backward(obj, ten.tensor_obj) ||
+                stack.push(obj);
+        }
+
+        inline bool exec_ndcfg(CallStack& stack)
+        {
+            Obj node, name, type, obj;
+            core::Config* cfg;
+            return
+                stack.pop(node) ||
+                stack.pop(name) ||
+                stack.pop(type) ||
+                stack.pop(obj) ||
+                type.type_obj->cfg(cfg, obj) ||
+                pbuilder->add_ndcfg(*name.str_obj, node.node_obj, cfg) ||
                 stack.push(node);
         }
 
-        inline bool exec_ini(CallStack& stack)
+        inline bool exec_bkcfg(CallStack& stack)
         {
-            Obj name, argnum;
-            if (stack.pop(name) ||
-                stack.pop(argnum)
-                ) return true;
-
-            Obj type, val;
-            std::vector<core::Config*> cfgs;
-            for (int i = 0; i < *argnum.int_obj; i++)
-            {
-                core::Config* cfg;
-                if (stack.pop(type) ||
-                    stack.pop(val) ||
-                    type.type_obj->cfg(cfg, val)
-                    )
-                {
-                    for (core::Config* e : cfgs)
-                        delete e;
-                    return true;
-                }
-                cfgs.push_back(cfg);
-            }
-
-            Obj init;
+            Obj block, name, type, obj;
+            core::Config* cfg;
             return
-                pbuilder->create_init(init, *name.str_obj, cfgs) ||
-                stack.push(init);
+                stack.pop(block) ||
+                stack.pop(name) ||
+                stack.pop(type) ||
+                stack.pop(obj) ||
+                type.type_obj->cfg(cfg, obj) ||
+                pbuilder->add_bkcfg(*name.str_obj, block.block_obj, cfg) ||
+                stack.push(block);
         }
 
-        inline bool exec_blk(CallStack& stack)
+        inline bool exec_incfg(CallStack& stack)
         {
-            Obj name, parent, block;
+            Obj init, name, type, obj;
+            core::Config* cfg;
             return
+                stack.pop(init) ||
                 stack.pop(name) ||
-                stack.pop(parent) ||
-                pbuilder->create_block(block, *name.str_obj, parent.block_obj) ||
-                stack.push(block);
+                stack.pop(type) ||
+                stack.pop(obj) ||
+                type.type_obj->cfg(cfg, obj) ||
+                pbuilder->add_incfg(*name.str_obj, init.init_obj, cfg) ||
+                stack.push(init);
         }
 
         inline bool exec_ndinp(CallStack& stack)
         {
             Obj name, node, edge;
             return
-                stack.pop(edge) ||
-                stack.pop(name) ||
                 stack.pop(node) ||
-                pbuilder->set_ndinp(*name.str_obj, node.node_obj, edge.edge_obj);
+                stack.pop(name) ||
+                stack.pop(edge) ||
+                pbuilder->set_ndinp(*name.str_obj, node.node_obj, edge.edge_obj) ||
+                stack.push(node);
         }
 
         inline bool exec_ndout(CallStack& stack)
         {
             Obj name, node, edge;
             return
-                stack.pop(name) ||
                 stack.pop(node) ||
+                stack.pop(name) ||
                 stack.pop(edge) ||
-                pbuilder->set_ndout(*name.str_obj, node.node_obj, edge.edge_obj);
+                pbuilder->set_ndout(*name.str_obj, node.node_obj, edge.edge_obj) ||
+                stack.push(node);
+        }
+
+        inline bool exec_bkprt(CallStack& stack)
+        {
+            Obj block, parent;
+            return
+                stack.pop(block) ||
+                stack.pop(parent) ||
+                pbuilder->set_bkprt(block.block_obj, parent.block_obj) ||
+                stack.push(block);
         }
 
         inline bool exec_bkinp(CallStack& stack)
         {
-            Obj name, block, forward, backward;
+            Obj name, block, tensor;
             return
-                stack.pop(name) ||
                 stack.pop(block) ||
-                stack.pop(forward) ||
-                stack.pop(backward) ||
-                pbuilder->set_bkinp(*name.str_obj, block.block_obj, forward.edge_obj, backward.edge_obj);
+                stack.pop(name) ||
+                stack.pop(tensor) ||
+                pbuilder->set_bkinp(*name.str_obj, block.block_obj, tensor.tensor_obj) ||
+                stack.push(block);
         }
 
         inline bool exec_bkout(CallStack& stack)
         {
-            Obj name, block, forward, backward;
+            Obj name, block, tensor;
             return
-                stack.pop(name) ||
                 stack.pop(block) ||
-                stack.pop(forward) ||
-                stack.pop(backward) ||
-                pbuilder->set_bkout(*name.str_obj, block.block_obj, forward.edge_obj, backward.edge_obj);
+                stack.pop(name) ||
+                stack.pop(tensor) ||
+                pbuilder->set_bkout(*name.str_obj, block.block_obj, tensor.tensor_obj) ||
+                stack.push(block);
         }
 
         inline bool exec_pshmd(CallStack& stack)
@@ -676,24 +778,22 @@ namespace nn
 
         inline bool exec_ext(CallStack& stack)
         {
-            Obj name, block, forward, backward, init;
+            Obj name, block, tensor, init;
             return
-                stack.pop(name) ||
                 stack.pop(block) ||
-                stack.pop(forward) ||
-                stack.pop(backward) ||
                 stack.pop(init) ||
-                pbuilder->add_extern(*name.str_obj, block.block_obj, forward.edge_obj, backward.edge_obj, init.init_obj);
+                stack.pop(name) ||
+                stack.pop(tensor) ||
+                pbuilder->add_extern(*name.str_obj, block.block_obj, tensor.tensor_obj, init.init_obj);
         }
 
         inline bool exec_exp(CallStack& stack)
         {
-            Obj name, forward, backward;
+            Obj name, tensor;
             return
                 stack.pop(name) ||
-                stack.pop(forward) ||
-                stack.pop(backward) ||
-                pbuilder->add_export(*name.str_obj, forward.edge_obj, backward.edge_obj);
+                stack.pop(tensor) ||
+                pbuilder->add_export(*name.str_obj, tensor.tensor_obj);
         }
 
         bool exec(CallStack& stack, ProgramHeap& heap, ByteCode& byte_code, std::string entry_point, core::Graph& graph)
@@ -707,11 +807,11 @@ namespace nn
             data = byte_code.data_segment;
             complete = false;
             pc_stack.clear();
-            GraphBuilder builder(entry_point);
+            GraphBuilder builder;
             pbuilder = &builder;
             md_stack.clear();
             error::bind_runtime_context(byte_code.debug_info, pc);
-            if (stack.push(pbuilder->get_root()))
+            if (stack.push(Obj{ .block_obj = nullptr }))  // this will mark the first block as root
                 return true;
 
             InstructionType ty;
@@ -867,15 +967,43 @@ namespace nn
                     break;
 
                 case InstructionType::EDG:
-                    if (exec_edg(stack))
+                    if (exec_edg(stack, heap))
                         goto runtime_error;
                     break;
                 case InstructionType::NDE:
-                    if (exec_nde(stack))
+                    if (exec_nde(stack, heap))
+                        goto runtime_error;
+                    break;
+                case InstructionType::INI:
+                    if (exec_ini(stack, heap))
                         goto runtime_error;
                     break;
                 case InstructionType::BLK:
-                    if (exec_blk(stack))
+                    if (exec_blk(stack, heap))
+                        goto runtime_error;
+                    break;
+                case InstructionType::TSR:
+                    if (exec_tsr(stack, heap))
+                        goto runtime_error;
+                    break;
+                case InstructionType::FWD:
+                    if (exec_fwd(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::BWD:
+                    if (exec_bwd(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::NDCFG:
+                    if (exec_ndcfg(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::BKCFG:
+                    if (exec_bkcfg(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::INCFG:
+                    if (exec_incfg(stack))
                         goto runtime_error;
                     break;
                 case InstructionType::NDINP:
@@ -884,6 +1012,10 @@ namespace nn
                     break;
                 case InstructionType::NDOUT:
                     if (exec_ndout(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::BKPRT:
+                    if (exec_bkprt(stack))
                         goto runtime_error;
                     break;
                 case InstructionType::BKINP:
@@ -900,10 +1032,6 @@ namespace nn
                     break;
                 case InstructionType::POPMD:
                     if (exec_popmd(stack))
-                        goto runtime_error;
-                    break;
-                case InstructionType::INI:
-                    if (exec_ini(stack))
                         goto runtime_error;
                     break;
                 case InstructionType::EXT:

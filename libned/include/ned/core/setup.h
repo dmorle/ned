@@ -22,7 +22,7 @@ namespace nn
         struct Init
         {
             std::string name;
-            std::vector<core::Config*> configs;
+            std::map<std::string, std::unique_ptr<core::Config>> configs;
         };
 
         void load_inits(std::vector<std::string> search_paths);

@@ -6,12 +6,14 @@
 
 #include <string>
 #include <cassert>
+#include <unordered_set>
+#include <functional>
 
 namespace nn
 {
     namespace lang
     {
-        ProgramHeap::~ProgramHeap()
+        void ProgramHeap::release(const core::Graph& graph)
         {
             for (auto* ty : bool_types)
                 delete ty;
@@ -39,6 +41,59 @@ namespace nn
             for (auto* obj : str_objs)
                 delete obj;
             for (auto* obj : agg_objs)
+                delete obj;
+
+            std::unordered_set<NodeObj*>   used_nodes;
+            std::unordered_set<EdgeObj*>   used_edges;
+            std::function<void(core::Edge*)> build_used_graph;
+            build_used_graph = [&](core::Edge* edge)
+            {
+                // graph search
+                if (used_edges.contains(edge))
+                    return;
+                used_edges.insert(edge);
+                for (auto& [inp_name, connectors] : edge->md_outs)
+                    for (auto& connector : connectors)
+                    {
+                        used_nodes.insert(connector.node);
+                        for (auto& [out_name, out_edge] : connector.node->outs)
+                            build_used_graph(out_edge);
+                    }
+            };
+            for (auto& [name, tensor] : graph.inps)
+                build_used_graph(tensor.forward);
+            for (auto& [name, tensor] : graph.outs)
+                build_used_graph(tensor.backward);
+
+            std::unordered_set<InitObj*>   used_inits;
+            std::unordered_set<BlockObj*>  used_blocks;
+            std::function<void(core::Block*)> build_used_block;
+            build_used_block = [&](core::Block* block)
+            {
+                // tree search
+                for (auto& [name, param] : block->weights)
+                    used_inits.insert(param.init);
+                used_blocks.insert(block);
+                for (auto& [name, sub_block] : block->sub_blocks)
+                    build_used_block(sub_block);
+            };
+            build_used_block(graph.model);
+            
+            for (auto* obj : node_objs)
+                if (!used_nodes.contains(obj))
+                    delete obj;
+            for (auto* obj : edge_objs)
+                if (!used_edges.contains(obj))
+                    delete obj;
+            for (auto* obj : init_objs)
+                if (!used_inits.contains(obj))
+                    delete obj;
+            for (auto* obj : block_objs)
+                if (!used_blocks.contains(obj))
+                    delete obj;
+
+            // heap allocated tensors are never used in the core
+            for (auto* obj : tensor_objs)
                 delete obj;
         }
 
@@ -130,12 +185,53 @@ namespace nn
 
         bool ProgramHeap::create_obj_agg(Obj& obj, const AggObj& val)
         {
-            return true;
+            agg_objs.push_back(new AggObj(val));
+            obj.agg_obj = agg_objs.back();
+            return false;
         }
 
-        bool ProgramHeap::create_obj_tensor(Obj& obj, FtyObj dty, const std::vector<IntObj>& dims)
+        bool ProgramHeap::create_obj_edge(Obj& obj, FtyObj fty, const std::vector<IntObj>& dims)
         {
-            return true;
+            edge_objs.push_back(new EdgeObj());
+            obj.edge_obj = edge_objs.back();
+            obj.edge_obj->info.fty = fty;
+            obj.edge_obj->info.dims.reserve(dims.size());
+            for (IntObj e : dims)
+                obj.edge_obj->info.dims.push_back(e);
+            return false;
+        }
+
+        bool ProgramHeap::create_obj_node(Obj& obj, const std::string& name)
+        {
+            node_objs.push_back(new NodeObj());
+            obj.node_obj = node_objs.back();
+            obj.node_obj->name = name;
+            return false;
+        }
+
+        bool ProgramHeap::create_obj_init(Obj& obj, const std::string& name)
+        {
+            init_objs.push_back(new InitObj());
+            obj.init_obj = init_objs.back();
+            obj.init_obj->name = name;
+            return false;
+        }
+
+        bool ProgramHeap::create_obj_block(Obj& obj, const std::string& name)
+        {
+            block_objs.push_back(new BlockObj());
+            obj.block_obj = block_objs.back();
+            obj.block_obj->name = name;
+            return false;
+        }
+
+        bool ProgramHeap::create_obj_tensor(Obj& obj, core::Edge* forward, core::Edge* backward)
+        {
+            tensor_objs.push_back(new TensorObj());
+            obj.tensor_obj = tensor_objs.back();
+            obj.tensor_obj->forward = forward;
+            obj.tensor_obj->backward = backward;
+            return false;
         }
 
         bool TypeObj::cpy(ProgramHeap& heap, Obj& dst, const Obj src)

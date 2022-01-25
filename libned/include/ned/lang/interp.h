@@ -18,30 +18,28 @@ namespace nn
 
         class GraphBuilder
         {
-            std::vector<core::Edge*> edge_buffer;
-            std::vector<core::Node*> node_buffer;
-            std::vector<core::Init*> init_buffer;
-            std::vector<core::Block*> block_buffer;
-
-            std::map<std::string, core::IOEdge> exports;
-            core::Block* root;
+            std::map<std::string, core::Tensor> exports;
+            core::Block* root = nullptr;
 
         public:
-            GraphBuilder(const std::string& name);
-            Obj get_root();
-
-            bool create_edge(Obj& edge);
-            bool create_node(Obj& node, const std::string& name);
-            bool create_init(Obj& init, const std::string& name, const std::vector<core::Config*> cfgs);
-            bool create_block(Obj& block, const std::string& name, core::Block* parent);
+            GraphBuilder();
             
-            static bool set_ndinp(const std::string& name, core::Node* pnode, core::Edge* pedge);
-            static bool set_ndout(const std::string& name, core::Node* pnode, core::Edge* pedge);
-            static bool set_bkinp(const std::string& name, core::Block* pblock, core::Edge* pforward, core::Edge* pbackward);
-            static bool set_bkout(const std::string& name, core::Block* pblock, core::Edge* pforward, core::Edge* pbackward);
+            bool get_forward(Obj& obj, core::Tensor* pten);
+            bool get_backward(Obj& obj, core::Tensor* pten);
 
-            bool add_extern(const std::string& name, core::Block* pblock, core::Edge* pforward, core::Edge* pbackward, core::Init* pinit);
-            bool add_export(const std::string& name, core::Edge* pforward, core::Edge* pbackward);
+            bool add_ndcfg(const std::string& name, core::Node* pnode, core::Config* pconfig);
+            bool add_bkcfg(const std::string& name, core::Block* pblock, core::Config* pconfig);
+            bool add_incfg(const std::string& name, core::Init* pinit, core::Config* pconfig);
+
+            bool set_ndinp(const std::string& name, core::Node* pnode, core::Edge* pedge);
+            bool set_ndout(const std::string& name, core::Node* pnode, core::Edge* pedge);
+
+            bool set_bkprt(core::Block* pblock, core::Block* pparent);
+            bool set_bkinp(const std::string& name, core::Block* pblock, core::Tensor* pten);
+            bool set_bkout(const std::string& name, core::Block* pblock, core::Tensor* pten);
+
+            bool add_extern(const std::string& name, core::Block* pblock, core::Tensor* pten, core::Init* pinit);
+            bool add_export(const std::string& name, core::Tensor* pten);
 
             bool export_graph(core::Graph& graph);
         };

@@ -4,6 +4,11 @@ namespace nn
 {
     namespace core
     {
+        bool operator==(const EdgeInfo& ei1, const EdgeInfo& ei2)
+        {
+            return ei1.fty == ei2.fty && ei1.dims == ei2.dims;
+        }
+
         size_t fty_size(EdgeFty fty)
         {
             switch (fty)

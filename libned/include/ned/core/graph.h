@@ -22,7 +22,7 @@ namespace nn
 
             EdgeInfo info;
             std::map<std::string, Connector> md_inps;
-            std::map<std::string, std::vector<Connector>> ctx_outs;
+            std::map<std::string, std::vector<Connector>> md_outs;
             mutable void* opaque = nullptr;
         };
 
@@ -35,7 +35,7 @@ namespace nn
             mutable void* opaque = nullptr;
         };
 
-        struct IOEdge
+        struct Tensor
         {
             Edge* forward;
             Edge* backward;
@@ -52,21 +52,22 @@ namespace nn
         struct Block
         {
             std::string name;
-            std::map<std::string, IOEdge> inps;
-            std::map<std::string, IOEdge> outs;
-            std::map<std::string, IOEdge> exports;  // Local to the block
+            std::map<std::string, std::unique_ptr<Config>> configs;
+            std::map<std::string, Tensor> inps;
+            std::map<std::string, Tensor> outs;
+            std::map<std::string, Tensor> exports;  // Local to the block
             std::map<std::string, Parameter> weights;  // Local to the block
-            Block* parent;  // null if its the root block
+            Block* parent = nullptr;  // null if its the root block or uninitialized
             std::map<std::string, Block*> sub_blocks;
         };
 
         struct Graph
         {
             Block* model;
-            std::map<std::string, IOEdge> inps;
-            std::map<std::string, IOEdge> outs;
-            std::map<std::string, IOEdge> weights;  // Global across the graph
-            std::map<std::string, IOEdge> exports;  // Global across the graph
+            std::map<std::string, Tensor> inps;
+            std::map<std::string, Tensor> outs;
+            std::map<std::string, Tensor> exports;  // Global across the graph
+            std::map<std::string, Parameter> weights;  // Global across the graph
             std::vector<std::string> eval_modes;
         };
 
