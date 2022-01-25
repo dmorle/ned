@@ -149,7 +149,7 @@ namespace nn
                 DEF,         // Block with bound cargs
                 INTRREF,     // Reference to a intrinsic name
                 INTR,        // Intrinsic with bound cargs
-                TENSOR,      // Both a forward and backward edge adjacent in the stack
+                TENSOR,      // Both a forward and backward edge
                 EDGE,        // Either forward or backward edge
                 GENERIC,     // Compile time generic type
                 ARRPACK,     // A packed set of parameters (array of a single type)
@@ -222,9 +222,6 @@ namespace nn
             bool push(size_t n);
             bool pop(size_t n);
 
-            // This function does not return the actual size on the stack thats used by the scope
-            // Instead, they provide the number of types that are stored on the stack,
-            // To determine the total size on the stack, accumulate the size for each type
             bool local_size(size_t& sz, const Scope* scope) const;
             bool list_local_vars(std::vector<StackVar>& vars, const Scope* scope);
 
@@ -296,7 +293,7 @@ namespace nn
 
         bool codegen_line(ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);  // generates code for independent lines.  Can't handle if, elif, else, forward.
         bool codegen_loop(ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const std::vector<AstLine>& lines, const std::string& cont_lbl, const std::string& break_lbl);
-        bool codegen_lines(ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const std::vector<AstLine>& lines, bool fallthrough);
+        bool codegen_lines(ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const std::vector<AstLine>& lines);
 
         bool codegen_struct(ByteCodeModule& bc, const std::string& name, const AstStruct& ast_struct, const std::vector<std::string>& ns);
         bool codegen_func(ByteCodeModule& bc, const std::string& name, const AstFn& ast_fn, const std::vector<std::string>& ns);

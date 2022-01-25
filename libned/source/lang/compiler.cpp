@@ -890,24 +890,12 @@ namespace nn
             if (scope.list_local_vars(vars, scope.parent))
                 return true;
             std::sort(vars.begin(), vars.end(), [](const Scope::StackVar& lhs, const Scope::StackVar& rhs) { return lhs.ptr > rhs.ptr; });
-            size_t pop_sz = 0;
             for (const auto& var : vars)
             {
-                if (var.info.ty == TypeInfo::TENSOR)
-                {
-                    pop_sz += 2;
-                    if (body.add_instruction(instruction::Pop(info, var.ptr)) ||   // forward
-                        body.add_instruction(instruction::Pop(info, var.ptr - 1))  // backward
-                        ) return true;
-                }
-                else
-                {
-                    pop_sz += 1;
-                    if (body.add_instruction(instruction::Pop(info, var.ptr)))
-                        return true;
-                }
+                if (body.add_instruction(instruction::Pop(info, var.ptr)))
+                    return true;
             }
-            return scope.parent->pop(pop_sz);
+            return scope.parent->pop(vars.size());
         }
 
         // Set by codegen_line_while, codegen_line_for.  Read by codegen_line_goto
@@ -931,15 +919,8 @@ namespace nn
             std::sort(vars.begin(), vars.end(), [](const Scope::StackVar& lhs, const Scope::StackVar& rhs) { return lhs.ptr > rhs.ptr; });
             for (const auto& var : vars)
             {
-                if (var.info.ty == TypeInfo::TENSOR)
-                {
-                    if (body.add_instruction(instruction::Pop(line.node_info, var.ptr)) ||   // forward
-                        body.add_instruction(instruction::Pop(line.node_info, var.ptr - 1))  // backward
-                        ) return true;
-                }
-                else
-                    if (body.add_instruction(instruction::Pop(line.node_info, var.ptr)))
-                        return true;
+                if (body.add_instruction(instruction::Pop(line.node_info, var.ptr)))
+                    return true;
             }
             return body.add_instruction(instruction::Jmp(line.node_info, loop_ctx->break_label));
         }
@@ -955,15 +936,8 @@ namespace nn
             std::sort(vars.begin(), vars.end(), [](const Scope::StackVar& lhs, const Scope::StackVar& rhs) { return lhs.ptr > rhs.ptr; });
             for (const auto& var : vars)
             {
-                if (var.info.ty == TypeInfo::TENSOR)
-                {
-                    if (body.add_instruction(instruction::Pop(line.node_info, var.ptr)) ||   // forward
-                        body.add_instruction(instruction::Pop(line.node_info, var.ptr - 1))  // backward
-                        ) return true;
-                }
-                else
-                    if (body.add_instruction(instruction::Pop(line.node_info, var.ptr)))
-                        return true;
+                if (body.add_instruction(instruction::Pop(line.node_info, var.ptr)))
+                    return true;
             }
             return body.add_instruction(instruction::Jmp(line.node_info, loop_ctx->break_label));
         }
@@ -1037,7 +1011,7 @@ namespace nn
             std::string false_branch = label_prefix(line.node_info) + "false_branch";
             return
                 body.add_instruction(instruction::Brf(line.node_info, false_branch)) ||
-                codegen_lines(bc, body, block_scope, line.line_branch.body, true) ||
+                codegen_lines(bc, body, block_scope, line.line_branch.body) ||
                 codegen_exit(body, block_scope, line.node_info) || // leaving the block's scope
                 body.add_instruction(instruction::Jmp(line.node_info, end_label)) ||
                 body.add_label(line.node_info, false_branch);
@@ -1084,12 +1058,6 @@ namespace nn
             {
                 if (body.add_instruction(instruction::Pop(line.node_info, 0)))
                     return true;
-                if (info.ty == TypeInfo::TENSOR)
-                {
-                    // extra pop for the forward edge
-                    if (body.add_instruction(instruction::Pop(line.node_info, 0)))
-                        return true;
-                }
             }
             return false;
         }
@@ -1157,7 +1125,7 @@ namespace nn
                     }
                     if (i < lines.size() && lines[i].ty == LineType::ELSE)
                     {
-                        if (codegen_lines(bc, body, scope, lines[i].line_block.body, true))
+                        if (codegen_lines(bc, body, scope, lines[i].line_block.body))
                             return true;
                     }
                     body.add_label(lines[i].node_info, end_label);
@@ -1196,7 +1164,7 @@ namespace nn
         {
             ByteCodeBody body{ ast_fn.node_info };
             Scope scope;
-
+            ast_fn.signature.cargs;
         }
 
         bool codegen_def(ByteCodeModule& bc, const std::string& name, const AstBlock& ast_def, const std::vector<std::string>& ns)

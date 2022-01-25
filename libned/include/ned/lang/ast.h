@@ -60,8 +60,9 @@ namespace nn
             VAR_DECL,
             CARGS_CALL,
             VARGS_CALL,
-            FN_DECL,
             DEF_DECL,
+            INTR_DECL,
+            FN_DECL,
             KW,
             VAR
         };
@@ -70,6 +71,8 @@ namespace nn
 
         struct AstArgDecl
         {
+            // for signatures, the type expression will contain the full declaration
+            // and the name will be duplicated into the 
             bool is_packed = false;
             std::unique_ptr<AstExpr> type_expr;  // The expression that was used to define the passed type
             std::string var_name;
@@ -104,7 +107,7 @@ namespace nn
         enum class ExprKW
         {
             TYPE,
-            VAR,
+            INIT,
             FP,
             BOOL,
             INT,
@@ -165,7 +168,7 @@ namespace nn
                 AstExprName expr_name;
                 AstExprCall expr_call;
                 AstFnSig expr_fn_decl;
-                AstBlockSig expr_def_decl;
+                AstBlockSig expr_blk_decl;
             };
 
             AstExpr();

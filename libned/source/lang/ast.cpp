@@ -6,650 +6,658 @@
 #include <functional>
 #include <cassert>
 
-using namespace nn;
-using namespace lang;
-
-// Parses comma deliminated token sequences within a matching set of brackets
-// Returns the index in tarr immediately after the CLOSE token was found
-// On failure, this function returns -1
-template<typename T, bool(*parse_fn)(const TokenArray&, T&), TokenType OPEN, TokenType CLOSE>
-inline int parse_args(const TokenArray& tarr, int i, std::vector<T>& args)
+namespace nn
 {
-    assert(tarr[0]->ty == OPEN);
-    
-    // Advancing one token past the opening bracket
-    i++;
-    int end = tarr.search(ArgEndCriteria(CLOSE), i);
-    if (tarr[end]->ty == CLOSE)
+    namespace lang
     {
-        // either a single arg, or its empty
-        for (int j = i; j < end; j++)
-            if (!tarr[j]->is_whitespace())
+        // Parses comma deliminated token sequences within a matching set of brackets
+        // Returns the index in tarr immediately after the CLOSE token was found
+        // On failure, this function returns -1
+        template<typename T, bool(*parse_fn)(const TokenArray&, T&), TokenType OPEN, TokenType CLOSE>
+        inline int parse_args(const TokenArray& tarr, int i, std::vector<T>& args)
+        {
+            assert(tarr[0]->ty == OPEN);
+
+            // Advancing one token past the opening bracket
+            i++;
+            int end = tarr.search(ArgEndCriteria(CLOSE), i);
+            if (tarr[end]->ty == CLOSE)
             {
-                // single arg, parse it and move on
+                // either a single arg, or its empty
+                for (int j = i; j < end; j++)
+                    if (!tarr[j]->is_whitespace())
+                    {
+                        // single arg, parse it and move on
+                        args.push_back(T());
+                        if (parse_fn({ tarr, i, end }, args.back()))
+                        {
+                            args.clear();
+                            return -1;
+                        }
+                        break;
+                    }
+                return end;
+            }
+
+            // General case for parsing multiple args
+            args.push_back(T());
+            if (parse_fn({ tarr, i, end }, args.back()))
+            {
+                args.clear();
+                return -1;
+            }
+            do
+            {
+                end = tarr.search(ArgEndCriteria(CLOSE), i);
                 args.push_back(T());
                 if (parse_fn({ tarr, i, end }, args.back()))
                 {
                     args.clear();
                     return -1;
                 }
-                break;
-            }
-        return end;
-    }
+                i = end + 1;
+            } while (tarr[end]->ty == TokenType::COMMA);
 
-    // General case for parsing multiple args
-    args.push_back(T());
-    if (parse_fn({ tarr, i, end }, args.back()))
-    {
-        args.clear();
-        return -1;
-    }
-    do
-    {
-        end = tarr.search(ArgEndCriteria(CLOSE), i);
-        args.push_back(T());
-        if (parse_fn({ tarr, i, end }, args.back()))
-        {
-            args.clear();
-            return -1;
+            return i;
         }
-        i = end + 1;
-    } while (tarr[end]->ty == TokenType::COMMA);
 
-    return i;
-}
-
-// Parses lines from a token sequence
-// On failure, this function returns true
-template<typename T, bool(*parse_fn)(const TokenArray&, T&, int)>
-inline bool parse_lines(const TokenArray& tarr, int i, int indent_level, std::vector<T>& lines)
-{
-    int end;
-    do
-    {
-        end = tarr.search(LineEndCriteria(indent_level), i);
-        if (end < 0)
-            end = tarr.size();
-        for (int j = i; j < end; j++)  // Only use lines that have non-whitespace tokens in them
-            if (!tarr[j]->is_whitespace())
+        // Parses lines from a token sequence
+        // On failure, this function returns true
+        template<typename T, bool(*parse_fn)(const TokenArray&, T&, int)>
+        inline bool parse_lines(const TokenArray& tarr, int i, int indent_level, std::vector<T>& lines)
+        {
+            int end;
+            do
             {
-                lines.push_back(T());
-                if (parse_fn({ tarr, i, end }, lines.back(), indent_level))
-                {
-                    lines.clear();
+                end = tarr.search(LineEndCriteria(indent_level), i);
+                if (end < 0)
+                    end = tarr.size();
+                for (int j = i; j < end; j++)  // Only use lines that have non-whitespace tokens in them
+                    if (!tarr[j]->is_whitespace())
+                    {
+                        lines.push_back(T());
+                        if (parse_fn({ tarr, i, end }, lines.back(), indent_level))
+                        {
+                            lines.clear();
+                            return true;
+                        }
+                        break;
+                    }
+                i = end + 1;
+            } while (end < tarr.size());
+            return false;
+        }
+
+        enum class OpAssoc
+        {
+            LTOR,
+            RTOL
+        };
+
+        // Eventually this can become constexpr, but it seems my current c++ compiler doesn't have that yet...
+        const std::vector<std::tuple<OpAssoc, std::vector<TokenType>>> prec_ops = {
+            { OpAssoc::LTOR, { TokenType::COMMA }},
+            { OpAssoc::RTOL, { TokenType::ASSIGN, TokenType::IADD, TokenType::ISUB, TokenType::IMUL, TokenType::IDIV, TokenType::IMOD }},
+            { OpAssoc::LTOR, { TokenType::KW_AND, TokenType::KW_OR }},
+            { OpAssoc::LTOR, { TokenType::CMP_EQ, TokenType::CMP_NE, TokenType::CMP_GT, TokenType::CMP_LT, TokenType::CMP_GE, TokenType::CMP_LE }},
+            { OpAssoc::LTOR, { TokenType::ADD, TokenType::SUB }},
+            { OpAssoc::LTOR, { TokenType::STAR, TokenType::DIV, TokenType::MOD }}
+        };
+
+        bool parse_leaf_mods(const TokenArray& tarr, AstExpr& ast_expr, std::unique_ptr<AstExpr> lhs)
+        {
+            assert(tarr.size() && !tarr[0]->is_whitespace());
+
+            // Finding the bounds on the sub expression
+            int start, end, i;  // start of subexpr, end of subexpr, beginning of possible next expr
+            switch (tarr[0]->ty)
+            {
+            case TokenType::SQUARE_O:
+                for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
+                end = tarr.search(IsSameCriteria(TokenType::SQUARE_C), start);
+                if (end == -1)
+                    return error::syntax(tarr[0], "Missing closing ']' in index expression");
+                i = end + 1;
+                break;
+            case TokenType::DOT:
+                for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
+                end = tarr.search(IsSameCriteria(TokenType::DOT), start);
+                if (end == -1)
+                    end = tarr.size();
+                for (const Token& tk : TokenArray{ tarr, start + 1, end })  // making sure there are no more tokens between the identifier and the dot
+                    if (!tk.is_whitespace())
+                        return error::syntax(tk, "Unexpected token after '.'");
+                i = end;
+                break;
+            case TokenType::IDN:
+                for (const Token& tk : TokenArray{ tarr, 1 })  // making sure there are no more tokens
+                    if (!tk.is_whitespace())
+                        return error::syntax(tk, "Unexpected token after variable declaration");
+                new (&ast_expr.expr_name) AstExprName();
+                ast_expr.ty = ExprType::VAR;
+                ast_expr.expr_name.expr = std::move(lhs);
+                ast_expr.expr_name.val = tarr[0]->get<TokenType::IDN>().val;
+                return false;
+            case TokenType::ANGLE_O:
+                for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
+                end = tarr.search(IsSameCriteria(TokenType::ANGLE_C), start);
+                if (end == -1)
+                    return error::syntax(tarr[0], "Missing closing '>' in carg expression");
+                i = end + 1;
+                break;
+            case TokenType::ROUND_O:
+                for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
+                end = tarr.search(IsSameCriteria(TokenType::ROUND_C), start);
+                if (end == -1)
+                    return error::syntax(tarr[0], "Missing closing ')' in varg expression");
+                i = end + 1;
+                break;
+            default:
+                return error::syntax(tarr[0], "Unexpected token in leafmod expression");
+            }
+
+            if (end == start)
+                return error::syntax(tarr[start], "Empty expression");
+            std::unique_ptr<AstExpr> nlhs;
+            AstExpr* pexpr = i == tarr.size() ? &ast_expr : (nlhs = std::make_unique<AstExpr>()).get();
+
+            AstExpr ret_expr;  // helper for calls so that I leverge the tuple parsing code for this
+            switch (tarr[0]->ty)
+            {
+            case TokenType::SQUARE_O:
+                new (&pexpr->expr_binary) AstExprBinaryOp();
+                pexpr->ty = ExprType::BINARY_IDX;
+                pexpr->expr_binary.left = std::move(lhs);
+                pexpr->expr_binary.right = std::make_unique<AstExpr>();
+                if (parse_expr({ tarr, start, end }, *pexpr->expr_binary.right))
                     return true;
-                }
                 break;
+            case TokenType::DOT:
+                new (&pexpr->expr_name) AstExprName();
+                pexpr->ty = ExprType::DOT;
+                pexpr->expr_name.expr = std::move(lhs);
+                pexpr->expr_name.val = tarr[start]->get<TokenType::IDN>().val;
+                break;
+            case TokenType::ANGLE_O:
+                new (&pexpr->expr_call) AstExprCall();
+                pexpr->ty = ExprType::CARGS_CALL;
+                pexpr->expr_call.callee = std::move(lhs);
+                if (parse_expr({ tarr, start, end }, ret_expr))
+                    return true;
+                if (ret_expr.ty == ExprType::LIT_TUPLE)
+                    pexpr->expr_call.args = std::move(ret_expr.expr_agg.elems);
+                else
+                    pexpr->expr_call.args.push_back(std::move(ret_expr));
+                break;
+            case TokenType::ROUND_O:
+                new (&pexpr->expr_call) AstExprCall();
+                pexpr->ty = ExprType::VARGS_CALL;
+                pexpr->expr_call.callee = std::move(lhs);
+                if (parse_expr({ tarr, start, end }, ret_expr))
+                    return true;
+                if (ret_expr.ty == ExprType::LIT_TUPLE)
+                    pexpr->expr_call.args = std::move(ret_expr.expr_agg.elems);
+                else
+                    pexpr->expr_call.args.push_back(std::move(ret_expr));
+                break;
+            default:
+                assert(false);
             }
-        i = end + 1;
-    } while (end < tarr.size());
-    return false;
-}
 
-enum class OpAssoc
-{
-    LTOR,
-    RTOL
-};
-
-// Eventually this can become constexpr, but it seems my current c++ compiler doesn't have that yet...
-const std::vector<std::tuple<OpAssoc, std::vector<TokenType>>> prec_ops = {
-    { OpAssoc::LTOR, { TokenType::COMMA }},
-    { OpAssoc::RTOL, { TokenType::ASSIGN, TokenType::IADD, TokenType::ISUB, TokenType::IMUL, TokenType::IDIV, TokenType::IMOD }},
-    { OpAssoc::LTOR, { TokenType::KW_AND, TokenType::KW_OR }},
-    { OpAssoc::LTOR, { TokenType::CMP_EQ, TokenType::CMP_NE, TokenType::CMP_GT, TokenType::CMP_LT, TokenType::CMP_GE, TokenType::CMP_LE }},
-    { OpAssoc::LTOR, { TokenType::ADD, TokenType::SUB }},
-    { OpAssoc::LTOR, { TokenType::STAR, TokenType::DIV, TokenType::MOD }}
-};
-
-bool parse_leaf_mods(const TokenArray& tarr, AstExpr& ast_expr, std::unique_ptr<AstExpr> lhs)
-{
-    assert(tarr.size() && !tarr[0]->is_whitespace());
-
-    // Finding the bounds on the sub expression
-    int start, end, i;  // start of subexpr, end of subexpr, beginning of possible next expr
-    switch (tarr[0]->ty)
-    {
-    case TokenType::SQUARE_O:
-        for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
-        end = tarr.search(IsSameCriteria(TokenType::SQUARE_C), start);
-        if (end == -1)
-            return error::syntax(tarr[0], "Missing closing ']' in index expression");
-        i = end + 1;
-        break;
-    case TokenType::DOT:
-        for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
-        end = tarr.search(IsSameCriteria(TokenType::DOT), start);
-        if (end == -1)
-            end = tarr.size();
-        for (const Token& tk : TokenArray{ tarr, start + 1, end })  // making sure there are no more tokens between the identifier and the dot
-            if (!tk.is_whitespace())
-                return error::syntax(tk, "Unexpected token after '.'");
-        i = end;
-        break;
-    case TokenType::IDN:
-        for (const Token& tk : TokenArray{ tarr, 1 })  // making sure there are no more tokens
-            if (!tk.is_whitespace())
-                return error::syntax(tk, "Unexpected token after variable declaration");
-        new (&ast_expr.expr_name) AstExprName();
-        ast_expr.ty = ExprType::VAR;
-        ast_expr.expr_name.expr = std::move(lhs);
-        ast_expr.expr_name.val = tarr[0]->get<TokenType::IDN>().val;
-        return false;
-    case TokenType::ANGLE_O:
-        for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
-        end = tarr.search(IsSameCriteria(TokenType::ANGLE_C), start);
-        if (end == -1)
-            return error::syntax(tarr[0], "Missing closing '>' in carg expression");
-        i = end + 1;
-        break;
-    case TokenType::ROUND_O:
-        for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
-        end = tarr.search(IsSameCriteria(TokenType::ROUND_C), start);
-        if (end == -1)
-            return error::syntax(tarr[0], "Missing closing ')' in varg expression");
-        i = end + 1;
-        break;
-    default:
-        return error::syntax(tarr[0], "Unexpected token in leafmod expression");
-    }
-
-    if (end == start)
-        return error::syntax(tarr[start], "Empty expression");
-    std::unique_ptr<AstExpr> nlhs;
-    AstExpr* pexpr = i == tarr.size() ? &ast_expr : (nlhs = std::make_unique<AstExpr>()).get();
-
-    AstExpr ret_expr;  // helper for calls so that I leverge the tuple parsing code for this
-    switch (tarr[0]->ty)
-    {
-    case TokenType::SQUARE_O:
-        new (&pexpr->expr_binary) AstExprBinaryOp();
-        pexpr->ty = ExprType::BINARY_IDX;
-        pexpr->expr_binary.left = std::move(lhs);
-        pexpr->expr_binary.right = std::make_unique<AstExpr>();
-        if (parse_expr({ tarr, start, end }, *pexpr->expr_binary.right))
-            return true;
-        break;
-    case TokenType::DOT:
-        new (&pexpr->expr_name) AstExprName();
-        pexpr->ty = ExprType::DOT;
-        pexpr->expr_name.expr = std::move(lhs);
-        pexpr->expr_name.val = tarr[start]->get<TokenType::IDN>().val;
-        break;
-    case TokenType::ANGLE_O:
-        new (&pexpr->expr_call) AstExprCall();
-        pexpr->ty = ExprType::CARGS_CALL;
-        pexpr->expr_call.callee = std::move(lhs);
-        if (parse_expr({ tarr, start, end }, ret_expr))
-            return true;
-        if (ret_expr.ty == ExprType::LIT_TUPLE)
-            pexpr->expr_call.args = std::move(ret_expr.expr_agg.elems);
-        else
-            pexpr->expr_call.args.push_back(std::move(ret_expr));
-        break;
-    case TokenType::ROUND_O:
-        new (&pexpr->expr_call) AstExprCall();
-        pexpr->ty = ExprType::VARGS_CALL;
-        pexpr->expr_call.callee = std::move(lhs);
-        if (parse_expr({ tarr, start, end }, ret_expr))
-            return true;
-        if (ret_expr.ty == ExprType::LIT_TUPLE)
-            pexpr->expr_call.args = std::move(ret_expr.expr_agg.elems);
-        else
-            pexpr->expr_call.args.push_back(std::move(ret_expr));
-        break;
-    default:
-        assert(false);
-    }
-
-    if (i == tarr.size())
-        return false;
-    return parse_leaf_mods({ tarr, i }, ast_expr, std::move(nlhs));
-}
-
-bool parse_leaf_token(const Token* ptk, AstExpr& ast_expr)
-{
-    switch (ptk->ty)
-    {
-    case TokenType::LIT_INT:
-        ast_expr.expr_int = ptk->get<TokenType::LIT_INT>().val;
-        ast_expr.ty = ExprType::LIT_INT;
-        return false;
-    case TokenType::LIT_FLOAT:
-        ast_expr.expr_float = ptk->get<TokenType::LIT_FLOAT>().val;
-        ast_expr.ty = ExprType::LIT_FLOAT;
-        return false;
-    case TokenType::LIT_STR:
-        new (&ast_expr.expr_string) std::string(ptk->get<TokenType::LIT_STR>().val);
-        ast_expr.ty = ExprType::LIT_STRING;
-        return false;
-    case TokenType::IDN:
-        new (&ast_expr.expr_string) std::string(ptk->get<TokenType::IDN>().val);
-        ast_expr.ty = ExprType::VAR;
-        return false;
-    case TokenType::KW_TRUE:
-        ast_expr.expr_bool = true;
-        ast_expr.ty = ExprType::LIT_BOOL;
-        return false;
-    case TokenType::KW_FALSE:
-        ast_expr.expr_bool = false;
-        ast_expr.ty = ExprType::LIT_BOOL;
-        return false;
-    case TokenType::KW_TYPE:
-        ast_expr.expr_kw = ExprKW::TYPE;
-        ast_expr.ty = ExprType::KW;
-        return false;
-    case TokenType::KW_FP:
-        ast_expr.expr_kw = ExprKW::FP;
-        ast_expr.ty = ExprType::KW;
-        return false;
-    case TokenType::KW_BOOL:
-        ast_expr.expr_kw = ExprKW::BOOL;
-        ast_expr.ty = ExprType::KW;
-        return false;
-    case TokenType::KW_INT:
-        ast_expr.expr_kw = ExprKW::INT;
-        ast_expr.ty = ExprType::KW;
-        return false;
-    case TokenType::KW_FLOAT:
-        ast_expr.expr_kw = ExprKW::FLOAT;
-        ast_expr.ty = ExprType::KW;
-        return false;
-    case TokenType::KW_STR:
-        ast_expr.expr_kw = ExprKW::STR;
-        ast_expr.ty = ExprType::KW;
-        return false;
-    case TokenType::KW_ARRAY:
-        ast_expr.expr_kw = ExprKW::ARRAY;
-        ast_expr.ty = ExprType::KW;
-        return false;
-    case TokenType::KW_TUPLE:
-        ast_expr.expr_kw = ExprKW::TUPLE;
-        ast_expr.ty = ExprType::KW;
-        return false;
-    case TokenType::KW_F16:
-        ast_expr.expr_kw = ExprKW::F16;
-        ast_expr.ty = ExprType::KW;
-        return false;
-    case TokenType::KW_F32:
-        ast_expr.expr_kw = ExprKW::F32;
-        ast_expr.ty = ExprType::KW;
-        return false;
-    case TokenType::KW_F64:
-        ast_expr.expr_kw = ExprKW::F64;
-        ast_expr.ty = ExprType::KW;
-        return false;
-    default:
-        error::syntax(ptk, "Unexpected token for single token expression leaf node");
-        return true;
-    }
-}
-
-template<int prec>
-inline ExprType get_expr_type(TokenType ty);
-
-template<>
-inline ExprType get_expr_type<1>(TokenType ty)
-{
-    switch (ty)
-    {
-    case TokenType::ASSIGN:
-        return ExprType::BINARY_ASSIGN;
-    case TokenType::IADD:
-        return ExprType::BINARY_IADD;
-    case TokenType::ISUB:
-        return ExprType::BINARY_ISUB;
-    case TokenType::IMUL:
-        return ExprType::BINARY_IMUL;
-    case TokenType::IDIV:
-        return ExprType::BINARY_IDIV;
-    case TokenType::IMOD:
-        return ExprType::BINARY_IMOD;
-    }
-    assert(false);
-    return ExprType::INVALID;
-}
-
-template<>
-inline ExprType get_expr_type<2>(TokenType ty)
-{
-    switch (ty)
-    {
-    case TokenType::KW_AND:
-        return ExprType::BINARY_AND;
-    case TokenType::KW_OR:
-        return ExprType::BINARY_OR;
-    }
-    assert(false);
-    return ExprType::INVALID;
-}
-
-template<>
-inline ExprType get_expr_type<3>(TokenType ty)
-{
-    switch (ty)
-    {
-    case TokenType::CMP_EQ:
-        return ExprType::BINARY_CMP_EQ;
-    case TokenType::CMP_NE:
-        return ExprType::BINARY_CMP_NE;
-    case TokenType::CMP_GT:
-        return ExprType::BINARY_CMP_GT;
-    case TokenType::CMP_LT:
-        return ExprType::BINARY_CMP_LT;
-    case TokenType::CMP_GE:
-        return ExprType::BINARY_CMP_GE;
-    case TokenType::CMP_LE:
-        return ExprType::BINARY_CMP_LE;
-    }
-    assert(false);
-    return ExprType::INVALID;
-}
-
-template<>
-inline ExprType get_expr_type<4>(TokenType ty)
-{
-    switch (ty)
-    {
-    case TokenType::ADD:
-        return ExprType::BINARY_ADD;
-    case TokenType::SUB:
-        return ExprType::BINARY_SUB;
-    }
-    assert(false);
-    return ExprType::INVALID;
-}
-
-template<>
-inline ExprType get_expr_type<5>(TokenType ty)
-{
-    switch (ty)
-    {
-    case TokenType::STAR:
-        return ExprType::BINARY_MUL;
-    case TokenType::DIV:
-        return ExprType::BINARY_DIV;
-    case TokenType::MOD:
-        return ExprType::BINARY_MOD;
-    }
-    assert(false);
-    return ExprType::INVALID;
-}
-
-template<int prec>
-bool parse_expr_prec(const TokenArray& tarr, AstExpr& ast_expr);
-
-// specializations
-template<> bool parse_expr_prec<7>(const TokenArray& tarr, AstExpr& ast_expr);
-template<> bool parse_expr_prec<6>(const TokenArray& tarr, AstExpr& ast_expr);
-template<> bool parse_expr_prec<0>(const TokenArray& tarr, AstExpr& ast_expr);
-
-template<int prec>
-bool parse_expr_prec(const TokenArray& tarr, AstExpr& ast_expr)
-{
-    static_assert(0 <= prec && prec <= 7);
-    assert(tarr.size() > 0);
-    const auto& [op_assoc, tys] = prec_ops[prec];  // TODO: update my c++ compiler and make this constexpr
-    int pos;
-    if (op_assoc == OpAssoc::LTOR)
-        pos = tarr.search(IsInCriteria(tys), 1, -1);
-    else
-        pos = tarr.rsearch(IsInCriteria(tys));
-    if (pos == -1)
-        return parse_expr_prec<prec + 1>(tarr, ast_expr);
-    if (pos < 1 || tarr.size() - pos < 2)
-        return error::syntax(tarr[pos], "Dangling operator");
-    std::unique_ptr<AstExpr> pleft = std::make_unique<AstExpr>();
-    if (parse_expr_prec<prec + 1>({ tarr, 0, pos }, *pleft))
-        return true;
-    std::unique_ptr<AstExpr> pright = std::make_unique<AstExpr>();
-    if (parse_expr_prec<prec + 1>({ tarr, pos + 1 }, *pright))
-        return true;
-    new (&ast_expr.expr_binary) AstExprBinaryOp();
-    ast_expr.ty = get_expr_type<prec>(tarr[pos]->ty);
-    ast_expr.expr_binary.left = std::move(pleft);
-    ast_expr.expr_binary.right = std::move(pright);
-    return false;
-}
-
-template<>
-bool parse_expr_prec<7>(const TokenArray& tarr, AstExpr& ast_expr)
-{
-    assert(tarr.size() > 0);
-
-    if (tarr.size() == 1)  // single token leaf node
-        return parse_leaf_token(tarr[0], ast_expr);
-
-    std::unique_ptr<AstExpr> lhs = nullptr;
-    int i;
-    if (tarr[0]->ty == TokenType::ROUND_O)
-    {
-        // handling bracketed expressions
-        i = tarr.search(IsSameCriteria(TokenType::ROUND_C));
-        if (i == -1)
-            return error::syntax(tarr[0], "Missing closing ')'");
-        if (i == 1)
-            return error::syntax(tarr[0], "Empty expression are not allowed");
-
-        // Checking if all the remaining tokens are whitespace
-        // This is used to determine if any mods exist on the expression
-        int end;
-        for (end = i + 1; end < tarr.size() && tarr[end]->is_whitespace(); end++);
-        if (end == tarr.size() - 1)
-            return parse_expr({ tarr, 1, i }, ast_expr);
-
-        lhs = std::make_unique<AstExpr>();
-        if (parse_expr({ tarr, 1, i }, *lhs))
-            return true;
-        i = end;
-    }
-    else if (tarr[0]->ty == TokenType::SQUARE_O)
-    {
-        // handling array literals
-        i = tarr.search(IsSameCriteria(TokenType::SQUARE_C));
-        if (i == -1)
-            return error::syntax(tarr[0], "Missing closing ']'");
-        
-        // Checking if all the remaining tokens are whitespace
-        // This is used to determine if any mods exist on the array literal
-        int end;
-        for (end = i + 1; end < tarr.size() && tarr[end]->is_whitespace(); end++);
-        
-        if (i == 1)
-        {
-            // Empty array
-            if (end != tarr.size() - 1)
-            {
-                // has mods => initialize lhs and continue execution
-                lhs = std::make_unique<AstExpr>();
-                new (&lhs->expr_agg) AstExprAggLit();
-                lhs->ty = ExprType::LIT_ARRAY;
-                i = end;
-            }
-            else
-            {
-                // does not have mods => initialize ast_expr and return
-                new (&ast_expr.expr_agg) AstExprAggLit();
-                ast_expr.ty = ExprType::LIT_ARRAY;
+            if (i == tarr.size())
                 return false;
-            }
+            return parse_leaf_mods({ tarr, i }, ast_expr, std::move(nlhs));
         }
-        else
+
+        bool parse_leaf_token(const Token* ptk, AstExpr& ast_expr)
         {
-            // Non-empty array
-            AstExpr arr_expr;
-            if (parse_expr({ tarr, 1, i }, arr_expr))
+            switch (ptk->ty)
+            {
+            case TokenType::LIT_INT:
+                ast_expr.expr_int = ptk->get<TokenType::LIT_INT>().val;
+                ast_expr.ty = ExprType::LIT_INT;
+                return false;
+            case TokenType::LIT_FLOAT:
+                ast_expr.expr_float = ptk->get<TokenType::LIT_FLOAT>().val;
+                ast_expr.ty = ExprType::LIT_FLOAT;
+                return false;
+            case TokenType::LIT_STR:
+                new (&ast_expr.expr_string) std::string(ptk->get<TokenType::LIT_STR>().val);
+                ast_expr.ty = ExprType::LIT_STRING;
+                return false;
+            case TokenType::IDN:
+                new (&ast_expr.expr_string) std::string(ptk->get<TokenType::IDN>().val);
+                ast_expr.ty = ExprType::VAR;
+                return false;
+            case TokenType::KW_TRUE:
+                ast_expr.expr_bool = true;
+                ast_expr.ty = ExprType::LIT_BOOL;
+                return false;
+            case TokenType::KW_FALSE:
+                ast_expr.expr_bool = false;
+                ast_expr.ty = ExprType::LIT_BOOL;
+                return false;
+            case TokenType::KW_TYPE:
+                ast_expr.expr_kw = ExprKW::TYPE;
+                ast_expr.ty = ExprType::KW;
+                return false;
+            case TokenType::KW_INIT:
+                ast_expr.expr_kw = ExprKW::INIT;
+                ast_expr.ty = ExprType::KW;
+                return false;
+            case TokenType::KW_FP:
+                ast_expr.expr_kw = ExprKW::FP;
+                ast_expr.ty = ExprType::KW;
+                return false;
+            case TokenType::KW_BOOL:
+                ast_expr.expr_kw = ExprKW::BOOL;
+                ast_expr.ty = ExprType::KW;
+                return false;
+            case TokenType::KW_INT:
+                ast_expr.expr_kw = ExprKW::INT;
+                ast_expr.ty = ExprType::KW;
+                return false;
+            case TokenType::KW_FLOAT:
+                ast_expr.expr_kw = ExprKW::FLOAT;
+                ast_expr.ty = ExprType::KW;
+                return false;
+            case TokenType::KW_STR:
+                ast_expr.expr_kw = ExprKW::STR;
+                ast_expr.ty = ExprType::KW;
+                return false;
+            case TokenType::KW_ARRAY:
+                ast_expr.expr_kw = ExprKW::ARRAY;
+                ast_expr.ty = ExprType::KW;
+                return false;
+            case TokenType::KW_TUPLE:
+                ast_expr.expr_kw = ExprKW::TUPLE;
+                ast_expr.ty = ExprType::KW;
+                return false;
+            case TokenType::KW_F16:
+                ast_expr.expr_kw = ExprKW::F16;
+                ast_expr.ty = ExprType::KW;
+                return false;
+            case TokenType::KW_F32:
+                ast_expr.expr_kw = ExprKW::F32;
+                ast_expr.ty = ExprType::KW;
+                return false;
+            case TokenType::KW_F64:
+                ast_expr.expr_kw = ExprKW::F64;
+                ast_expr.ty = ExprType::KW;
+                return false;
+            default:
+                error::syntax(ptk, "Unexpected token for single token expression leaf node");
                 return true;
-            if (end != tarr.size() - 1)
+            }
+        }
+
+        template<int prec>
+        inline ExprType get_expr_type(TokenType ty);
+
+        template<>
+        inline ExprType get_expr_type<1>(TokenType ty)
+        {
+            switch (ty)
             {
-                // has mods => initialize lhs and continue execution
+            case TokenType::ASSIGN:
+                return ExprType::BINARY_ASSIGN;
+            case TokenType::IADD:
+                return ExprType::BINARY_IADD;
+            case TokenType::ISUB:
+                return ExprType::BINARY_ISUB;
+            case TokenType::IMUL:
+                return ExprType::BINARY_IMUL;
+            case TokenType::IDIV:
+                return ExprType::BINARY_IDIV;
+            case TokenType::IMOD:
+                return ExprType::BINARY_IMOD;
+            }
+            assert(false);
+            return ExprType::INVALID;
+        }
+
+        template<>
+        inline ExprType get_expr_type<2>(TokenType ty)
+        {
+            switch (ty)
+            {
+            case TokenType::KW_AND:
+                return ExprType::BINARY_AND;
+            case TokenType::KW_OR:
+                return ExprType::BINARY_OR;
+            }
+            assert(false);
+            return ExprType::INVALID;
+        }
+
+        template<>
+        inline ExprType get_expr_type<3>(TokenType ty)
+        {
+            switch (ty)
+            {
+            case TokenType::CMP_EQ:
+                return ExprType::BINARY_CMP_EQ;
+            case TokenType::CMP_NE:
+                return ExprType::BINARY_CMP_NE;
+            case TokenType::CMP_GT:
+                return ExprType::BINARY_CMP_GT;
+            case TokenType::CMP_LT:
+                return ExprType::BINARY_CMP_LT;
+            case TokenType::CMP_GE:
+                return ExprType::BINARY_CMP_GE;
+            case TokenType::CMP_LE:
+                return ExprType::BINARY_CMP_LE;
+            }
+            assert(false);
+            return ExprType::INVALID;
+        }
+
+        template<>
+        inline ExprType get_expr_type<4>(TokenType ty)
+        {
+            switch (ty)
+            {
+            case TokenType::ADD:
+                return ExprType::BINARY_ADD;
+            case TokenType::SUB:
+                return ExprType::BINARY_SUB;
+            }
+            assert(false);
+            return ExprType::INVALID;
+        }
+
+        template<>
+        inline ExprType get_expr_type<5>(TokenType ty)
+        {
+            switch (ty)
+            {
+            case TokenType::STAR:
+                return ExprType::BINARY_MUL;
+            case TokenType::DIV:
+                return ExprType::BINARY_DIV;
+            case TokenType::MOD:
+                return ExprType::BINARY_MOD;
+            }
+            assert(false);
+            return ExprType::INVALID;
+        }
+
+        template<int prec>
+        bool parse_expr_prec(const TokenArray& tarr, AstExpr& ast_expr);
+
+        // specializations
+        template<> bool parse_expr_prec<7>(const TokenArray& tarr, AstExpr& ast_expr);
+        template<> bool parse_expr_prec<6>(const TokenArray& tarr, AstExpr& ast_expr);
+        template<> bool parse_expr_prec<0>(const TokenArray& tarr, AstExpr& ast_expr);
+
+        template<int prec>
+        bool parse_expr_prec(const TokenArray& tarr, AstExpr& ast_expr)
+        {
+            static_assert(0 <= prec && prec <= 7);
+            assert(tarr.size() > 0);
+            const auto& [op_assoc, tys] = prec_ops[prec];  // TODO: update my c++ compiler and make this constexpr
+            int pos;
+            if (op_assoc == OpAssoc::LTOR)
+                pos = tarr.search(IsInCriteria(tys), 1, -1);
+            else
+                pos = tarr.rsearch(IsInCriteria(tys));
+            if (pos == -1)
+                return parse_expr_prec<prec + 1>(tarr, ast_expr);
+            if (pos < 1 || tarr.size() - pos < 2)
+                return error::syntax(tarr[pos], "Dangling operator");
+            std::unique_ptr<AstExpr> pleft = std::make_unique<AstExpr>();
+            if (parse_expr_prec<prec + 1>({ tarr, 0, pos }, *pleft))
+                return true;
+            std::unique_ptr<AstExpr> pright = std::make_unique<AstExpr>();
+            if (parse_expr_prec<prec + 1>({ tarr, pos + 1 }, *pright))
+                return true;
+            new (&ast_expr.expr_binary) AstExprBinaryOp();
+            ast_expr.ty = get_expr_type<prec>(tarr[pos]->ty);
+            ast_expr.expr_binary.left = std::move(pleft);
+            ast_expr.expr_binary.right = std::move(pright);
+            return false;
+        }
+
+        template<>
+        bool parse_expr_prec<7>(const TokenArray& tarr, AstExpr& ast_expr)
+        {
+            assert(tarr.size() > 0);
+
+            if (tarr.size() == 1)  // single token leaf node
+                return parse_leaf_token(tarr[0], ast_expr);
+
+            std::unique_ptr<AstExpr> lhs = nullptr;
+            int i;
+            if (tarr[0]->ty == TokenType::ROUND_O)
+            {
+                // handling bracketed expressions
+                i = tarr.search(IsSameCriteria(TokenType::ROUND_C));
+                if (i == -1)
+                    return error::syntax(tarr[0], "Missing closing ')'");
+                if (i == 1)
+                    return error::syntax(tarr[0], "Empty expression are not allowed");
+
+                // Checking if all the remaining tokens are whitespace
+                // This is used to determine if any mods exist on the expression
+                int end;
+                for (end = i + 1; end < tarr.size() && tarr[end]->is_whitespace(); end++);
+                if (end == tarr.size() - 1)
+                    return parse_expr({ tarr, 1, i }, ast_expr);
+
                 lhs = std::make_unique<AstExpr>();
-                new (&lhs->expr_agg) AstExprAggLit();
-                lhs->ty = ExprType::LIT_ARRAY;
-                if (arr_expr.ty == ExprType::LIT_TUPLE)
-                    lhs->expr_agg.elems = std::move(arr_expr.expr_agg.elems);
-                else
-                    lhs->expr_agg.elems.push_back(std::move(arr_expr));
+                if (parse_expr({ tarr, 1, i }, *lhs))
+                    return true;
                 i = end;
+            }
+            else if (tarr[0]->ty == TokenType::SQUARE_O)
+            {
+                // handling array literals
+                i = tarr.search(IsSameCriteria(TokenType::SQUARE_C));
+                if (i == -1)
+                    return error::syntax(tarr[0], "Missing closing ']'");
+
+                // Checking if all the remaining tokens are whitespace
+                // This is used to determine if any mods exist on the array literal
+                int end;
+                for (end = i + 1; end < tarr.size() && tarr[end]->is_whitespace(); end++);
+
+                if (i == 1)
+                {
+                    // Empty array
+                    if (end != tarr.size() - 1)
+                    {
+                        // has mods => initialize lhs and continue execution
+                        lhs = std::make_unique<AstExpr>();
+                        new (&lhs->expr_agg) AstExprAggLit();
+                        lhs->ty = ExprType::LIT_ARRAY;
+                        i = end;
+                    }
+                    else
+                    {
+                        // does not have mods => initialize ast_expr and return
+                        new (&ast_expr.expr_agg) AstExprAggLit();
+                        ast_expr.ty = ExprType::LIT_ARRAY;
+                        return false;
+                    }
+                }
+                else
+                {
+                    // Non-empty array
+                    AstExpr arr_expr;
+                    if (parse_expr({ tarr, 1, i }, arr_expr))
+                        return true;
+                    if (end != tarr.size() - 1)
+                    {
+                        // has mods => initialize lhs and continue execution
+                        lhs = std::make_unique<AstExpr>();
+                        new (&lhs->expr_agg) AstExprAggLit();
+                        lhs->ty = ExprType::LIT_ARRAY;
+                        if (arr_expr.ty == ExprType::LIT_TUPLE)
+                            lhs->expr_agg.elems = std::move(arr_expr.expr_agg.elems);
+                        else
+                            lhs->expr_agg.elems.push_back(std::move(arr_expr));
+                        i = end;
+                    }
+                    else
+                    {
+                        // does not have mods => initialize ast_expr and return
+                        new (&ast_expr.expr_agg) AstExprAggLit();
+                        ast_expr.ty = ExprType::LIT_ARRAY;
+                        if (arr_expr.ty == ExprType::LIT_TUPLE)
+                            ast_expr.expr_agg.elems = std::move(arr_expr.expr_agg.elems);
+                        else
+                            ast_expr.expr_agg.elems.push_back(std::move(arr_expr));
+                        return false;
+                    }
+                }
+            }
+            else if (tarr[0]->ty == TokenType::KW_DEF)
+            {
+                // Block reference declaration
+                new (&ast_expr.expr_blk_decl) AstBlockSig();
+                ast_expr.ty = ExprType::DEF_DECL;
+                return parse_signature(tarr, ast_expr.expr_blk_decl);
+            }
+            else if (tarr[0]->ty == TokenType::KW_INTR)
+            {
+                // Intrinsic reference declaration
+                new (&ast_expr.expr_blk_decl) AstBlockSig();
+                ast_expr.ty = ExprType::INTR_DECL;
+                return parse_signature(tarr, ast_expr.expr_blk_decl);
+            }
+            else if (tarr[0]->ty == TokenType::KW_FN)
+            {
+                // Function reference declaration
+                new (&ast_expr.expr_fn_decl) AstFnSig();
+                ast_expr.ty = ExprType::FN_DECL;
+                return parse_signature(tarr, ast_expr.expr_fn_decl);
             }
             else
             {
-                // does not have mods => initialize ast_expr and return
-                new (&ast_expr.expr_agg) AstExprAggLit();
-                ast_expr.ty = ExprType::LIT_ARRAY;
-                if (arr_expr.ty == ExprType::LIT_TUPLE)
-                    ast_expr.expr_agg.elems = std::move(arr_expr.expr_agg.elems);
-                else
-                    ast_expr.expr_agg.elems.push_back(std::move(arr_expr));
+                // single token followed by modifiers
+                lhs = std::make_unique<AstExpr>();
+                if (parse_leaf_token(tarr[0], *lhs))
+                    return true;
+                i = 1;
+            }
+
+            // If execution falls through the above code,
+            // it means lhs and start are initialized and there are leaf mods that need to be parsed
+            // start should be the index immediately after the lhs expression
+            return parse_leaf_mods({ tarr, i }, ast_expr, std::move(lhs));
+        }
+
+        template<>
+        bool parse_expr_prec<6>(const TokenArray& tarr, AstExpr& ast_expr)
+        {
+            assert(tarr.size() > 0);
+            constexpr int prec = 6;
+
+            // Handling unary operators
+            std::unique_ptr<AstExpr> pexpr = nullptr;
+            switch (tarr[0]->ty)
+            {
+                // Don't move repeated code out.  In the case where the type falls through,
+                // keeping the code inside each case will save logic and a malloc
+            case TokenType::ADD:
+                if (tarr.size() < 2)
+                    return error::syntax(tarr[0], "Dangling operator");
+                pexpr = std::make_unique<AstExpr>();
+                if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
+                    return true;
+                new (&ast_expr.expr_unary) AstExprUnaryOp();
+                ast_expr.ty = ExprType::UNARY_POS;
+                ast_expr.expr_unary.expr = std::move(pexpr);
+                return false;
+            case TokenType::SUB:
+                if (tarr.size() < 2)
+                    return error::syntax(tarr[0], "Dangling operator");
+                pexpr = std::make_unique<AstExpr>();
+                if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
+                    return true;
+                new (&ast_expr.expr_unary) AstExprUnaryOp();
+                ast_expr.ty = ExprType::UNARY_NEG;
+                ast_expr.expr_unary.expr = std::move(pexpr);
+                return false;
+            case TokenType::STAR:
+                if (tarr.size() < 2)
+                    return error::syntax(tarr[0], "Dangling operator");
+                pexpr = std::make_unique<AstExpr>();
+                if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
+                    return true;
+                new (&ast_expr.expr_unary) AstExprUnaryOp();
+                ast_expr.ty = ExprType::UNARY_UNPACK;
+                ast_expr.expr_unary.expr = std::move(pexpr);
+                return false;
+            case TokenType::KW_NOT:
+                if (tarr.size() < 2)
+                    return error::syntax(tarr[0], "Dangling operator");
+                pexpr = std::make_unique<AstExpr>();
+                if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
+                    return true;
+                new (&ast_expr.expr_unary) AstExprUnaryOp();
+                ast_expr.ty = ExprType::UNARY_NOT;
+                ast_expr.expr_unary.expr = std::move(pexpr);
+                return false;
+            case TokenType::KW_REF:
+                if (tarr.size() < 2)
+                    return error::syntax(tarr[0], "Dangling operator");
+                pexpr = std::make_unique<AstExpr>();
+                if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
+                    return true;
+                new (&ast_expr.expr_unary) AstExprUnaryOp();
+                ast_expr.ty = ExprType::UNARY_REF;
+                ast_expr.expr_unary.expr = std::move(pexpr);
+                return false;
+            case TokenType::KW_CONST:
+                if (tarr.size() < 2)
+                    return error::syntax(tarr[0], "Dangling operator");
+                pexpr = std::make_unique<AstExpr>();
+                if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
+                    return true;
+                new (&ast_expr.expr_unary) AstExprUnaryOp();
+                ast_expr.ty = ExprType::UNARY_CONST;
+                ast_expr.expr_unary.expr = std::move(pexpr);
                 return false;
             }
+
+            return parse_expr_prec<7>(tarr, ast_expr);
         }
-    }
-    else if (tarr[0]->ty == TokenType::KW_FN)
-    {
-        // Function reference declaration
-        new (&ast_expr.expr_fn_decl) AstFnSig();
-        ast_expr.ty = ExprType::FN_DECL;
-        return parse_signature(tarr, ast_expr.expr_fn_decl);
-    }
-    else if (tarr[0]->ty == TokenType::KW_DEF)
-    {
-        // Block reference declaration
-        new (&ast_expr.expr_def_decl) AstBlockSig();
-        ast_expr.ty = ExprType::DEF_DECL;
-        return parse_signature(tarr, ast_expr.expr_def_decl);
-    }
-    else
-    {
-        // single token followed by modifiers
-        lhs = std::make_unique<AstExpr>();
-        if (parse_leaf_token(tarr[0], *lhs))
-            return true;
-        i = 1;
-    }
 
-    // If execution falls through the above code,
-    // it means lhs and start are initialized and there are leaf mods that need to be parsed
-    // start should be the index immediately after the lhs expression
-    return parse_leaf_mods({ tarr, i }, ast_expr, std::move(lhs));
-}
+        template<>
+        bool parse_expr_prec<0>(const TokenArray& tarr, AstExpr& ast_expr)
+        {
+            assert(tarr.size() > 0);
 
-template<>
-bool parse_expr_prec<6>(const TokenArray& tarr, AstExpr& ast_expr)
-{
-    assert(tarr.size() > 0);
-    constexpr int prec = 6;
+            // Handling the comma operator
+            IsSameCriteria sc{ TokenType::COMMA };
+            int i = 0;
+            int end;
+            std::vector<AstExpr> elem_exprs;
+            while ((end = tarr.search(sc, i)) > 0)
+            {
+                AstExpr elem_expr;
+                if (parse_expr_prec<1>({ tarr, i, end }, elem_expr))
+                    return true;
+                elem_exprs.push_back(std::move(elem_expr));
+                i = end + 1;
+            }
 
-    // Handling unary operators
-    std::unique_ptr<AstExpr> pexpr = nullptr;
-    switch (tarr[0]->ty)
-    {
-        // Don't move repeated code out.  In the case where the type falls through,
-        // keeping the code inside each case will save logic and a malloc
-    case TokenType::ADD:
-        if (tarr.size() < 2)
-            return error::syntax(tarr[0], "Dangling operator");
-        pexpr = std::make_unique<AstExpr>();
-        if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
-            return true;
-        new (&ast_expr.expr_unary) AstExprUnaryOp();
-        ast_expr.ty = ExprType::UNARY_POS;
-        ast_expr.expr_unary.expr = std::move(pexpr);
-        return false;
-    case TokenType::SUB:
-        if (tarr.size() < 2)
-            return error::syntax(tarr[0], "Dangling operator");
-        pexpr = std::make_unique<AstExpr>();
-        if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
-            return true;
-        new (&ast_expr.expr_unary) AstExprUnaryOp();
-        ast_expr.ty = ExprType::UNARY_NEG;
-        ast_expr.expr_unary.expr = std::move(pexpr);
-        return false;
-    case TokenType::STAR:
-        if (tarr.size() < 2)
-            return error::syntax(tarr[0], "Dangling operator");
-        pexpr = std::make_unique<AstExpr>();
-        if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
-            return true;
-        new (&ast_expr.expr_unary) AstExprUnaryOp();
-        ast_expr.ty = ExprType::UNARY_UNPACK;
-        ast_expr.expr_unary.expr = std::move(pexpr);
-        return false;
-    case TokenType::KW_NOT:
-        if (tarr.size() < 2)
-            return error::syntax(tarr[0], "Dangling operator");
-        pexpr = std::make_unique<AstExpr>();
-        if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
-            return true;
-        new (&ast_expr.expr_unary) AstExprUnaryOp();
-        ast_expr.ty = ExprType::UNARY_NOT;
-        ast_expr.expr_unary.expr = std::move(pexpr);
-        return false;
-    case TokenType::KW_REF:
-        if (tarr.size() < 2)
-            return error::syntax(tarr[0], "Dangling operator");
-        pexpr = std::make_unique<AstExpr>();
-        if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
-            return true;
-        new (&ast_expr.expr_unary) AstExprUnaryOp();
-        ast_expr.ty = ExprType::UNARY_REF;
-        ast_expr.expr_unary.expr = std::move(pexpr);
-        return false;
-    case TokenType::KW_CONST:
-        if (tarr.size() < 2)
-            return error::syntax(tarr[0], "Dangling operator");
-        pexpr = std::make_unique<AstExpr>();
-        if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
-            return true;
-        new (&ast_expr.expr_unary) AstExprUnaryOp();
-        ast_expr.ty = ExprType::UNARY_CONST;
-        ast_expr.expr_unary.expr = std::move(pexpr);
-        return false;
-    }
+            if (i == 0)  // No commas were found
+                return parse_expr_prec<1>(tarr, ast_expr);
 
-    return parse_expr_prec<7>(tarr, ast_expr);
-}
+            new (&ast_expr.expr_agg) AstExprAggLit();
+            ast_expr.ty = ExprType::LIT_TUPLE;
+            ast_expr.expr_agg.elems = std::move(elem_exprs);
+            if (i == tarr.size())
+                return false;  // In case the tuple was ended with a comma
+            AstExpr last_expr;
+            if (parse_expr_prec<1>({ tarr, i }, last_expr))
+                return true;
+            ast_expr.expr_agg.elems.push_back(std::move(last_expr));
+            return false;
+        }
 
-template<>
-bool parse_expr_prec<0>(const TokenArray& tarr, AstExpr& ast_expr)
-{
-    assert(tarr.size() > 0);
-    
-    // Handling the comma operator
-    IsSameCriteria sc{ TokenType::COMMA };
-    int i = 0;
-    int end;
-    std::vector<AstExpr> elem_exprs;
-    while ((end = tarr.search(sc, i)) > 0)
-    {
-        AstExpr elem_expr;
-        if (parse_expr_prec<1>({ tarr, i, end }, elem_expr))
-            return true;
-        elem_exprs.push_back(std::move(elem_expr));
-        i = end + 1;
-    }
-    
-    if (i == 0)  // No commas were found
-        return parse_expr_prec<1>(tarr, ast_expr);
-    
-    new (&ast_expr.expr_agg) AstExprAggLit();
-    ast_expr.ty = ExprType::LIT_TUPLE;
-    ast_expr.expr_agg.elems = std::move(elem_exprs);
-    if (i == tarr.size())
-        return false;  // In case the tuple was ended with a comma
-    AstExpr last_expr;
-    if (parse_expr_prec<1>({ tarr, i }, last_expr))
-        return true;
-    ast_expr.expr_agg.elems.push_back(std::move(last_expr));
-    return false;
-}
-
-namespace nn
-{
-    namespace lang
-    {
         bool parse_expr(const TokenArray& tarr, AstExpr& ast_expr)
         {
             assert(tarr.size() > 0);
@@ -925,7 +933,70 @@ namespace nn
                 i = tarr.size();
             }
 
-            // TODO: figure out how to handle fn and def references
+            // handling references to defs/intrs/fns.  The syntax for these are different from normal declarations
+            int start;
+            for (start = 0; start < i && tarr[start]->is_whitespace(); start++);
+            if (start == i)
+                return error::syntax(tarr[tarr.size() - 1], "Expected an expression");
+            switch (tarr[0]->ty)
+            {
+            case TokenType::KW_DEF:
+                for (start++; start < i && tarr[start]->is_whitespace(); start++);
+                if (start == i)
+                    return error::syntax(tarr[i], "Expected signature after 'def'");
+                if (tarr[start]->ty == TokenType::STAR)
+                {
+                    ast_arg_decl.is_packed = true;
+                    for (start++; start < i && tarr[start]->is_whitespace(); start++);
+                    if (start == i)
+                        return error::syntax(tarr[i], "Expected signature after 'def'");
+                }
+                if (tarr[start]->expect<TokenType::IDN>())
+                    return true;
+                ast_arg_decl.var_name = tarr[start]->get<TokenType::IDN>().val;
+                ast_arg_decl.type_expr = std::make_unique<AstExpr>();
+                new (&ast_arg_decl.type_expr->expr_blk_decl) AstBlockSig();
+                ast_arg_decl.type_expr->ty = ExprType::DEF_DECL;
+                return parse_signature(tarr, ast_arg_decl.type_expr->expr_blk_decl);
+
+            case TokenType::KW_INTR:
+                for (start++; start < i && tarr[start]->is_whitespace(); start++);
+                if (start == i)
+                    return error::syntax(tarr[i], "Expected signature after 'intr'");
+                if (tarr[start]->ty == TokenType::STAR)
+                {
+                    ast_arg_decl.is_packed = true;
+                    for (start++; start < i && tarr[start]->is_whitespace(); start++);
+                    if (start == i)
+                        return error::syntax(tarr[i], "Expected signature after 'intr'");
+                }
+                if (tarr[start]->expect<TokenType::IDN>())
+                    return true;
+                ast_arg_decl.var_name = tarr[start]->get<TokenType::IDN>().val;
+                ast_arg_decl.type_expr = std::make_unique<AstExpr>();
+                new (&ast_arg_decl.type_expr->expr_blk_decl) AstBlockSig();
+                ast_arg_decl.type_expr->ty = ExprType::INTR_DECL;
+                return parse_signature(tarr, ast_arg_decl.type_expr->expr_blk_decl);
+
+            case TokenType::KW_FN:
+                for (start++; start < i && tarr[start]->is_whitespace(); start++);
+                if (start == i)
+                    return error::syntax(tarr[i], "Expected signature after 'fn'");
+                if (tarr[start]->ty == TokenType::STAR)
+                {
+                    ast_arg_decl.is_packed = true;
+                    for (start++; start < i && tarr[start]->is_whitespace(); start++);
+                    if (start == i)
+                        return error::syntax(tarr[i], "Expected signature after 'fn'");
+                }
+                if (tarr[start]->expect<TokenType::IDN>())
+                    return true;
+                ast_arg_decl.var_name = tarr[start]->get<TokenType::IDN>().val;
+                ast_arg_decl.type_expr = std::make_unique<AstExpr>();
+                new (&ast_arg_decl.type_expr->expr_fn_decl) AstFnSig();
+                ast_arg_decl.type_expr->ty = ExprType::FN_DECL;
+                return parse_signature(tarr, ast_arg_decl.type_expr->expr_fn_decl);
+            }
 
             for (i--; tarr[i]->is_whitespace(); i--);
             if (tarr[i]->expect<TokenType::IDN>())
@@ -1206,6 +1277,7 @@ namespace nn
 
         bool parse_namespace(const TokenArray& tarr, AstNamespace& ast_namespace, int indent_level)
         {
+            bool ret = false;
             for (int i = 0; i < tarr.size(); i++)
             {
                 if (tarr[i]->ty == TokenType::ENDL || tarr[i]->ty == TokenType::INDENT)
@@ -1215,7 +1287,7 @@ namespace nn
                 switch (tarr[i]->ty)
                 {
                 case TokenType::KW_IMPORT:
-                    error::syntax(tarr[i], "imports are not allowed within a namespace");
+                    ret = error::syntax(tarr[i], "imports are not allowed within a namespace");
                     i = tarr.search(IsSameCriteria(TokenType::ENDL), i);
                     continue;
                 case TokenType::KW_NAMESPACE:
@@ -1226,7 +1298,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_namespace.namespaces.push_back(AstNamespace());
-                    if (parse_namespace({ tarr, i, end }, ast_namespace.namespaces.back(), indent_level + 1))
+                    if (ret = ret || parse_namespace({ tarr, i, end }, ast_namespace.namespaces.back(), indent_level + 1))
                         ast_namespace.namespaces.pop_back();
                     continue;
                 case TokenType::KW_STRUCT:
@@ -1237,7 +1309,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_namespace.structs.push_back(AstStruct());
-                    if (parse_code_block({ tarr, i, end }, ast_namespace.structs.back(), indent_level + 1))
+                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_namespace.structs.back(), indent_level + 1))
                         ast_namespace.structs.pop_back();
                     continue;
                 case TokenType::KW_FN:
@@ -1248,7 +1320,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_namespace.funcs.push_back(AstFn());
-                    if (parse_code_block({ tarr, i, end }, ast_namespace.funcs.back(), indent_level + 1))
+                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_namespace.funcs.back(), indent_level + 1))
                         ast_namespace.funcs.pop_back();
                     continue;
                 case TokenType::KW_DEF:
@@ -1259,7 +1331,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_namespace.defs.push_back(AstBlock());
-                    if (parse_code_block({ tarr, i, end }, ast_namespace.defs.back(), indent_level + 1))
+                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_namespace.defs.back(), indent_level + 1))
                         ast_namespace.defs.pop_back();
                     continue;
                 case TokenType::KW_INTR:
@@ -1270,7 +1342,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_namespace.intrs.push_back(AstBlock());
-                    if (parse_code_block({ tarr, i, end }, ast_namespace.intrs.back(), indent_level + 1))
+                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_namespace.intrs.back(), indent_level + 1))
                         ast_namespace.intrs.pop_back();
                     continue;
                 case TokenType::KW_INIT:
@@ -1281,20 +1353,21 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_namespace.inits.push_back(AstInit());
-                    if (parse_init({ tarr, i, end }, ast_namespace.inits.back()))
+                    if (ret = ret || parse_init({ tarr, i, end }, ast_namespace.inits.back()))
                         ast_namespace.inits.pop_back();
                     continue;
                 default:
                     return error::syntax(tarr[i], "Invalid token in namespace");
                 }
             }
-            return false;
+            return ret;
         }
 
         bool parse_module(const TokenArray& tarr, AstModule& ast_module)
         {
             ast_module.fname = tarr[0]->fname;
 
+            bool ret = false;
             for (int i = 0; i < tarr.size(); i++)
             {
                 if (tarr[i]->ty == TokenType::ENDL || tarr[i]->ty == TokenType::INDENT)
@@ -1311,7 +1384,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.imports.push_back(AstImport());
-                    if (!parse_import({ tarr, i, end }, ast_module.imports.back()))
+                    if (ret = ret || parse_import({ tarr, i, end }, ast_module.imports.back()))
                         ast_module.imports.pop_back();
                     continue;
                 case TokenType::KW_NAMESPACE:
@@ -1322,7 +1395,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.namespaces.push_back(AstNamespace());
-                    if (parse_namespace({ tarr, i, end }, ast_module.namespaces.back(), 1))
+                    if (ret = ret || parse_namespace({ tarr, i, end }, ast_module.namespaces.back(), 1))
                         ast_module.namespaces.pop_back();
                     continue;
                 case TokenType::KW_STRUCT:
@@ -1333,7 +1406,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.structs.push_back(AstStruct());
-                    if (parse_code_block({ tarr, i, end }, ast_module.structs.back(), 1))
+                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_module.structs.back(), 1))
                         ast_module.structs.pop_back();
                     continue;
                 case TokenType::KW_FN:
@@ -1344,7 +1417,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.funcs.push_back(AstFn());
-                    if (parse_code_block({ tarr, i, end }, ast_module.funcs.back(), 1))
+                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_module.funcs.back(), 1))
                         ast_module.funcs.pop_back();
                     continue;
                 case TokenType::KW_DEF:
@@ -1355,7 +1428,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.defs.push_back(AstBlock());
-                    if (parse_code_block({ tarr, i, end }, ast_module.defs.back(), 1))
+                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_module.defs.back(), 1))
                         ast_module.defs.pop_back();
                     continue;
                 case TokenType::KW_INTR:
@@ -1366,7 +1439,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.intrs.push_back(AstBlock());
-                    if (parse_code_block({ tarr, i, end }, ast_module.intrs.back(), 1))
+                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_module.intrs.back(), 1))
                         ast_module.intrs.pop_back();
                     continue;
                 case TokenType::KW_INIT:
@@ -1377,14 +1450,14 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.inits.push_back(AstInit());
-                    if (parse_init({ tarr, i, end }, ast_module.inits.back()))
+                    if (ret = ret || parse_init({ tarr, i, end }, ast_module.inits.back()))
                         ast_module.inits.pop_back();
                     continue;
                 default:
                     return error::syntax(tarr[i], "Invalid token in module");
                 }
             }
-            return false;
+            return ret;
         }
 
         // From this point onward, the actual code ends and we enter c++ land
@@ -1449,11 +1522,12 @@ namespace nn
             case ExprType::VARGS_CALL:
                 new (&expr_call) decltype(expr_call)(std::move(expr.expr_call));
                 break;
+            case ExprType::DEF_DECL:
+            case ExprType::INTR_DECL:
+                new (&expr_blk_decl) decltype(expr_blk_decl)(std::move(expr.expr_blk_decl));
+                break;
             case ExprType::FN_DECL:
                 new (&expr_fn_decl) decltype(expr_fn_decl)(std::move(expr.expr_fn_decl));
-                break;
-            case ExprType::DEF_DECL:
-                new (&expr_def_decl) decltype(expr_def_decl)(std::move(expr.expr_def_decl));
                 break;
             default:
                 assert(false);
@@ -1521,11 +1595,12 @@ namespace nn
             case ExprType::VARGS_CALL:
                 new (&expr_call) decltype(expr_call)(std::move(expr.expr_call));
                 break;
+            case ExprType::DEF_DECL:
+            case ExprType::INTR_DECL:
+                new (&expr_blk_decl) decltype(expr_blk_decl)(std::move(expr.expr_blk_decl));
             case ExprType::FN_DECL:
                 new (&expr_fn_decl) decltype(expr_fn_decl)(std::move(expr.expr_fn_decl));
                 break;
-            case ExprType::DEF_DECL:
-                new (&expr_def_decl) decltype(expr_def_decl)(std::move(expr.expr_def_decl));
                 break;
             default:
                 assert(false);
@@ -1589,11 +1664,12 @@ namespace nn
             case ExprType::VARGS_CALL:
                 expr_call.~AstExprCall();
                 break;
+            case ExprType::DEF_DECL:
+            case ExprType::INTR_DECL:
+                expr_blk_decl.~AstBlockSig();
+                break;
             case ExprType::FN_DECL:
                 expr_fn_decl.~AstFnSig();
-                break;
-            case ExprType::DEF_DECL:
-                expr_def_decl.~AstBlockSig();
                 break;
             default:
                 assert(false);
