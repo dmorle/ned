@@ -652,7 +652,7 @@ namespace nn
         {
             Obj obj, ten;
             return
-                stack.pop(obj) ||
+                stack.pop(ten) ||
                 pbuilder->get_forward(obj, ten.tensor_obj) ||
                 stack.push(obj);
         }
@@ -661,7 +661,7 @@ namespace nn
         {
             Obj obj, ten;
             return
-                stack.pop(obj) ||
+                stack.pop(ten) ||
                 pbuilder->get_backward(obj, ten.tensor_obj) ||
                 stack.push(obj);
         }
@@ -671,10 +671,10 @@ namespace nn
             Obj node, name, type, obj;
             core::Config* cfg;
             return
-                stack.pop(node) ||
                 stack.pop(name) ||
                 stack.pop(type) ||
                 stack.pop(obj) ||
+                stack.pop(node) ||
                 type.type_obj->cfg(cfg, obj) ||
                 pbuilder->add_ndcfg(*name.str_obj, node.node_obj, cfg) ||
                 stack.push(node);
@@ -685,10 +685,10 @@ namespace nn
             Obj block, name, type, obj;
             core::Config* cfg;
             return
-                stack.pop(block) ||
                 stack.pop(name) ||
                 stack.pop(type) ||
                 stack.pop(obj) ||
+                stack.pop(block) ||
                 type.type_obj->cfg(cfg, obj) ||
                 pbuilder->add_bkcfg(*name.str_obj, block.block_obj, cfg) ||
                 stack.push(block);
@@ -699,10 +699,10 @@ namespace nn
             Obj init, name, type, obj;
             core::Config* cfg;
             return
-                stack.pop(init) ||
                 stack.pop(name) ||
                 stack.pop(type) ||
                 stack.pop(obj) ||
+                stack.pop(init) ||
                 type.type_obj->cfg(cfg, obj) ||
                 pbuilder->add_incfg(*name.str_obj, init.init_obj, cfg) ||
                 stack.push(init);
@@ -712,9 +712,9 @@ namespace nn
         {
             Obj name, node, edge;
             return
-                stack.pop(node) ||
                 stack.pop(name) ||
                 stack.pop(edge) ||
+                stack.pop(node) ||
                 pbuilder->set_ndinp(*name.str_obj, node.node_obj, edge.edge_obj) ||
                 stack.push(node);
         }
@@ -723,9 +723,9 @@ namespace nn
         {
             Obj name, node, edge;
             return
-                stack.pop(node) ||
                 stack.pop(name) ||
                 stack.pop(edge) ||
+                stack.pop(node) ||
                 pbuilder->set_ndout(*name.str_obj, node.node_obj, edge.edge_obj) ||
                 stack.push(node);
         }
@@ -744,9 +744,9 @@ namespace nn
         {
             Obj name, block, tensor;
             return
-                stack.pop(block) ||
                 stack.pop(name) ||
                 stack.pop(tensor) ||
+                stack.pop(block) ||
                 pbuilder->set_bkinp(*name.str_obj, block.block_obj, tensor.tensor_obj) ||
                 stack.push(block);
         }
@@ -755,9 +755,9 @@ namespace nn
         {
             Obj name, block, tensor;
             return
-                stack.pop(block) ||
                 stack.pop(name) ||
                 stack.pop(tensor) ||
+                stack.pop(block) ||
                 pbuilder->set_bkout(*name.str_obj, block.block_obj, tensor.tensor_obj) ||
                 stack.push(block);
         }
@@ -780,10 +780,10 @@ namespace nn
         {
             Obj name, block, tensor, init;
             return
-                stack.pop(block) ||
-                stack.pop(init) ||
                 stack.pop(name) ||
                 stack.pop(tensor) ||
+                stack.pop(init) ||
+                stack.pop(block) ||
                 pbuilder->add_extern(*name.str_obj, block.block_obj, tensor.tensor_obj, init.init_obj);
         }
 

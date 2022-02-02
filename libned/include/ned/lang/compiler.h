@@ -128,7 +128,7 @@ namespace nn
 
         struct TypeInfo
         {
-            enum
+            enum class Type
             {
                 INVALID = 0, // Invalid (uninitialized) type object
                 TYPE,        // Type object
@@ -149,19 +149,67 @@ namespace nn
                 DEF,         // Block with bound cargs
                 INTRREF,     // Reference to a intrinsic name
                 INTR,        // Intrinsic with bound cargs
+                INITREF,     // Reference to an init name
+                INIT,        // Init object
+                NODE,        // Node object
+                EDGE,        // Edge object
+                BLOCK,       // Block object
                 TENSOR,      // Both a forward and backward edge
-                EDGE,        // Either forward or backward edge
                 GENERIC,     // Compile time generic type
                 ARRPACK,     // A packed set of parameters (array of a single type)
                 AGGPACK      // The return value of a non-struct callable (tuple of types)
-            } ty = TypeInfo::INVALID;
+            } ty = TypeInfo::Type::INVALID;
 
-            bool is_const;
-            bool is_ref;
+            enum class Category
+            {
+                DEFAULT,
+                CONST,
+                REF,
+                VIRTUAL
+            } cat = TypeInfo::Category::DEFAULT;
 
-            bool xstr();  // whether the type can be converted into a string
-            bool xint();  // whether the type can be converted into an int
-            bool xflt();  // whether the type can be converted into a float
+            template<Category...>
+            struct CategorySet;
+
+            template<Category head, Category... tail>
+            struct CategorySet<head, tail...>
+            {
+                constexpr bool has_default = tail == Category::DEFAULT || CategorySet<tail...>::has_default;
+                constexpr bool has_const   = tail == Category::CONST   || CategorySet<tail...>::has_const;
+                constexpr bool has_ref     = tail == Category::REF     || CategorySet<tail...>::has_ref;
+                constexpr bool has_virtual = tail == Category::VIRTUAL || CategorySet<tail...>::has_virtual;
+            };
+
+            template<>
+            struct CategorySet<>
+            {
+                constexpr static bool has_default = false;
+                constexpr static bool has_const   = false;
+                constexpr static bool has_ref     = false;
+                constexpr static bool has_virtual = false;
+            };
+
+            using AllowAll = CategorySet<Category::DEFAULT, Category::CONST, Category::REF, Category::VIRTUAL>;
+            using NonVirtual = CategorySet<Category::DEFAULT, Category::CONST, Category::REF>;
+            using NonConst = CategorySet<Category::DEFAULT, Category::REF, Category::VIRTUAL>;
+            using Mutable = CategorySet<Category::DEFAULT, Category::REF>;
+
+            bool check_add();
+            bool check_sub();
+            bool check_mul();
+            bool check_div();
+            bool check_mod();
+
+            bool check_eq();
+            bool check_ne();
+            bool check_ge();
+            bool check_le();
+            bool check_gt();
+            bool check_lt();
+
+            bool check_xstr();  // whether the type can be converted into a string
+            bool check_xint();  // whether the type can be converted into an int
+            bool check_xflt();  // whether the type can be converted into a float
 
             union
             {
@@ -182,23 +230,37 @@ namespace nn
                 TypeInfoAggPack   type_agg_pack;
             };
 
+            TypeInfo();
             TypeInfo(const TypeInfo& type);
             TypeInfo& operator=(const TypeInfo& type);
             ~TypeInfo();
         
-        private:
-            TypeInfo();
+            static TypeInfo create_type(const TypeInfo& base, TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
+            static TypeInfo create_placeholder(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
+            static TypeInfo create_bool(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
+            static TypeInfo create_int(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
+            static TypeInfo create_float(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
+            static TypeInfo create_string(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
+            static TypeInfo create_array(const TypeInfo& elem, TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
+            static TypeInfo create_tuple(const std::vector<TypeInfo>& elems, TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
 
-        public:
-            static TypeInfo create_type(const TypeInfo& base);
-            static TypeInfo create_placeholder();
-            static TypeInfo create_bool();
-            static TypeInfo create_int();
-            static TypeInfo create_float();
-            static TypeInfo create_string();
-            static TypeInfo create_array(const TypeInfo& elem);
-            static TypeInfo create_tuple(const std::vector<TypeInfo>& elems);
+            static TypeInfo create_init(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
+            static TypeInfo create_node(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
+            static TypeInfo create_edge(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
+            static TypeInfo create_block(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
+            static TypeInfo create_tensor(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
+
+            std::string encode();
+            void decode(const std::string& data);
+            std::string to_string();
+            bool runtime_obj();  // returns whether or not the type can be converted into a runtime object
+            bool to_obj(ProgramHeap& heap, Obj& obj);  // converts the type into a runtime object
+
+        private:
+            void do_copy(const TypeInfo& type);
         };
+
+        bool operator==(const TypeInfo& lhs, const TypeInfo& rhs);
 
         class Scope
         {
@@ -208,7 +270,7 @@ namespace nn
             struct StackVar
             {
                 TypeInfo info;
-                size_t ptr;  // For tensor types, the backward edge will always be at ptr-1
+                size_t ptr;
             };
 
         private:
@@ -216,25 +278,21 @@ namespace nn
             Scope* parent = nullptr;
 
         public:
-            bool at(const std::string& var_name, StackVar& var) const;
-            bool add(const std::string& var_name, const TypeInfo& info);
+            Scope(Scope* parent) : parent(parent) {}
 
-            bool push(size_t n);
-            bool pop(size_t n);
+            bool at(const std::string& var_name, StackVar& var) const;
+            bool add(const std::string& var_name, const TypeInfo& info, const AstNodeInfo& node_info);
+
+            void push(size_t n);
+            void pop(size_t n);
 
             bool local_size(size_t& sz, const Scope* scope) const;
             bool list_local_vars(std::vector<StackVar>& vars, const Scope* scope);
-
-            static bool create_sub(Scope& scope, Scope* parent);
-            static bool create_struct(Scope& scope, AstStructSig& sig);
-            static bool create_func(Scope& scope, AstFnSig& sig);
-            static bool create_def(Scope& scope, AstBlockSig& sig);
-            static bool create_intr(Scope& scope, AstBlockSig& sig);
         };
 
         std::string label_prefix(const AstNodeInfo& info);
 
-        bool expr_type(TypeInfo& info, const CodeModule& mod, const Scope* scope, const AstExpr& ast);
+        bool arg_type(TypeInfo& info, const Scope& scope, const AstArgDecl& arg);
 
         bool codegen_expr_bool     (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
         bool codegen_expr_int      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
@@ -292,7 +350,6 @@ namespace nn
         bool codegen_line_expr     (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);
 
         bool codegen_line(ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);  // generates code for independent lines.  Can't handle if, elif, else, forward.
-        bool codegen_loop(ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const std::vector<AstLine>& lines, const std::string& cont_lbl, const std::string& break_lbl);
         bool codegen_lines(ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const std::vector<AstLine>& lines);
 
         bool codegen_struct(ByteCodeModule& bc, const std::string& name, const AstStruct& ast_struct, const std::vector<std::string>& ns);

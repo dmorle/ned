@@ -71,6 +71,8 @@ namespace nn
 
         struct AstArgDecl
         {
+            AstNodeInfo node_info;
+
             // for signatures, the type expression will contain the full declaration
             // and the name will be duplicated into the 
             bool is_packed = false;
@@ -175,6 +177,9 @@ namespace nn
             AstExpr(AstExpr&&);
             AstExpr& operator=(AstExpr&&) noexcept;
             ~AstExpr();
+
+        private:
+            void do_move(AstExpr&& line) noexcept;
         };
 
         struct AstLine;
@@ -271,9 +276,12 @@ namespace nn
             };
 
             AstLine();
-            AstLine(AstLine&& line);
+            AstLine(AstLine&& line) noexcept;
             AstLine& operator=(AstLine&& line) noexcept;
             ~AstLine();
+
+        private:
+            void do_move(AstLine&& line) noexcept;
         };
 
         template<typename T>

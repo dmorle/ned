@@ -915,6 +915,15 @@ namespace nn
 
         bool parse_arg_decl(const TokenArray& tarr, AstArgDecl& ast_arg_decl)
         {
+            assert(tarr.size() > 0);
+            ast_arg_decl.node_info = {
+                .fname = tarr[0]->fname,
+                .line_start = tarr[0]->line_num,
+                .line_end = tarr[tarr.size() - 1]->line_num,
+                .col_start = tarr[0]->col_num,
+                .col_end = tarr[tarr.size() - 1]->col_num
+            };
+
             // handling default values
             int i = tarr.search(IsSameCriteria(TokenType::ASSIGN));
             if (i != -1)
@@ -1466,146 +1475,15 @@ namespace nn
 
         AstExpr::AstExpr(AstExpr&& expr)
         {
-            ty = expr.ty;
-            expr.ty = ExprType::INVALID;
-
-            switch (ty)
-            {
-            case ExprType::INVALID:
-            case ExprType::LIT_BOOL:
-            case ExprType::LIT_INT:
-            case ExprType::LIT_FLOAT:
-                break;
-            case ExprType::LIT_STRING:
-            case ExprType::VAR:
-                new (&expr_string) decltype(expr_string)(std::move(expr.expr_string));
-                break;
-            case ExprType::LIT_ARRAY:
-            case ExprType::LIT_TUPLE:
-                new (&expr_agg) decltype(expr_agg)(std::move(expr.expr_agg));
-                break;
-            case ExprType::UNARY_POS:
-            case ExprType::UNARY_NEG:
-            case ExprType::UNARY_NOT:
-            case ExprType::UNARY_UNPACK:
-            case ExprType::UNARY_REF:
-            case ExprType::UNARY_CONST:
-                new (&expr_unary) decltype(expr_unary)(std::move(expr.expr_unary));
-                break;
-            case ExprType::BINARY_ADD:
-            case ExprType::BINARY_SUB:
-            case ExprType::BINARY_MUL:
-            case ExprType::BINARY_DIV:
-            case ExprType::BINARY_MOD:
-            case ExprType::BINARY_IADD:
-            case ExprType::BINARY_ISUB:
-            case ExprType::BINARY_IMUL:
-            case ExprType::BINARY_IDIV:
-            case ExprType::BINARY_IMOD:
-            case ExprType::BINARY_ASSIGN:
-            case ExprType::BINARY_AND:
-            case ExprType::BINARY_OR:
-            case ExprType::BINARY_CMP_EQ:
-            case ExprType::BINARY_CMP_NE:
-            case ExprType::BINARY_CMP_GT:
-            case ExprType::BINARY_CMP_LT:
-            case ExprType::BINARY_CMP_GE:
-            case ExprType::BINARY_CMP_LE:
-            case ExprType::BINARY_IDX:
-                new (&expr_binary) decltype(expr_binary)(std::move(expr.expr_binary));
-                break;
-            case ExprType::DOT:
-            case ExprType::VAR_DECL:
-                new (&expr_name) decltype(expr_name)(std::move(expr.expr_name));
-                break;
-            case ExprType::CARGS_CALL:
-            case ExprType::VARGS_CALL:
-                new (&expr_call) decltype(expr_call)(std::move(expr.expr_call));
-                break;
-            case ExprType::DEF_DECL:
-            case ExprType::INTR_DECL:
-                new (&expr_blk_decl) decltype(expr_blk_decl)(std::move(expr.expr_blk_decl));
-                break;
-            case ExprType::FN_DECL:
-                new (&expr_fn_decl) decltype(expr_fn_decl)(std::move(expr.expr_fn_decl));
-                break;
-            default:
-                assert(false);
-            }
+            do_move(std::move(expr));
         }
 
         AstExpr& AstExpr::operator=(AstExpr&& expr) noexcept
         {
             if (&expr == this)
                 return *this;
-
-            ty = expr.ty;
-            expr.ty = ExprType::INVALID;
-
-            switch (ty)
-            {
-            case ExprType::INVALID:
-            case ExprType::LIT_BOOL:
-            case ExprType::LIT_INT:
-            case ExprType::LIT_FLOAT:
-                break;
-            case ExprType::LIT_STRING:
-            case ExprType::VAR:
-                new (&expr_string) decltype(expr_string)(std::move(expr.expr_string));
-                break;
-            case ExprType::LIT_ARRAY:
-            case ExprType::LIT_TUPLE:
-                new (&expr_agg) decltype(expr_agg)(std::move(expr.expr_agg));
-                break;
-            case ExprType::UNARY_POS:
-            case ExprType::UNARY_NEG:
-            case ExprType::UNARY_NOT:
-            case ExprType::UNARY_UNPACK:
-            case ExprType::UNARY_REF:
-            case ExprType::UNARY_CONST:
-                new (&expr_unary) decltype(expr_unary)(std::move(expr.expr_unary));
-                break;
-            case ExprType::BINARY_ADD:
-            case ExprType::BINARY_SUB:
-            case ExprType::BINARY_MUL:
-            case ExprType::BINARY_DIV:
-            case ExprType::BINARY_MOD:
-            case ExprType::BINARY_IADD:
-            case ExprType::BINARY_ISUB:
-            case ExprType::BINARY_IMUL:
-            case ExprType::BINARY_IDIV:
-            case ExprType::BINARY_IMOD:
-            case ExprType::BINARY_ASSIGN:
-            case ExprType::BINARY_AND:
-            case ExprType::BINARY_OR:
-            case ExprType::BINARY_CMP_EQ:
-            case ExprType::BINARY_CMP_NE:
-            case ExprType::BINARY_CMP_GT:
-            case ExprType::BINARY_CMP_LT:
-            case ExprType::BINARY_CMP_GE:
-            case ExprType::BINARY_CMP_LE:
-            case ExprType::BINARY_IDX:
-                new (&expr_binary) decltype(expr_binary)(std::move(expr.expr_binary));
-                break;
-            case ExprType::DOT:
-            case ExprType::VAR_DECL:
-                new (&expr_name) decltype(expr_name)(std::move(expr.expr_name));
-                break;
-            case ExprType::CARGS_CALL:
-            case ExprType::VARGS_CALL:
-                new (&expr_call) decltype(expr_call)(std::move(expr.expr_call));
-                break;
-            case ExprType::DEF_DECL:
-            case ExprType::INTR_DECL:
-                new (&expr_blk_decl) decltype(expr_blk_decl)(std::move(expr.expr_blk_decl));
-            case ExprType::FN_DECL:
-                new (&expr_fn_decl) decltype(expr_fn_decl)(std::move(expr.expr_fn_decl));
-                break;
-                break;
-            default:
-                assert(false);
-            }
-
+            this->~AstExpr();
+            do_move(std::move(expr));
             return *this;
         }
 
@@ -1676,102 +1554,89 @@ namespace nn
             }
         }
 
-        AstLine::AstLine() {}
-
-        AstLine::AstLine(AstLine&& line)
+        void AstExpr::do_move(AstExpr&& expr)
         {
-            ty = line.ty;
-            line.ty = LineType::INVALID;
+            ty = expr.ty;
+            expr.ty = ExprType::INVALID;
 
             switch (ty)
             {
-            case LineType::INVALID:
-            case LineType::BREAK:
-            case LineType::CONTINUE:
+            case ExprType::INVALID:
+            case ExprType::LIT_BOOL:
+            case ExprType::LIT_INT:
+            case ExprType::LIT_FLOAT:
                 break;
-            case LineType::EXPORT:
-                new (&line_export) decltype(line_export)(std::move(line.line_export));
+            case ExprType::LIT_STRING:
+            case ExprType::VAR:
+                new (&expr_string) decltype(expr_string)(std::move(expr.expr_string));
                 break;
-            case LineType::EXTERN:
-                new (&line_extern) decltype(line_extern)(std::move(line.line_extern));
+            case ExprType::LIT_ARRAY:
+            case ExprType::LIT_TUPLE:
+                new (&expr_agg) decltype(expr_agg)(std::move(expr.expr_agg));
                 break;
-            case LineType::RAISE:
-            case LineType::PRINT:
-            case LineType::RETURN:
-                new (&line_func) decltype(line_func)(std::move(line.line_func));
+            case ExprType::UNARY_POS:
+            case ExprType::UNARY_NEG:
+            case ExprType::UNARY_NOT:
+            case ExprType::UNARY_UNPACK:
+            case ExprType::UNARY_REF:
+            case ExprType::UNARY_CONST:
+                new (&expr_unary) decltype(expr_unary)(std::move(expr.expr_unary));
                 break;
-            case LineType::IF:
-            case LineType::ELIF:
-            case LineType::WHILE:
-                new (&line_branch) decltype(line_branch)(std::move(line.line_branch));
+            case ExprType::BINARY_ADD:
+            case ExprType::BINARY_SUB:
+            case ExprType::BINARY_MUL:
+            case ExprType::BINARY_DIV:
+            case ExprType::BINARY_MOD:
+            case ExprType::BINARY_IADD:
+            case ExprType::BINARY_ISUB:
+            case ExprType::BINARY_IMUL:
+            case ExprType::BINARY_IDIV:
+            case ExprType::BINARY_IMOD:
+            case ExprType::BINARY_ASSIGN:
+            case ExprType::BINARY_AND:
+            case ExprType::BINARY_OR:
+            case ExprType::BINARY_CMP_EQ:
+            case ExprType::BINARY_CMP_NE:
+            case ExprType::BINARY_CMP_GT:
+            case ExprType::BINARY_CMP_LT:
+            case ExprType::BINARY_CMP_GE:
+            case ExprType::BINARY_CMP_LE:
+            case ExprType::BINARY_IDX:
+                new (&expr_binary) decltype(expr_binary)(std::move(expr.expr_binary));
                 break;
-            case LineType::ELSE:
-            case LineType::FORWARD:
-            case LineType::BACKWARD:
-                new (&line_block) decltype(line_block)(std::move(line.line_block));
+            case ExprType::DOT:
+            case ExprType::VAR_DECL:
+                new (&expr_name) decltype(expr_name)(std::move(expr.expr_name));
                 break;
-            case LineType::FOR:
-                new (&line_for) decltype(line_for)(std::move(line.line_for));
+            case ExprType::CARGS_CALL:
+            case ExprType::VARGS_CALL:
+                new (&expr_call) decltype(expr_call)(std::move(expr.expr_call));
                 break;
-            case LineType::EXPR:
-                new (&line_expr) decltype(line_expr)(std::move(line.line_expr));
+            case ExprType::DEF_DECL:
+            case ExprType::INTR_DECL:
+                new (&expr_blk_decl) decltype(expr_blk_decl)(std::move(expr.expr_blk_decl));
+            case ExprType::FN_DECL:
+                new (&expr_fn_decl) decltype(expr_fn_decl)(std::move(expr.expr_fn_decl));
                 break;
-            case LineType::EVALMODE:
-                new (&line_label) decltype(line_label)(std::move(line.line_label));
                 break;
             default:
                 assert(false);
             }
         }
 
+        AstLine::AstLine() {}
+
+        AstLine::AstLine(AstLine&& line) noexcept
+        {
+            do_move(std::move(line));
+        }
+
         AstLine& AstLine::operator=(AstLine&& line) noexcept
         {
             if (&line == this)
                 return *this;
-
-            ty = line.ty;
-            line.ty = LineType::INVALID;
-
-            switch (ty)
-            {
-            case LineType::INVALID:
-            case LineType::BREAK:
-            case LineType::CONTINUE:
-                break;
-            case LineType::EXPORT:
-                new (&line_export) decltype(line_export)(std::move(line.line_export));
-                break;
-            case LineType::EXTERN:
-                new (&line_extern) decltype(line_extern)(std::move(line.line_extern));
-                break;
-            case LineType::RAISE:
-            case LineType::PRINT:
-            case LineType::RETURN:
-                new (&line_func) decltype(line_func)(std::move(line.line_func));
-                break;
-            case LineType::IF:
-            case LineType::ELIF:
-            case LineType::WHILE:
-                new (&line_branch) decltype(line_branch)(std::move(line.line_branch));
-                break;
-            case LineType::ELSE:
-            case LineType::FORWARD:
-            case LineType::BACKWARD:
-                new (&line_block) decltype(line_block)(std::move(line.line_block));
-                break;
-            case LineType::FOR:
-                new (&line_for) decltype(line_for)(std::move(line.line_for));
-                break;
-            case LineType::EXPR:
-                new (&line_expr) decltype(line_expr)(std::move(line.line_expr));
-                break;
-            case LineType::EVALMODE:
-                new (&line_label) decltype(line_label)(std::move(line.line_label));
-                break;
-            default:
-                assert(false);
-            }
-
+            this->~AstLine();
+            do_move(std::move(line));
             return *this;
         }
 
@@ -1809,6 +1674,52 @@ namespace nn
                 break;
             case LineType::EVALMODE:
                 line_label.~AstLineLabel();
+                break;
+            default:
+                assert(false);
+            }
+        }
+
+        void AstLine::do_move(AstLine&& line)
+        {
+            ty = line.ty;
+            line.ty = LineType::INVALID;
+
+            switch (ty)
+            {
+            case LineType::INVALID:
+            case LineType::BREAK:
+            case LineType::CONTINUE:
+                break;
+            case LineType::EXPORT:
+                new (&line_export) decltype(line_export)(std::move(line.line_export));
+                break;
+            case LineType::EXTERN:
+                new (&line_extern) decltype(line_extern)(std::move(line.line_extern));
+                break;
+            case LineType::RAISE:
+            case LineType::PRINT:
+            case LineType::RETURN:
+                new (&line_func) decltype(line_func)(std::move(line.line_func));
+                break;
+            case LineType::IF:
+            case LineType::ELIF:
+            case LineType::WHILE:
+                new (&line_branch) decltype(line_branch)(std::move(line.line_branch));
+                break;
+            case LineType::ELSE:
+            case LineType::FORWARD:
+            case LineType::BACKWARD:
+                new (&line_block) decltype(line_block)(std::move(line.line_block));
+                break;
+            case LineType::FOR:
+                new (&line_for) decltype(line_for)(std::move(line.line_for));
+                break;
+            case LineType::EXPR:
+                new (&line_expr) decltype(line_expr)(std::move(line.line_expr));
+                break;
+            case LineType::EVALMODE:
+                new (&line_label) decltype(line_label)(std::move(line.line_label));
                 break;
             default:
                 assert(false);
