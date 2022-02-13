@@ -3,6 +3,7 @@
 #include <ned/lang/bytecode.h>
 
 #include <iostream>
+#include <vector>
 
 #define oprand (*((size_t*)(code + pc)))
 
@@ -26,130 +27,368 @@ namespace nn
 
         GraphBuilder::GraphBuilder() {}
 
-        bool GraphBuilder::get_forward(Obj& obj, core::Tensor* pten)
+        GraphBuilder::~GraphBuilder()
         {
-            obj.edge_obj = pten->forward;
-            if (obj.edge_obj)
+            if (is_exported)
+            {
+                // Figure out how exporting works
+            }
+            else
+            {
+                // delete everything
+            }
+        }
+
+        inline bool GraphBuilder::edge_exists(uint64_t edge)
+        {
+            return edge * (edge < edges.size());
+        }
+
+        inline bool GraphBuilder::node_exists(uint64_t node)
+        {
+            return node * (node < nodes.size());
+        }
+
+        inline bool GraphBuilder::init_exists(uint64_t init)
+        {
+            return init * (init < inits.size());
+        }
+
+        inline bool GraphBuilder::tensor_exists(uint64_t tensor)
+        {
+            return tensor * (tensor < tensors.size());
+        }
+
+        inline bool GraphBuilder::block_exists(uint64_t block)
+        {
+            return block * (block < blocks.size());
+        }
+
+        std::string GraphBuilder::current_mode()
+        {
+            if (md_stack.size() == 0)
+                return "";
+
+            // Not very efficient, but it'll work
+            std::stringstream ss;
+            ss << md_stack[0];
+            for (size_t i = 1; i < md_stack.size(); i++)
+                ss << "." << md_stack[i];
+            return ss.str();
+        }
+
+        bool GraphBuilder::create_edg(Obj& obj, const core::EdgeInfo& info)
+        {
+            obj.ptr = edges.size();
+            edges.push_back(new EdgeBuilder{ .info = info });
+            return false;
+        }
+
+        bool GraphBuilder::create_tsr(Obj& obj)
+        {
+            obj.ptr = tensors.size();
+            tensors.push_back(new TensorBuilder());
+            return false;
+        }
+
+        bool GraphBuilder::create_nde(Obj& obj, const std::string& name)
+        {
+            obj.ptr = nodes.size();
+            nodes.push_back(new NodeBuilder{ .name = name });
+            return false;
+        }
+
+        bool GraphBuilder::create_ini(Obj& obj, const std::string& name)
+        {
+            obj.ptr = inits.size();
+            inits.push_back(new InitBuilder{ .name = name });
+            return false;
+        }
+
+        bool GraphBuilder::create_blk(Obj& obj, const std::string& name)
+        {
+            obj.ptr = blocks.size();
+            blocks.push_back(new BlockBuilder{ .name = name });
+            return false;
+        }
+
+        bool GraphBuilder::get_fwd(Obj& obj, uint64_t tensor)
+        {
+            assert(!is_exported);
+
+            if (!tensor_exists(tensor))
+                return error::runtime("Attempted to reference a non-existant tensor");
+            obj.ptr = tensors[tensor]->fwd_edge;
+            if (!obj.ptr)
                 return error::runtime("Attempted to retrieve the uninitialized forward edge of a tensor");
             return false;
         }
 
-        bool GraphBuilder::get_backward(Obj& obj, core::Tensor* pten)
+        bool GraphBuilder::get_bwd(Obj& obj, uint64_t tensor)
         {
-            obj.edge_obj = pten->backward;
-            if (obj.edge_obj)
+            assert(!is_exported);
+
+            if (!tensor_exists(tensor))
+                return error::runtime("Attempted to reference a non-existant tensor");
+            obj.ptr = tensors[tensor]->bwd_edge;
+            if (!obj.ptr)
                 return error::runtime("Attempted to retrieve the uninitialized backward edge of a tensor");
             return false;
         }
 
-        bool GraphBuilder::add_ndcfg(const std::string& name, core::Node* pnode, core::Config* pconfig)
+        bool GraphBuilder::get_ini(Obj& obj, uint64_t tensor)
         {
-            if (pnode->configs.contains(name))
+            assert(!is_exported);
+
+            if (!tensor_exists(tensor))
+                return error::runtime("Attempted to reference a non-existant tensor");
+            obj.ptr = tensors[tensor]->init;
+            if (!obj.ptr)
+                return error::runtime("Attempted to retrieve the uninitialized weight initializer of a tensor");
+            return false;
+        }
+
+        bool GraphBuilder::set_fwd(uint64_t tensor, uint64_t edge)
+        {
+            assert(!is_exported);
+
+            if (!tensor_exists(tensor))
+                return error::runtime("Attempted to reference a non-existant tensor");
+            if (!edge_exists(edge))
+                return error::runtime("Attempted to reference a non-existant edge");
+            tensors[tensor]->fwd_edge = edge;
+            return false;
+        }
+
+        bool GraphBuilder::set_bwd(uint64_t tensor, uint64_t edge)
+        {
+            assert(!is_exported);
+
+            if (!tensor_exists(tensor))
+                return error::runtime("Attempted to reference a non-existant tensor");
+            if (!edge_exists(edge))
+                return error::runtime("Attempted to reference a non-existant edge");
+            tensors[tensor]->bwd_edge = edge;
+            return false;
+        }
+
+        bool GraphBuilder::set_ini(uint64_t tensor, uint64_t init)
+        {
+            assert(!is_exported);
+
+            if (!tensor_exists(tensor))
+                return error::runtime("Attempted to reference a non-existant tensor");
+            if (!init_exists(init))
+                return error::runtime("Attempted to reference a non-existant weight initializer");
+            tensors[tensor]->init = init;
+            return false;
+
+        }
+
+        bool GraphBuilder::mrg(uint64_t lhs_edge, uint64_t rhs_edge)
+        {
+            assert(!is_exported);
+
+            if (!edge_exists(lhs_edge) || !edge_exists(rhs_edge))
+                return error::runtime("Attempted to reference a non-existant edge object");
+
+            // Merging the edge inputs
+            for (const auto& [md, conn] : edges[rhs_edge]->md_inps)
+            {
+                if (edges[lhs_edge]->md_inps.contains(md))
+                    return error::runtime("Attempted to merge two edges when both had bound inputs");
+                assert(nodes[conn.node]->outs.contains(md));
+                nodes[conn.node]->outs[md] = lhs_edge;
+                edges[lhs_edge]->md_inps[md] = conn;
+            }
+            edges[rhs_edge]->md_inps.clear();
+
+            // Merging the edge outputs
+            for (const auto& [md, conns] : edges[rhs_edge]->md_outs)
+                for (const auto& conn : conns)
+                {
+                    nodes[conn.node]->inps[conn.name] = lhs_edge;
+                    edges[lhs_edge]->md_outs[md].push_back(conn);  // dupicates will be handled during the export
+                }
+
+            delete edges[rhs_edge];
+            edges[rhs_edge] = edges[lhs_edge];
+            return false;
+        }
+
+        bool GraphBuilder::add_ndcfg(const std::string& name, uint64_t node, core::Config* pconfig)
+        {
+            assert(!is_exported);
+
+            if (!node_exists(node))
+                return error::runtime("Attempted to reference a non-existant node");
+            if (nodes[node]->configs.contains(name))
                 return error::runtime("Attempted to overwrite node configuration '%'", name);
-            pnode->configs[name] = std::unique_ptr<core::Config>(pconfig);
+            nodes[node]->configs[name] = std::unique_ptr<core::Config>(pconfig);
             return false;
         }
 
-        bool GraphBuilder::add_bkcfg(const std::string& name, core::Block* pblock, core::Config* pconfig)
+        bool GraphBuilder::add_bkcfg(const std::string& name, uint64_t block, core::Config* pconfig)
         {
-            if (pblock->configs.contains(name))
+            assert(!is_exported);
+
+            if (!block_exists(block))
+                return error::runtime("Attempted to reference a non-existant block");
+            if (blocks[block]->configs.contains(name))
                 return error::runtime("Attempted to overwrite block configuration '%'", name);
-            pblock->configs[name] = std::unique_ptr<core::Config>(pconfig);
+            blocks[block]->configs[name] = std::unique_ptr<core::Config>(pconfig);
             return false;
         }
 
-        bool GraphBuilder::add_incfg(const std::string& name, core::Init* pinit, core::Config* pconfig)
+        bool GraphBuilder::add_incfg(const std::string& name, uint64_t init, core::Config* pconfig)
         {
-            if (pinit->configs.contains(name))
+            assert(!is_exported);
+
+            if (!init_exists(init))
+                return error::runtime("Attempted to reference a non-existant weight initializer");
+            if (inits[init]->configs.contains(name))
                 return error::runtime("Attempted to overwrite init configuration '%'", name);
-            pinit->configs[name] = std::unique_ptr<core::Config>(pconfig);
+            inits[init]->configs[name] = std::unique_ptr<core::Config>(pconfig);
             return false;
         }
 
-        bool GraphBuilder::set_ndinp(const std::string& name, core::Node* pnode, core::Edge* pedge)
+        bool GraphBuilder::set_ndinp(const std::string& name, uint64_t node, uint64_t edge)
         {
-            if (pnode->inps.contains(name))
+            assert(!is_exported);
+
+            if (!node_exists(node))
+                return error::runtime("Attempted to reference a non-existant node");
+            if (!edge_exists(edge))
+                return error::runtime("Attempted to reference a non-existant edge");
+            if (nodes[node]->inps.contains(name))
                 return error::runtime("Attempted to bind node input '%' multiple times", name);
-            pnode->inps[name] = pedge;
+            nodes[node]->inps[name] = edge;
+            edges[edge]->md_outs[current_mode()].push_back({ node, name });
             return false;
         }
 
-        bool GraphBuilder::set_ndout(const std::string& name, core::Node* pnode, core::Edge* pedge)
+        bool GraphBuilder::set_ndout(const std::string& name, uint64_t node, uint64_t edge)
         {
-            if (pnode->outs.contains(name))
+            assert(!is_exported);
+
+            if (!node_exists(node))
+                return error::runtime("Attempted to reference a non-existant node");
+            if (!edge_exists(edge))
+                return error::runtime("Attempted to reference a non-existant edge");
+            if (nodes[node]->outs.contains(name))
                 return error::runtime("Attempted to bind node output '%' multiple times", name);
-            pnode->outs[name] = pedge;
+            std::string md = current_mode();
+            if (edges[edge]->md_inps.contains(md))
+                return error::runtime("Attempted to bind an edge input multiple times");
+            nodes[node]->outs[name] = edge;
+            edges[edge]->md_inps[md] = { node, name };
             return false;
         }
 
-        bool GraphBuilder::set_bkinp(const std::string& name, core::Block* pblock, core::Tensor* pten)
+        bool GraphBuilder::set_bkprt(uint64_t block, uint64_t parent)
         {
-            if (pblock->inps.contains(name))
-                return error::runtime("Attempted to bind block input '%' multiple times", name);
-            if (!pten->forward)
-                return error::runtime("Attempted to bind block input '%' to a tensor with an uninitialized forward edge", name);
-            if (!pten->backward)
-                return error::runtime("Attempted to bind block input '%' to a tensor with an uninitialized backward edge", name);
-            pblock->inps[name] = { pten->forward, pten->backward };
-            return false;
-        }
+            assert(!is_exported);
 
-        bool GraphBuilder::set_bkout(const std::string& name, core::Block* pblock, core::Tensor* pten)
-        {
-            if (pblock->outs.contains(name))
-                return error::runtime("Attempted to bind block output '%' multiple times", name);
-            if (!pten->forward)
-                return error::runtime("Attempted to bind block output '%' to a tensor with an uninitialized forward edge", name);
-            if (!pten->backward)
-                return error::runtime("Attempted to bind block output '%' to a tensor with an uninitialized backward edge", name);
-            pblock->outs[name] = { pten->forward, pten->backward };
-            return false;
-        }
+            if (!block_exists(block) || parent >= blocks.size())  // parent can be null
+                return error::runtime("Attempted to reference a non-existant block");
 
-        bool GraphBuilder::set_bkprt(core::Block* pblock, core::Block* pparent)
-        {
-            if (pblock->parent)
+            if (blocks[block]->parent)
                 return error::runtime("Attempted to set a block's parent when it has already been set");
-            else if (pblock == root)
+            else if (block == root)
                 return error::runtime("Attempted to set the root block's parent");
 
-            pblock->parent = pparent;
-            if (pparent)
+            blocks[block]->parent = parent;
+            if (parent)
                 return false;
 
             if (root)
                 return error::runtime("Attempted to set a block as the root, when a root was already set");
-            root = pblock;
+            root = block;
             return false;
         }
 
-        bool GraphBuilder::add_extern(const std::string& name, core::Block* pblock, core::Tensor* pten, core::Init* pinit)
+        bool GraphBuilder::set_bkinp(const std::string& name, uint64_t block, uint64_t tensor)
         {
-            if (pblock->weights.contains(name))
+            assert(!is_exported);
+
+            if (!block_exists(block))
+                return error::runtime("Attempted to reference a non-existant block");
+            if (!tensor_exists(tensor))
+                return error::runtime("Attempted to reference a non-existant tensor");
+
+            if (blocks[block]->inps.contains(name))
+                return error::runtime("Attempted to bind block input '%' multiple times", name);
+            if (!tensors[tensor]->fwd_edge)
+                return error::runtime("Attempted to bind block input '%' to a tensor with an uninitialized forward edge", name);
+            if (!tensors[tensor]->bwd_edge)
+                return error::runtime("Attempted to bind block input '%' to a tensor with an uninitialized backward edge", name);
+            blocks[block]->inps[name] = tensor;
+            return false;
+        }
+
+        bool GraphBuilder::set_bkout(const std::string& name, uint64_t block, uint64_t tensor)
+        {
+            assert(!is_exported);
+
+            if (!block_exists(block))
+                return error::runtime("Attempted to reference a non-existant block");
+            if (!tensor_exists(tensor))
+                return error::runtime("Attempted to reference a non-existant tensor");
+
+            if (blocks[block]->outs.contains(name))
+                return error::runtime("Attempted to bind block output '%' multiple times", name);
+            if (tensors[tensor]->fwd_edge == 0)
+                return error::runtime("Attempted to bind block output '%' to a tensor with an uninitialized forward edge", name);
+            if (tensors[tensor]->bwd_edge == 0)
+                return error::runtime("Attempted to bind block output '%' to a tensor with an uninitialized backward edge", name);
+            blocks[block]->outs[name] = tensor;
+            return false;
+        }
+
+        bool GraphBuilder::set_bkext(const std::string& name, uint64_t block, uint64_t tensor)
+        {
+            assert(!is_exported);
+
+            if (!block_exists(block))
+                return error::runtime("Attempted to reference a non-existant block");
+            if (!tensor_exists(tensor))
+                return error::runtime("Attempted to reference a non-existant tensor");
+
+            if (blocks[block]->exts.contains(name))
                 return error::runtime("Attempted to overwrite block weight '%'", name);
-            if (!pten->forward)
+            if (tensors[tensor]->fwd_edge == 0)
                 return error::runtime("Attempted to extern a tensor with an uninitialized forward edge");
-            if (!pten->backward)
+            if (tensors[tensor]->bwd_edge == 0)
                 return error::runtime("Attempted to extern a tensor with an uninitialized backward edge");
-            pblock->weights[name] = { pten->forward, pten->backward, pinit, nullptr };
+            blocks[block]->exts[name] = tensor;
             return false;
         }
 
-        bool GraphBuilder::add_export(const std::string& name, core::Tensor* pten)
+        bool GraphBuilder::set_bkexp(const std::string& name, uint64_t block, uint64_t tensor)
         {
-            if (exports.contains(name))
+            assert(!is_exported);
+
+            if (!block_exists(block))
+                return error::runtime("Attempted to reference a non-existant block");
+            if (!tensor_exists(tensor))
+                return error::runtime("Attempted to reference a non-existant tensor");
+
+            if (blocks[block]->exps.contains(name))
                 return error::runtime("Attempted to overwrite model export '%'", name);
-            if (!pten->forward)
+            if (tensors[tensor]->fwd_edge == 0)
                 return error::runtime("Attempted to export a tensor with an uninitialized forward edge");
-            if (!pten->backward)
+            if (tensors[tensor]->bwd_edge == 0)
                 return error::runtime("Attempted to export a tensor with an uninitialized backward edge");
-            exports[name] = { pten->forward, pten->backward };
+            blocks[block]->exps[name] = tensor;
             return false;
         }
 
         bool GraphBuilder::export_graph(core::Graph& graph)
         {
+            assert(!is_exported);
+
             // TODO: implement graph exporting
+            is_exported = true;
             return error::runtime("Graph exporting has not been implemented yet...");
         }
 
@@ -591,12 +830,13 @@ namespace nn
             return error::runtime(*obj.str_obj);
         }
 
-        inline bool exec_edg(CallStack& stack, ProgramHeap& heap)
+        inline bool exec_edg(CallStack& stack)
         {
             Obj argnum;
             if (stack.pop(argnum))
                 return true;
-            std::vector<IntObj> dims{ *argnum.int_obj };
+            std::vector<size_t> dims;
+            dims.resize(*argnum.int_obj);
             for (IntObj i = 0; i < *argnum.int_obj; i++)
             {
                 Obj dim;
@@ -607,63 +847,109 @@ namespace nn
             Obj obj, fty;
             return
                 stack.pop(fty) ||
-                heap.create_obj_edge(obj, *fty.fty_obj, dims) ||
+                pbuilder->create_edg(obj, core::EdgeInfo{ *fty.fty_obj, dims }) ||
                 stack.push(obj);
         }
 
-        inline bool exec_nde(CallStack& stack, ProgramHeap& heap)
+        inline bool exec_tsr(CallStack& stack)
+        {
+            Obj obj;
+            return
+                pbuilder->create_tsr(obj) ||
+                stack.push(obj);
+        }
+
+        inline bool exec_nde(CallStack& stack)
         {
             Obj obj, name;
             return
                 stack.pop(name) ||
-                heap.create_obj_node(obj, *name.str_obj) ||
+                pbuilder->create_nde(obj, *name.str_obj) ||
                 stack.push(obj);
         }
 
-        inline bool exec_ini(CallStack& stack, ProgramHeap& heap)
+        inline bool exec_ini(CallStack& stack)
         {
             Obj obj, name;
             return
                 stack.pop(name) ||
-                heap.create_obj_init(obj, *name.str_obj) ||
+                pbuilder->create_ini(obj, *name.str_obj) ||
                 stack.push(obj);
         }
 
-        inline bool exec_blk(CallStack& stack, ProgramHeap& heap)
+        inline bool exec_blk(CallStack& stack)
         {
             Obj obj, name;
             return
                 stack.pop(name) ||
-                heap.create_obj_block(obj, *name.str_obj) ||
+                pbuilder->create_blk(obj, *name.str_obj) ||
                 stack.push(obj);
         }
 
-        inline bool exec_tsr(CallStack& stack, ProgramHeap& heap)
-        {
-            Obj obj, forward, backward;
-            return
-                stack.pop(backward) ||
-                stack.pop(forward) ||
-                heap.create_obj_tensor(obj, forward.edge_obj, backward.edge_obj) ||
-                stack.push(obj);
-        }
-
-        inline bool exec_fwd(CallStack& stack)
+        inline bool exec_gfwd(CallStack& stack)
         {
             Obj obj, ten;
             return
                 stack.pop(ten) ||
-                pbuilder->get_forward(obj, ten.tensor_obj) ||
+                pbuilder->get_fwd(obj, ten.ptr) ||
                 stack.push(obj);
         }
 
-        inline bool exec_bwd(CallStack& stack)
+        inline bool exec_gbwd(CallStack& stack)
         {
             Obj obj, ten;
             return
                 stack.pop(ten) ||
-                pbuilder->get_backward(obj, ten.tensor_obj) ||
+                pbuilder->get_bwd(obj, ten.ptr) ||
                 stack.push(obj);
+        }
+
+        inline bool exec_gini(CallStack& stack)
+        {
+            Obj obj, ten;
+            return
+                stack.pop(ten) ||
+                pbuilder->get_ini(obj, ten.ptr) ||
+                stack.push(obj);
+        }
+
+        inline bool exec_sfwd(CallStack& stack)
+        {
+            Obj tensor, edge;
+            return
+                stack.pop(edge) ||
+                stack.pop(tensor) ||
+                pbuilder->set_fwd(tensor.ptr, edge.ptr) ||
+                stack.push(tensor);
+        }
+
+        inline bool exec_sbwd(CallStack& stack)
+        {
+            Obj tensor, edge;
+            return
+                stack.pop(edge) ||
+                stack.pop(tensor) ||
+                pbuilder->set_bwd(tensor.ptr, edge.ptr) ||
+                stack.push(tensor);
+        }
+
+        inline bool exec_sini(CallStack& stack)
+        {
+            Obj tensor, init;
+            return
+                stack.pop(init) ||
+                stack.pop(tensor) ||
+                pbuilder->set_ini(tensor.ptr, init.ptr) ||
+                stack.push(tensor);
+        }
+
+        inline bool exec_mrg(CallStack& stack)
+        {
+            Obj lhs, rhs;
+            return
+                stack.pop(rhs) ||
+                stack.pop(lhs) ||
+                pbuilder->mrg(lhs.ptr, rhs.ptr);
         }
 
         inline bool exec_ndcfg(CallStack& stack)
@@ -676,7 +962,7 @@ namespace nn
                 stack.pop(obj) ||
                 stack.pop(node) ||
                 type.type_obj->cfg(cfg, obj) ||
-                pbuilder->add_ndcfg(*name.str_obj, node.node_obj, cfg) ||
+                pbuilder->add_ndcfg(*name.str_obj, node.ptr, cfg) ||
                 stack.push(node);
         }
 
@@ -690,7 +976,7 @@ namespace nn
                 stack.pop(obj) ||
                 stack.pop(block) ||
                 type.type_obj->cfg(cfg, obj) ||
-                pbuilder->add_bkcfg(*name.str_obj, block.block_obj, cfg) ||
+                pbuilder->add_bkcfg(*name.str_obj, block.ptr, cfg) ||
                 stack.push(block);
         }
 
@@ -704,7 +990,7 @@ namespace nn
                 stack.pop(obj) ||
                 stack.pop(init) ||
                 type.type_obj->cfg(cfg, obj) ||
-                pbuilder->add_incfg(*name.str_obj, init.init_obj, cfg) ||
+                pbuilder->add_incfg(*name.str_obj, init.ptr, cfg) ||
                 stack.push(init);
         }
 
@@ -715,7 +1001,7 @@ namespace nn
                 stack.pop(name) ||
                 stack.pop(edge) ||
                 stack.pop(node) ||
-                pbuilder->set_ndinp(*name.str_obj, node.node_obj, edge.edge_obj) ||
+                pbuilder->set_ndinp(*name.str_obj, node.ptr, edge.ptr) ||
                 stack.push(node);
         }
 
@@ -726,7 +1012,7 @@ namespace nn
                 stack.pop(name) ||
                 stack.pop(edge) ||
                 stack.pop(node) ||
-                pbuilder->set_ndout(*name.str_obj, node.node_obj, edge.edge_obj) ||
+                pbuilder->set_ndout(*name.str_obj, node.ptr, edge.ptr) ||
                 stack.push(node);
         }
 
@@ -736,7 +1022,7 @@ namespace nn
             return
                 stack.pop(block) ||
                 stack.pop(parent) ||
-                pbuilder->set_bkprt(block.block_obj, parent.block_obj) ||
+                pbuilder->set_bkprt(block.ptr, parent.ptr) ||
                 stack.push(block);
         }
 
@@ -747,7 +1033,7 @@ namespace nn
                 stack.pop(name) ||
                 stack.pop(tensor) ||
                 stack.pop(block) ||
-                pbuilder->set_bkinp(*name.str_obj, block.block_obj, tensor.tensor_obj) ||
+                pbuilder->set_bkinp(*name.str_obj, block.ptr, tensor.ptr) ||
                 stack.push(block);
         }
 
@@ -758,8 +1044,28 @@ namespace nn
                 stack.pop(name) ||
                 stack.pop(tensor) ||
                 stack.pop(block) ||
-                pbuilder->set_bkout(*name.str_obj, block.block_obj, tensor.tensor_obj) ||
+                pbuilder->set_bkout(*name.str_obj, block.ptr, tensor.ptr) ||
                 stack.push(block);
+        }
+
+        inline bool exec_bkext(CallStack& stack)
+        {
+            Obj name, tensor, block;
+            return
+                stack.pop(name) ||
+                stack.pop(tensor) ||
+                stack.pop(block) ||
+                pbuilder->set_bkext(*name.str_obj, block.ptr, tensor.ptr);
+        }
+
+        inline bool exec_bkexp(CallStack& stack)
+        {
+            Obj name, tensor, block;
+            return
+                stack.pop(name) ||
+                stack.pop(tensor) ||
+                stack.pop(block) ||
+                pbuilder->set_bkexp(*name.str_obj, block.ptr, tensor.ptr);
         }
 
         inline bool exec_pshmd(CallStack& stack)
@@ -776,27 +1082,7 @@ namespace nn
                 pop_md();
         }
 
-        inline bool exec_ext(CallStack& stack)
-        {
-            Obj name, block, tensor, init;
-            return
-                stack.pop(name) ||
-                stack.pop(tensor) ||
-                stack.pop(init) ||
-                stack.pop(block) ||
-                pbuilder->add_extern(*name.str_obj, block.block_obj, tensor.tensor_obj, init.init_obj);
-        }
-
-        inline bool exec_exp(CallStack& stack)
-        {
-            Obj name, tensor;
-            return
-                stack.pop(name) ||
-                stack.pop(tensor) ||
-                pbuilder->add_export(*name.str_obj, tensor.tensor_obj);
-        }
-
-        bool exec(CallStack& stack, ProgramHeap& heap, ByteCode& byte_code, std::string entry_point, core::Graph& graph)
+        bool exec(CallStack& stack, ProgramHeap& heap, GraphBuilder& builder, ByteCode& byte_code, std::string entry_point)
 		{
             if (!byte_code.proc_offsets.contains(entry_point))
                 return error::runtime("Unable to find entry point '%'", entry_point);
@@ -807,11 +1093,10 @@ namespace nn
             data = byte_code.data_segment;
             complete = false;
             pc_stack.clear();
-            GraphBuilder builder;
             pbuilder = &builder;
             md_stack.clear();
             error::bind_runtime_context(byte_code.debug_info, pc);
-            if (stack.push(Obj{ .block_obj = nullptr }))  // this will mark the first block as root
+            if (stack.push(Obj{ .ptr = 0 }))  // this will mark the first block as root
                 return true;
 
             InstructionType ty;
@@ -967,31 +1252,51 @@ namespace nn
                     break;
 
                 case InstructionType::EDG:
-                    if (exec_edg(stack, heap))
-                        goto runtime_error;
-                    break;
-                case InstructionType::NDE:
-                    if (exec_nde(stack, heap))
-                        goto runtime_error;
-                    break;
-                case InstructionType::INI:
-                    if (exec_ini(stack, heap))
-                        goto runtime_error;
-                    break;
-                case InstructionType::BLK:
-                    if (exec_blk(stack, heap))
+                    if (exec_edg(stack))
                         goto runtime_error;
                     break;
                 case InstructionType::TSR:
-                    if (exec_tsr(stack, heap))
+                    if (exec_tsr(stack))
                         goto runtime_error;
                     break;
-                case InstructionType::FWD:
-                    if (exec_fwd(stack))
+                case InstructionType::NDE:
+                    if (exec_nde(stack))
                         goto runtime_error;
                     break;
-                case InstructionType::BWD:
-                    if (exec_bwd(stack))
+                case InstructionType::INI:
+                    if (exec_ini(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::BLK:
+                    if (exec_blk(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::GFWD:
+                    if (exec_gfwd(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::GBWD:
+                    if (exec_gbwd(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::GINI:
+                    if (exec_gini(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::SFWD:
+                    if (exec_sfwd(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::SBWD:
+                    if (exec_sbwd(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::SINI:
+                    if (exec_sini(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::MRG:
+                    if (exec_mrg(stack))
                         goto runtime_error;
                     break;
                 case InstructionType::NDCFG:
@@ -1026,6 +1331,14 @@ namespace nn
                     if (exec_bkout(stack))
                         goto runtime_error;
                     break;
+                case InstructionType::BKEXT:
+                    if (exec_bkext(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::BKEXP:
+                    if (exec_bkexp(stack))
+                        goto runtime_error;
+                    break;
                 case InstructionType::PSHMD:
                     if (exec_pshmd(stack))
                         goto runtime_error;
@@ -1034,21 +1347,13 @@ namespace nn
                     if (exec_popmd(stack))
                         goto runtime_error;
                     break;
-                case InstructionType::EXT:
-                    if (exec_ext(stack))
-                        goto runtime_error;
-                    break;
-                case InstructionType::EXP:
-                    if (exec_exp(stack))
-                        goto runtime_error;
-                    break;
 
                 default:
                     error::runtime("Invalid instruction opcode '%'", (uint8_t)ty);
                     goto runtime_error;
                 }
             }
-            return pbuilder->export_graph(graph);
+            return false;
 
         runtime_error:
             // TODO: unwind the call stack with location info

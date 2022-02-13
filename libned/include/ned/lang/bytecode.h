@@ -148,12 +148,17 @@ namespace nn
             ERR,
 
             EDG,
+            TSR,
             NDE,
             INI,
             BLK,
-            TSR,
-            FWD,
-            BWD,
+            GFWD,
+            GBWD,
+            GINI,
+            SFWD,
+            SBWD,
+            SINI,
+            MRG,
             NDCFG,
             BKCFG,
             INCFG,
@@ -162,10 +167,10 @@ namespace nn
             BKPRT,
             BKINP,
             BKOUT,
+            BKEXT,
+            BKEXP,
             PSHMD,
-            POPMD,
-            EXT,
-            EXP
+            POPMD
         };
 
         namespace instruction
@@ -241,6 +246,7 @@ namespace nn
             };
 
             using enum ::nn::lang::InstructionType;
+
             using Jmp   = Labeled  < JMP   >;
             using Brt   = Labeled  < BRT   >;
             using Brf   = Labeled  < BRF   >;
@@ -277,13 +283,19 @@ namespace nn
             using XInt  = Implicit < XINT  >;
             using Dsp   = Implicit < DSP   >;
             using Err   = Implicit < ERR   >;
+
             using Edg   = Implicit < EDG   >;
             using Nde   = Implicit < NDE   >;
             using Ini   = Implicit < INI   >;
             using Blk   = Implicit < BLK   >;
             using Tsr   = Implicit < TSR   >;
-            using Fwd   = Implicit < FWD   >;
-            using Bwd   = Implicit < BWD   >;
+            using GFwd  = Implicit < GFWD  >;
+            using GBwd  = Implicit < GBWD  >;
+            using GIni  = Implicit < GINI  >;
+            using SFwd  = Implicit < SFWD  >;
+            using SBwd  = Implicit < SBWD  >;
+            using SIni  = Implicit < SINI  >;
+            using Mrg   = Implicit < MRG   >;
             using NdCfg = Implicit < NDCFG >;
             using BkCfg = Implicit < BKCFG >;
             using InCfg = Implicit < INCFG >;
@@ -292,10 +304,10 @@ namespace nn
             using BkPrt = Implicit < BKPRT >;
             using BkInp = Implicit < BKINP >;
             using BkOut = Implicit < BKOUT >;
+            using BkExt = Implicit < BKEXT >;
+            using BkExp = Implicit < BKEXP >;
             using PshMd = Implicit < PSHMD >;
             using PopMd = Implicit < POPMD >;
-            using Ext   = Implicit < EXT   >;
-            using Exp   = Implicit < EXP   >;
         }
         
         bool parsebc_static(const TokenArray& tarr, ByteCodeModule& mod, size_t& addr);
@@ -363,14 +375,19 @@ namespace nn
 * 
 * Deep learning instructions
 * 
-* edg          Creates a new edge
+* edg          Creates a new empty edge with an fty and shape
+* tsr          Creates a new empty tensor
 * nde          Creates a new named node
-* ini          Creates a new named weight initializer
-* blk          Creates a new named block with a given parent
-* tsr          Creates a new tensor from a forward:backward edge pair
+* ini          Creates a new named initializer
+* blk          Creates a new named block
 * 
-* fwd          Extracts the forward edge from a tensor
-* bwd          Extracts the backward edge from a tensor
+* gfwd         Extracts the forward edge from a tensor
+* gbwd         Extracts the backward edge from a tensor
+* gini         Extracts the backward edge from a tensor
+* sfwd         Sets the forward edge of a tensor
+* sbwd         Sets the backward edge of a tensor
+* sini         Sets the initializer of a tensor
+* mrg          Merges the connections of two edges together
 * 
 * ndcfg        Adds a named configuration to a node
 * bkcfg        Adds a named configuration to a block
@@ -382,12 +399,11 @@ namespace nn
 * bkprt        Binds a block to a block's parent
 * bkinp        Binds a name and tensor to a block input
 * bkout        Binds a name and tensor to a block output
+* bkext        Adds a named tensor and initializer to a block as a parameter
+* bkexp        Exports a named forward:backward edge pair
 * 
 * pshmd        Pushes a new evaluation mode name onto the mode stack
 * popmd        Pops the top most evalutation mode name off the mode stack
-* 
-* ext          Adds a named tensor and initializer to a block as a parameter
-* exp          Exports a named forward:backward edge pair
 * 
 */
 

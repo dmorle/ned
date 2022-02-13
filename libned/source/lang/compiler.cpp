@@ -17,6 +17,10 @@ namespace nn
         template<typename T>
         bool CodeModule::merge_node(Node& dst, T& src)
         {
+            // std::variant isn't working for the non-copyable Ast* types
+            // TODO: custom implementation of CodeModule::Attr that doesn't depend on std::variant
+
+            /*
             for (AstNamespace& ns : src.namespaces)
             {
                 Node nd;
@@ -29,11 +33,13 @@ namespace nn
             for (AstFn& fn : src.funcs)
                 dst.attrs[fn.signature.name].push_back(std::move(fn));
             for (AstBlock& def : src.defs)
-                dst.attrs[def.signature.name].push_back(std::move(def));
+                dst.attrs[def.signature.name].push_back(Attr(std::move(def)));
+            */
             for (AstBlock& intr : src.intrs)
                 dst.intrs[intr.signature.name].push_back(std::move(intr));
             for (AstInit& init : src.inits)
                 dst.inits[init.name].push_back(std::move(init));
+            return false;
         }
 
         bool CodeModule::merge_ast(AstModule& ast)
@@ -101,6 +107,8 @@ namespace nn
                 ss << imp.imp[imp.imp.size() - 1];
                 return error::compiler(imp.node_info, "Unresolved import '%'", ss.str());
             }
+
+            return false;
         }
 
         TypeInfo::TypeInfo() {}
@@ -399,7 +407,7 @@ namespace nn
         std::string label_prefix(const AstNodeInfo& info)
         {
             char buf[64];
-            sprintf(buf, "l%zuc%zu_", info.line_start, info.col_start);
+            sprintf(buf, "l%uc%u_", info.line_start, info.col_start);
             return buf;
         }
 
@@ -1242,6 +1250,7 @@ namespace nn
         {
             ByteCodeBody body{ ast_struct.node_info };
 
+            return error::compiler(ast_struct.node_info, "Not implemented");
         }
 
         bool codegen_func(ByteCodeModule& bc, const std::string& name, const AstFn& ast_fn, const std::vector<std::string>& ns)
@@ -1391,9 +1400,9 @@ namespace nn
                 bc.add_block(def_name.str(), body);
         }
 
-        bool codegen_intr(ByteCodeModule& bc, const std::string& name, const AstBlock& ast_intr, const std::vector<std::string&> ns)
+        bool codegen_intr(ByteCodeModule& bc, const std::string& name, const AstBlock& ast_intr, const std::vector<std::string>& ns)
         {
-
+            return error::compiler(ast_intr.node_info, "Not implemented");
         }
 
         bool codegen_attr(ByteCodeModule& bc, const std::string& name, const CodeModule::Attr& attr, std::vector<std::string>& ns)

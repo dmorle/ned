@@ -65,48 +65,48 @@ namespace nn
 
         struct TypeInfoStructRef
         {
-            std::vector<AstStruct> matches;
+            std::vector<const AstStruct*> matches;
         };
 
         struct TypeInfoStruct
         {
-            std::vector<AstStruct> matches;
+            std::vector<const AstStruct*> matches;
             std::vector<TypeInfo> cargs;
             std::map<std::string, TypeInfo> kwcargs;
         };
 
         struct TypeInfoFnRef
         {
-            std::vector<AstFn> matches;
+            std::vector<const AstFn*> matches;
         };
 
         struct TypeInfoFn
         {
-            std::vector<AstFn> matches;
+            std::vector<const AstFn*> matches;
             std::vector<TypeInfo> cargs;
             std::map<std::string, TypeInfo> kwcargs;
         };
 
         struct TypeInfoDefRef
         {
-            std::vector<AstBlock> matches;
+            std::vector<const AstBlock*> matches;
         };
 
         struct TypeInfoDef
         {
-            std::vector<AstBlock> matches;
+            std::vector<const AstBlock*> matches;
             std::vector<TypeInfo> cargs;
             std::map<std::string, TypeInfo> kwcargs;
         };
 
         struct TypeInfoIntrRef
         {
-            std::vector<AstBlock> matches;
+            std::vector<const AstBlock*> matches;
         };
 
         struct TypeInfoIntr
         {
-            std::vector<AstBlock> matches;
+            std::vector<const AstBlock*> matches;
             std::vector<TypeInfo> cargs;
             std::map<std::string, TypeInfo> kwcargs;
         };
@@ -174,10 +174,10 @@ namespace nn
             template<Category head, Category... tail>
             struct CategorySet<head, tail...>
             {
-                constexpr bool has_default = tail == Category::DEFAULT || CategorySet<tail...>::has_default;
-                constexpr bool has_const   = tail == Category::CONST   || CategorySet<tail...>::has_const;
-                constexpr bool has_ref     = tail == Category::REF     || CategorySet<tail...>::has_ref;
-                constexpr bool has_virtual = tail == Category::VIRTUAL || CategorySet<tail...>::has_virtual;
+                constexpr static bool has_default = head == Category::DEFAULT || CategorySet<tail...>::has_default;
+                constexpr static bool has_const   = head == Category::CONST   || CategorySet<tail...>::has_const;
+                constexpr static bool has_ref     = head == Category::REF     || CategorySet<tail...>::has_ref;
+                constexpr static bool has_virtual = head == Category::VIRTUAL || CategorySet<tail...>::has_virtual;
             };
 
             template<>

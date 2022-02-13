@@ -182,7 +182,7 @@ namespace nn
                     return
                         mod.heap.create_type_bool(obj) ||
                         mod.add_static_obj(obj, addr);
-                case TokenType::KW_FP:
+                case TokenType::KW_FTY:
                     return
                         mod.heap.create_type_fty(obj) ||
                         mod.add_static_obj(obj, addr);
@@ -215,7 +215,7 @@ namespace nn
                         mod.add_static_obj(obj, addr);
                 }
                 return error::syntax(tarr[0], "Invalid static bool '%'", to_string(tarr[1]));
-            case TokenType::KW_FP:
+            case TokenType::KW_FTY:
                 if (tarr.size() != 2)
                     return error::syntax(tarr[0], "Malformed static fp");
                 switch (tarr[1]->ty)
@@ -455,6 +455,10 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(Edg(tarr[0]));
+            case hash("tsr"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Tsr(tarr[0]));
             case hash("nde"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
@@ -467,18 +471,34 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(Blk(tarr[0]));
-            case hash("tsr"):
+            case hash("gfwd"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(Tsr(tarr[0]));
-            case hash("fwd"):
+                return body.add_instruction(GFwd(tarr[0]));
+            case hash("gbwd"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(Fwd(tarr[0]));
-            case hash("bwd"):
+                return body.add_instruction(GBwd(tarr[0]));
+            case hash("gini"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(Bwd(tarr[0]));
+                return body.add_instruction(GIni(tarr[0]));
+            case hash("sfwd"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(SFwd(tarr[0]));
+            case hash("sbwd"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(SBwd(tarr[0]));
+            case hash("sini"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(SIni(tarr[0]));
+            case hash("mrg"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Mrg(tarr[0]));
             case hash("ndcfg"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
@@ -499,6 +519,10 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(NdOut(tarr[0]));
+            case hash("bkprt"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(BkPrt(tarr[0]));
             case hash("bkinp"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
@@ -507,6 +531,14 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(BkOut(tarr[0]));
+            case hash("bkext"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(BkExt(tarr[0]));
+            case hash("bkexp"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(BkExp(tarr[0]));
             case hash("pshmd"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
@@ -515,14 +547,6 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(PopMd(tarr[0]));
-            case hash("ext"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(Ext(tarr[0]));
-            case hash("exp"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(Exp(tarr[0]));
 
             default:
                 return error::syntax(tarr[0], "Unrecognized opcode: %", tarr[0]->get<TokenType::IDN>().val);

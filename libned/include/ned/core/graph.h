@@ -43,10 +43,10 @@ namespace nn
 
         struct Parameter
         {
-            Edge* forward;
-            Edge* backward;
-            Init* init;
-            void* data = nullptr;
+            Edge* forward  = nullptr;
+            Edge* backward = nullptr;
+            Init* init     = nullptr;
+            void* data     = nullptr;
         };
 
         struct Block

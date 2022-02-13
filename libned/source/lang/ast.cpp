@@ -245,8 +245,8 @@ namespace nn
                 ast_expr.expr_kw = ExprKW::INIT;
                 ast_expr.ty = ExprType::KW;
                 return false;
-            case TokenType::KW_FP:
-                ast_expr.expr_kw = ExprKW::FP;
+            case TokenType::KW_FTY:
+                ast_expr.expr_kw = ExprKW::FTY;
                 ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_BOOL:
@@ -1554,7 +1554,7 @@ namespace nn
             }
         }
 
-        void AstExpr::do_move(AstExpr&& expr)
+        void AstExpr::do_move(AstExpr&& expr) noexcept
         {
             ty = expr.ty;
             expr.ty = ExprType::INVALID;
@@ -1680,7 +1680,7 @@ namespace nn
             }
         }
 
-        void AstLine::do_move(AstLine&& line)
+        void AstLine::do_move(AstLine&& line) noexcept
         {
             ty = line.ty;
             line.ty = LineType::INVALID;

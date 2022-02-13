@@ -1,0 +1,143 @@
+# Hand compiled bytecode for the source shown below
+# This code defines a model which sums two vector inputs
+
+# intr sum<fty fp, int N>(fp<N> lhs, fp<N> rhs) -> out:
+#     fp<N> out
+#     return out
+# 
+# def model<fty fp, int N>(fp<N> lhs, fp<N> rhs) -> out:
+#     fp<N> out
+#     out.forward = sum(lhs.forward, rhs.forward)
+#     lhs.backward = out.backward
+#     rhs.backward = out.backward
+#     return out
+
+.proc sum
+    # Setting up the node
+    new    str "sum"
+    nde
+    # Configuring the carg fp
+    dup    4            # fty fp
+    new    type fty
+    new    str "fp"
+    ndcfg
+    # Configuring the carg N
+    dup    3            # int N
+    new    type int
+    new    str "N"
+    bkcfg
+    # Binding the lhs node input
+    dup    2
+    new    str "lhs"
+    ndinp
+    # Binding the rhs node input
+    dup    1
+    new    str "rhs"
+    ndinp
+
+    # Starting the actual body
+
+    # fp<N> out
+    dup    4            # fty fp
+    dup    4            # int N
+    new    int 1        # rank of the edge
+    edg                 # creating the edge
+
+    # return out
+    dup    0           # out
+    pop    1           # fp<N> out
+    jmp    end
+
+:end
+    dup    1           # ~node
+    dup    1           # out
+    new    str "out"
+    ndout
+    pop    0           # ~node
+    ret
+
+.proc model
+    # Setting up the block
+    new    str "model"
+    blk
+    bkprt
+    # Configuring the carg fp
+    dup    4            # fty fp
+    new    type fty
+    new    str "fp"
+    bkcfg
+    # Configuring the carg N
+    dup    3            # int N
+    new    type int
+    new    str "N"
+    bkcfg
+    # Binding the lhs block input
+    dup    2
+    new    str "lhs"
+    bkinp
+    # Binding the rhs block input
+    dup    1
+    new    str "rhs"
+    bkinp
+
+    # Starting the actual body
+
+    # fp<N> out
+    tsr                 # creating an empty tensor from the backward/forward edge pair
+    dup    5            # fty fp
+    dup    5            # int N
+    new    int 1        # rank of the edge
+    edg                 # creating the backward edge
+    sfwd                # binding the forward edge to the tensor
+    dup    5            # fty fp
+    dup    5            # int N
+    new    int 1        # rank of the edge
+    edg                 # creating the forward edge
+    sbwd                # binding the backward edge to the tensor
+
+    # out.forward = sum(lhs.forward, rhs.forward)
+    dup    0            # getting stack variable out
+    gfwd                # computing out.forward
+    # carg deduction generates this code
+    dup    6            # fty fp
+    dup    6            # int N
+    dup    6            # lhs
+    gfwd                # lhs.forward
+    dup    6            # rhs
+    gfwd                # rhs.forward
+    new    proc sum
+    call
+    pop    1            # rhs
+    pop    1            # lhs
+    pop    1            # int N
+    pop    1            # fty fp
+    mrg
+
+    # lhs.backward = out.backward
+    dup    3            # lhs
+    gbwd                # lhs.backward
+    dup    1            # out
+    gbwd                # out.backward
+    mrg
+
+    # rhs.backward = out.backward
+    dup    2            # rhs
+    gbwd                # rhs.backward
+    dup    1            # out
+    gbwd                # out.backward
+    mrg
+
+    # Setting up for the return.  This is a no-op, but the compiler would still generate it
+    # return out
+    dup    0           # out
+    pop    1           # fp<N> out
+    jmp    end
+
+    # Finishing up the block configuration now that I have the return values
+:end
+    dup    1           # ~block
+    dup    1           # out
+    new    str "out"
+    bkout
+    pop    0           # ~block
+    ret

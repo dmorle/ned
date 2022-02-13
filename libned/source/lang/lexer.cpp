@@ -147,8 +147,8 @@ namespace nn
                 return "keyword else";
             case TokenType::KW_TYPE:
                 return "keyword type";
-            case TokenType::KW_FP:
-                return "keyword fp";
+            case TokenType::KW_FTY:
+                return "keyword fty";
             case TokenType::KW_BOOL:
                 return "keyword bool";
             case TokenType::KW_INT:
@@ -302,8 +302,8 @@ namespace nn
                 return "else ";
             case TokenType::KW_TYPE:
                 return "type ";
-            case TokenType::KW_FP:
-                return "fp ";
+            case TokenType::KW_FTY:
+                return "fty ";
             case TokenType::KW_BOOL:
                 return "bool ";
             case TokenType::KW_INT:
@@ -482,6 +482,7 @@ namespace nn
                     use_indents = true;
                     line_start = i;
                     line_num++;
+                    tarr.push_back(TokenImp<TokenType::ENDL>(fname, line_num, i - line_start));
                     break;
                 case ' ':
                     if (use_indents
@@ -824,8 +825,8 @@ namespace nn
                     case hash("type"):
                         tarr.push_back(TokenImp<TokenType::KW_TYPE>(fname, line_num, col_num));
                         continue;
-                    case hash("fp"):
-                        tarr.push_back(TokenImp<TokenType::KW_FP>(fname, line_num, col_num));
+                    case hash("fty"):
+                        tarr.push_back(TokenImp<TokenType::KW_FTY>(fname, line_num, col_num));
                         continue;
                     case hash("bool"):
                         tarr.push_back(TokenImp<TokenType::KW_BOOL>(fname, line_num, col_num));

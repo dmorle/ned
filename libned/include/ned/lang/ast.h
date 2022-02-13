@@ -110,7 +110,7 @@ namespace nn
         {
             TYPE,
             INIT,
-            FP,
+            FTY,
             BOOL,
             INT,
             FLOAT,

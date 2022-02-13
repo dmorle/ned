@@ -70,7 +70,7 @@ namespace nn
             KW_ELIF,
             KW_ELSE,
             KW_TYPE,
-            KW_FP,
+            KW_FTY,
             KW_BOOL,
             KW_INT,
             KW_FLOAT,

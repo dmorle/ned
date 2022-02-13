@@ -16,7 +16,7 @@ CallStack stack;
 int main()
 {
     TokenArray tarr;
-    if (lex_file(TESTS_DIR"test.bcnn", tarr))
+    if (lex_file(TESTS_DIR"sum.bcnn", tarr))
     {
         error::print();
         return 1;
@@ -31,15 +31,34 @@ int main()
     }
     
     ByteCode byte_code;
-    Graph graph;
-    Obj obj;
+    GraphBuilder builder;
+    Obj obj, fwd, bwd;
 
     if (mod.export_module(byte_code) ||
-        heap.create_obj_int(obj, 1000) ||
+        // creating the cargs
+        heap.create_obj_fwidth(obj, EdgeFty::F32) ||
         stack.push(obj) ||
-        exec(stack, heap, byte_code, "test", graph))
+        heap.create_obj_int(obj, 10) ||
+        stack.push(obj) ||
+        // creating the vargs
+        builder.create_edg(fwd, EdgeInfo{ .fty = EdgeFty::F32, .dims = {10} }) ||
+        builder.create_edg(bwd, EdgeInfo{ .fty = EdgeFty::F32, .dims = {10} }) ||
+        builder.create_tsr(obj) ||
+        builder.set_fwd(obj.ptr, fwd.ptr) ||
+        builder.set_bwd(obj.ptr, bwd.ptr) ||
+        stack.push(obj) ||  // lhs
+        builder.create_edg(fwd, EdgeInfo{ .fty = EdgeFty::F32, .dims = {10} }) ||
+        builder.create_edg(bwd, EdgeInfo{ .fty = EdgeFty::F32, .dims = {10} }) ||
+        builder.create_tsr(obj) ||
+        builder.set_fwd(obj.ptr, fwd.ptr) ||
+        builder.set_bwd(obj.ptr, bwd.ptr) ||
+        stack.push(obj) ||  // rhs
+        stack.push(Obj{ .ptr = 0 }) ||  // null block
+        exec(stack, heap, builder, byte_code, "model"))
     {
         error::print();
         return 1;
     }
+
+    return 0;
 }

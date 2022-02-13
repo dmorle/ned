@@ -19,11 +19,6 @@ namespace nn
         using FloatObj = double;
         using StrObj = std::string;
         using AggObj = std::vector<Obj>;
-        using EdgeObj = core::Edge;
-        using NodeObj = core::Node;
-        using InitObj = core::Init;
-        using BlockObj = core::Block;
-        using TensorObj = core::Tensor;
 
         union Obj
         {
@@ -34,12 +29,7 @@ namespace nn
             FloatObj  *float_obj;
             StrObj    *str_obj;
             AggObj    *agg_obj;
-            NodeObj   *node_obj;
-            EdgeObj   *edge_obj;
-            InitObj   *init_obj;
-            BlockObj  *block_obj;
-            TensorObj *tensor_obj;
-            uint64_t   ptr;
+            uint64_t   ptr;  // this field is use for code pointers, data pointers, and all graph stuff
         };
 
         class BoolType;
@@ -66,15 +56,11 @@ namespace nn
             std::vector<FloatObj*>  float_objs;
             std::vector<StrObj*>    str_objs;
             std::vector<AggObj*>    agg_objs;
-            std::vector<NodeObj*>   node_objs;
-            std::vector<EdgeObj*>   edge_objs;
-            std::vector<InitObj*>   init_objs;
-            std::vector<BlockObj*>  block_objs;
-            std::vector<TensorObj*> tensor_objs;
+            // The program heap isn't responsible for managing the deep learning stuff.
+            // That responsibility falls on the graph builder.
 
         public:
             ~ProgramHeap();
-            void release(const core::Graph& graph);
 
             bool create_type_bool  (Obj& obj);
             bool create_type_fty   (Obj& obj);
@@ -90,11 +76,6 @@ namespace nn
             bool create_obj_float  (Obj& obj, FloatObj val);
             bool create_obj_str    (Obj& obj, const StrObj& val);
             bool create_obj_agg    (Obj& obj, const AggObj& val);
-            bool create_obj_edge   (Obj& obj, FtyObj fty, const std::vector<IntObj>& dims);
-            bool create_obj_node   (Obj& obj, const std::string& name);
-            bool create_obj_init   (Obj& obj, const std::string& name);
-            bool create_obj_block  (Obj& obj, const std::string& name);
-            bool create_obj_tensor (Obj& obj, core::Edge* forward, core::Edge* backward);
         };
 
         class CallStack;

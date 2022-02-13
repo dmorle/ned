@@ -86,7 +86,7 @@ namespace nn
         template<typename... Args>
         bool compiler<Args...>(const lang::AstNodeInfo& info, const std::string& fmt, Args... args)
         {
-            return error::syntax<>(info, format(fmt, args...));
+            return error::compiler<>(info, format(fmt, args...));
         }
 
         template<typename... Args> bool runtime(const std::string& fmt, Args... args);
