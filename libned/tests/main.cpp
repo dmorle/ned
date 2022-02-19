@@ -53,8 +53,19 @@ int main()
         builder.set_fwd(obj.ptr, fwd.ptr) ||
         builder.set_bwd(obj.ptr, bwd.ptr) ||
         stack.push(obj) ||  // rhs
-        stack.push(Obj{ .ptr = 0 }) ||  // null block
+        stack.push(Obj{ .ptr = 0 }) ||  // null block, this will mark the first block as root
         exec(stack, heap, builder, byte_code, "model"))
+    {
+        error::print();
+        return 1;
+    }
+    
+    core::Edge* edge = new core::Edge();
+
+    delete edge;
+
+    core::Graph graph;
+    if (builder.export_graph(graph))
     {
         error::print();
         return 1;

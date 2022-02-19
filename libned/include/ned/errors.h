@@ -97,6 +97,14 @@ namespace nn
             return error::runtime<>(format(fmt, args...));
         }
 
+        template<typename... Args> bool graph(const std::string& fmt, Args... args);
+        template<> bool graph<>(const std::string& errmsg);
+        template<typename... Args>
+        bool graph<Args...>(const std::string& fmt, Args... args)
+        {
+            return error::graph<>(format(fmt, args...));
+        }
+
         void print();
     }
 }

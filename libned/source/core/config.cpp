@@ -39,5 +39,44 @@ namespace nn
             }
             return true;
         }
+
+        Config* BoolConfig::clone() const
+        {
+            return new BoolConfig(val);
+        }
+
+        Config* FtyConfig::clone() const
+        {
+            return new FtyConfig(val);
+        }
+
+        Config* IntConfig::clone() const
+        {
+            return new IntConfig(val);
+        }
+
+        Config* FloatConfig::clone() const
+        {
+            return new FloatConfig(val);
+        }
+
+        Config* StringConfig::clone() const
+        {
+            return new StringConfig(val);
+        }
+
+        ListConfig::~ListConfig()
+        {
+            for (Config* cfg : val)
+                delete cfg;
+        }
+
+        Config* ListConfig::clone() const
+        {
+            std::vector<Config*> cfg{ val.size() };
+            for (const auto& e : val)
+                cfg.push_back(e->clone());
+            return new ListConfig(cfg);
+        }
     }
 }

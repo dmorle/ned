@@ -162,6 +162,7 @@ namespace nn
             NDCFG,
             BKCFG,
             INCFG,
+            NDPRT,
             NDINP,
             NDOUT,
             BKPRT,
@@ -299,6 +300,7 @@ namespace nn
             using NdCfg = Implicit < NDCFG >;
             using BkCfg = Implicit < BKCFG >;
             using InCfg = Implicit < INCFG >;
+            using NdPrt = Implicit < NDPRT >;
             using NdInp = Implicit < NDINP >;
             using NdOut = Implicit < NDOUT >;
             using BkPrt = Implicit < BKPRT >;
@@ -393,6 +395,7 @@ namespace nn
 * bkcfg        Adds a named configuration to a block
 * incfg        Adds a named configuration to a weight initializer
 * 
+* ndprt        Binds a block to a node's parent
 * ndinp        Sets a named node input to an edge
 * ndout        Sets a named node output to an edge
 * 

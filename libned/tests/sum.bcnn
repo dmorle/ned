@@ -16,6 +16,7 @@
     # Setting up the node
     new    str "sum"
     nde
+    ndprt
     # Configuring the carg fp
     dup    4            # fty fp
     new    type fty
@@ -25,7 +26,7 @@
     dup    3            # int N
     new    type int
     new    str "N"
-    bkcfg
+    ndcfg
     # Binding the lhs node input
     dup    2
     new    str "lhs"
@@ -105,8 +106,10 @@
     gfwd                # lhs.forward
     dup    6            # rhs
     gfwd                # rhs.forward
+    dup    6            # ~block
     new    proc sum
     call
+    pop    1            # ~block
     pop    1            # rhs
     pop    1            # lhs
     pop    1            # int N

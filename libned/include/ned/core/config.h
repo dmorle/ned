@@ -41,6 +41,8 @@ namespace nn
             ConfigType ty;
             Config(ConfigType ty) : ty(ty) {}
             virtual ~Config() {}
+
+            virtual Config* clone() const = 0;
         };
 
         struct BoolConfig :
@@ -48,6 +50,8 @@ namespace nn
         {
             bool val;
             BoolConfig(bool val) : Config(ConfigType::BOOL), val(val) {}
+
+            virtual Config* clone() const;
         };
 
         struct FtyConfig :
@@ -55,6 +59,8 @@ namespace nn
         {
             EdgeFty val;
             FtyConfig(EdgeFty val) : Config(ConfigType::FTY), val(val) {}
+
+            virtual Config* clone() const;
         };
 
         struct IntConfig :
@@ -62,6 +68,8 @@ namespace nn
         {
             int64_t val;
             IntConfig(int64_t val) : Config(ConfigType::INT), val(val) {}
+
+            virtual Config* clone() const;
         };
 
         struct FloatConfig :
@@ -69,6 +77,8 @@ namespace nn
         {
             double val;
             FloatConfig(double val) : Config(ConfigType::FLOAT), val(val) {}
+
+            virtual Config* clone() const;
         };
 
         struct StringConfig :
@@ -76,6 +86,8 @@ namespace nn
         {
             std::string val;
             StringConfig(const std::string& val) : Config(ConfigType::STRING), val(val) {}
+
+            virtual Config* clone() const;
         };
 
         struct ListConfig :
@@ -83,7 +95,9 @@ namespace nn
         {
             std::vector<Config*> val;
             ListConfig(const std::vector<Config*>& val) : Config(ConfigType::LIST), val(val) {}
-            ~ListConfig() { for (Config* cfg : val) delete cfg; }
+            ~ListConfig();
+
+            virtual Config* clone() const;
         };
     }
 }

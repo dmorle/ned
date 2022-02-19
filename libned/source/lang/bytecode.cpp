@@ -511,6 +511,10 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(InCfg(tarr[0]));
+            case hash("ndprt"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(NdPrt(tarr[0]));
             case hash("ndinp"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");

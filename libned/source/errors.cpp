@@ -101,6 +101,15 @@ namespace nn
             return true;
         }
 
+        template<>
+        bool graph<>(const std::string& errmsg)
+        {
+            std::stringstream ss;
+            ss << "Graph Error: " << errmsg;
+            errors.push_back(ss.str());
+            return true;
+        }
+
         void print()
         {
             for (const auto& err : errors)

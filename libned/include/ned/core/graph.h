@@ -18,7 +18,7 @@ namespace nn
         struct Node;
         struct Edge
         {
-            using Connector = struct { Node* node; std::string name; };
+            struct Connector { Node* node = nullptr; std::string name; };
 
             EdgeInfo info;
             std::map<std::string, Connector> md_inps;
@@ -26,12 +26,14 @@ namespace nn
             mutable void* opaque = nullptr;
         };
 
+        struct Block;
         struct Node
         {
             std::string name;
             std::map<std::string, std::unique_ptr<Config>> configs;
             std::map<std::string, Edge*> inps;
             std::map<std::string, Edge*> outs;
+            Block* parent = nullptr;
             mutable void* opaque = nullptr;
         };
 
@@ -45,8 +47,8 @@ namespace nn
         {
             Edge* forward  = nullptr;
             Edge* backward = nullptr;
-            Init* init     = nullptr;
             void* data     = nullptr;
+            Init* init     = nullptr;  // This has to be a pointer because Parameter needs to have a copy-constructor
         };
 
         struct Block
@@ -59,11 +61,12 @@ namespace nn
             std::map<std::string, Parameter> weights;  // Local to the block
             Block* parent = nullptr;  // null if its the root block or uninitialized
             std::map<std::string, Block*> sub_blocks;
+            std::map<std::string, Node*> sub_nodes;
         };
 
         struct Graph
         {
-            Block* model;
+            Block model;
             std::map<std::string, Tensor> inps;
             std::map<std::string, Tensor> outs;
             std::map<std::string, Tensor> exports;  // Global across the graph
