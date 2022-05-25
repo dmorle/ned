@@ -5,6 +5,7 @@
 #include <ned/lang/bytecode.h>
 
 #include <variant>
+#include <functional>
 
 namespace nn
 {
@@ -15,7 +16,7 @@ namespace nn
         {
         public:
             struct Node;
-            using Attr = std::variant<Node, AstStruct, AstFn, AstBlock>;
+            using Attr = std::variant<Node, const AstStruct*, const AstFn*, const AstBlock*>;
             enum AttrType
             {
                 NODE = 0,
@@ -26,9 +27,21 @@ namespace nn
 
             struct Node
             {
-                std::map<std::string, std::vector<Attr>>     attrs;
-                std::map<std::string, std::vector<AstBlock>> intrs;
-                std::map<std::string, std::vector<AstInit>>  inits;
+                std::map<std::string, std::vector<Attr>>            attrs;
+                std::map<std::string, std::vector<const AstBlock*>> intrs;  // references but doesn't own the memory
+                std::map<std::string, std::vector<const AstInit*>>  inits;  // references but doesn't own the memory
+            };
+
+            struct LookupResult
+            {
+                std::vector<const Node&>      nodes;
+                std::vector<const AstStruct*> structs;
+                std::vector<const AstFn*>     fns;
+                std::vector<const AstBlock*>  defs;
+                std::vector<const AstBlock*>  intrs;
+                std::vector<const AstInit*>   inits;
+
+                bool empty();
             };
 
         private:
@@ -39,76 +52,80 @@ namespace nn
             Node root;
             bool merge_ast(AstModule& ast);
             static bool create(CodeModule& mod, const AstModule& ast, const std::vector<std::string>& imp_dirs, std::vector<std::string> visited);
+
+            struct LookupCtx
+            {
+                Node& nd;
+                std::vector<std::string>::const_iterator it;
+                std::vector<std::string>::const_iterator end;
+            };
+
+            static bool lookup(const LookupCtx& ctx, const std::string& idn, LookupResult& result);
         };
 
         struct TypeInfo;
+        class Scope;
+
+        class TypeRef
+        {
+            friend class TypeManager;
+
+            size_t ptr;
+            TypeRef(size_t ptr);
+
+        public:
+            TypeRef() : ptr(0) {}
+            TypeRef(const TypeRef&) = default;
+            TypeRef(TypeRef&&) = default;
+            TypeRef& operator=(const TypeRef&) = default;
+            TypeRef& operator=(TypeRef&&) = default;
+
+            operator bool() const;
+            TypeInfo* operator->();
+            const TypeInfo* operator->() const;
+            TypeInfo& operator*();
+            const TypeInfo& operator*() const;
+        };
+
+        using CodegenCallback = std::function<bool(Scope&)>;
 
         struct TypeInfoType
         {
-            std::shared_ptr<TypeInfo> base;
+            TypeRef base;
+        };
+
+        struct TypeInfoPrimitive
+        {
+            CodegenCallback cb;
         };
 
         struct TypeInfoArray
         {
-            std::shared_ptr<TypeInfo> elem;
+            TypeRef elem;
         };
 
         struct TypeInfoTuple
         {
-            std::vector<TypeInfo> elems;
+            std::vector<TypeRef> elems;
         };
 
-        struct TypeInfoNamespace
+        struct TypeInfoLookup
         {
-            std::shared_ptr<CodeModule::Node> node;
+            std::string name;
+            CodeModule::LookupResult lookup;
         };
 
-        struct TypeInfoStructRef
+        struct TypeInfoCargBind
         {
-            std::vector<const AstStruct*> matches;
+            CodeModule::LookupResult lookup;
+            const std::vector<AstExpr>& cargs;
         };
 
         struct TypeInfoStruct
         {
-            std::vector<const AstStruct*> matches;
-            std::vector<TypeInfo> cargs;
-            std::map<std::string, TypeInfo> kwcargs;
-        };
-
-        struct TypeInfoFnRef
-        {
-            std::vector<const AstFn*> matches;
-        };
-
-        struct TypeInfoFn
-        {
-            std::vector<const AstFn*> matches;
-            std::vector<TypeInfo> cargs;
-            std::map<std::string, TypeInfo> kwcargs;
-        };
-
-        struct TypeInfoDefRef
-        {
-            std::vector<const AstBlock*> matches;
-        };
-
-        struct TypeInfoDef
-        {
-            std::vector<const AstBlock*> matches;
-            std::vector<TypeInfo> cargs;
-            std::map<std::string, TypeInfo> kwcargs;
-        };
-
-        struct TypeInfoIntrRef
-        {
-            std::vector<const AstBlock*> matches;
-        };
-
-        struct TypeInfoIntr
-        {
-            std::vector<const AstBlock*> matches;
-            std::vector<TypeInfo> cargs;
-            std::map<std::string, TypeInfo> kwcargs;
+            const AstStruct* matches;
+            std::vector<std::pair<TypeRef, CodegenCallback>> cargs;
+            std::map<std::string, std::pair<TypeRef, CodegenCallback>> kwcargs;
         };
 
         struct TypeInfoGeneric
@@ -118,54 +135,56 @@ namespace nn
 
         struct TypeInfoArrPack
         {
-            std::shared_ptr<TypeInfo> elem;
+            TypeRef elem;
         };
 
         struct TypeInfoAggPack
         {
-            std::vector<TypeInfo> elems;
+            std::vector<TypeRef> elems;
         };
 
-        struct TypeInfo
+        struct TypeInfoTensor
         {
+            TypeRef fp;
+            TypeRef shape;
+        };
+
+        class TypeInfo
+        {
+        public:
+            const static TypeRef null;
+
             enum class Type
             {
                 INVALID = 0, // Invalid (uninitialized) type object
                 TYPE,        // Type object
                 PLACEHOLDER, // Used as the element type for the array literal []
+                FTY,         // Float widths for tensors, ie f16, f32, f64
                 BOOL,        // Boolean
-                FWIDTH,      // Float widths for tensors, ie f16, f32, f64
                 INT,         // Integer
                 FLOAT,       // Floating point
                 STR,         // String
+
                 ARRAY,       // Array - Fixed length
-                TUPLE,       // Tuple - mainly for cargs
-                NAMESPACE,   // Reference to a namespace
-                STRUCTREF,   // Reference to a struct name
+                TUPLE,       // Tuple
+                LOOKUP,      // Result of an identifier lookup in the module
+                CARGBIND,    // Result of binding cargs to a lookup result
                 STRUCT,      // Struct with bound cargs
-                FNREF,       // Reference to a function name
-                FN,          // Function with bound cargs
-                DEFREF,      // Reference to a block name
-                DEF,         // Block with bound cargs
-                INTRREF,     // Reference to a intrinsic name
-                INTR,        // Intrinsic with bound cargs
-                INITREF,     // Reference to an init name
                 INIT,        // Init object
                 NODE,        // Node object
-                EDGE,        // Edge object
                 BLOCK,       // Block object
+                EDGE,        // Edge object
                 TENSOR,      // Both a forward and backward edge
                 GENERIC,     // Compile time generic type
-                ARRPACK,     // A packed set of parameters (array of a single type)
-                AGGPACK      // The return value of a non-struct callable (tuple of types)
+                UNPACK       // Unpacked array
             } ty = TypeInfo::Type::INVALID;
 
             enum class Category
             {
-                DEFAULT,
-                CONST,
-                REF,
-                VIRTUAL
+                DEFAULT,  // responsible for the underlying object
+                CONST,    // immutable reference to an object
+                REF,      // mutable reference to an object
+                VIRTUAL   // compile time object, doesn't exist at runtime
             } cat = TypeInfo::Category::DEFAULT;
 
             template<Category...>
@@ -194,171 +213,494 @@ namespace nn
             using NonConst = CategorySet<Category::DEFAULT, Category::REF, Category::VIRTUAL>;
             using Mutable = CategorySet<Category::DEFAULT, Category::REF>;
 
-            bool check_add();
-            bool check_sub();
-            bool check_mul();
-            bool check_div();
-            bool check_mod();
-
-            bool check_eq();
-            bool check_ne();
-            bool check_ge();
-            bool check_le();
-            bool check_gt();
-            bool check_lt();
-
-            bool check_xstr();  // whether the type can be converted into a string
-            bool check_xint();  // whether the type can be converted into an int
-            bool check_xflt();  // whether the type can be converted into a float
-
             union
             {
                 TypeInfoType      type_type;
                 TypeInfoArray     type_array;
                 TypeInfoTuple     type_tuple;
-                TypeInfoNamespace type_namespace;
-                TypeInfoStructRef type_struct_ref;
+                TypeInfoLookup    type_lookup;
+                TypeInfoCargBind  type_cargbind;
                 TypeInfoStruct    type_struct;
-                TypeInfoFnRef     type_fn_ref;
-                TypeInfoFn        type_fn;
-                TypeInfoDefRef    type_def_ref;
-                TypeInfoDef       type_def;
-                TypeInfoIntrRef   type_intr_ref;
-                TypeInfoIntr      type_intr;
+                TypeInfoTensor    type_tensor;
                 TypeInfoGeneric   type_generic;
-                TypeInfoArrPack   type_arr_pack;
-                TypeInfoAggPack   type_agg_pack;
             };
 
             TypeInfo();
-            TypeInfo(const TypeInfo& type);
-            TypeInfo& operator=(const TypeInfo& type);
+            TypeInfo(const TypeInfo& type) = delete;
+            TypeInfo(TypeInfo&& type) = delete;
+            TypeInfo& operator=(const TypeInfo& type) = delete;
+            TypeInfo& operator=(TypeInfo&& type) = delete;
             ~TypeInfo();
-        
-            static TypeInfo create_type(const TypeInfo& base, TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
-            static TypeInfo create_placeholder(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
-            static TypeInfo create_bool(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
-            static TypeInfo create_int(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
-            static TypeInfo create_float(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
-            static TypeInfo create_string(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
-            static TypeInfo create_array(const TypeInfo& elem, TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
-            static TypeInfo create_tuple(const std::vector<TypeInfo>& elems, TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
 
-            static TypeInfo create_init(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
-            static TypeInfo create_node(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
-            static TypeInfo create_edge(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
-            static TypeInfo create_block(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
-            static TypeInfo create_tensor(TypeInfo::Category cat = TypeInfo::Category::DEFAULT);
+            bool check_pos() const;
+            bool check_neg() const;
 
-            std::string encode();
-            void decode(const std::string& data);
-            std::string to_string();
-            bool runtime_obj();  // returns whether or not the type can be converted into a runtime object
-            bool to_obj(ProgramHeap& heap, Obj& obj);  // converts the type into a runtime object
+            bool check_add() const;
+            bool check_sub() const;
+            bool check_mul() const;
+            bool check_div() const;
+            bool check_mod() const;
 
-        private:
-            void do_copy(const TypeInfo& type);
+            bool check_eq() const;
+            bool check_ne() const;
+            bool check_ge() const;
+            bool check_le() const;
+            bool check_gt() const;
+            bool check_lt() const;
+
+            bool check_xstr() const;  // whether the type can be converted into a string
+            bool check_xint() const;  // whether the type can be converted into an int
+            bool check_xflt() const;  // whether the type can be converted into a float
+            bool check_cpy() const;
+
+            std::string encode() const;
+            std::string to_string() const;
+            bool runtime_obj() const;
+            bool to_obj(const AstNodeInfo& node_info, TypeRef& type) const;  // converts the type into a runtime object
+            template<class allowed>
+            bool in_category() const
+            {
+                return
+                    (allowed::has_default && cat == TypeInfo::Category::DEFAULT) ||
+                    (allowed::has_const   && cat == TypeInfo::Category::CONST  ) ||
+                    (allowed::has_ref     && cat == TypeInfo::Category::REF    ) ||
+                    (allowed::has_virtual && cat == TypeInfo::Category::VIRTUAL);
+            }
+
+            // puts the object that the type references onto the top of the stack if possible
+            CodegenCallback codegen;
         };
 
-        bool operator==(const TypeInfo& lhs, const TypeInfo& rhs);
+        class TypeManager
+        {
+            friend class TypeRef;
+
+            uint8_t* buf = nullptr;
+            size_t bufsz = 0;
+            size_t len = 0;
+
+            inline TypeInfo* get(size_t ptr);
+            inline TypeRef next();
+
+        public:
+            TypeManager();
+            TypeManager(const TypeManager&) = delete;
+            TypeManager(TypeManager&&) = delete;
+            TypeManager& operator=(const TypeManager&) = delete;
+            TypeManager& operator=(TypeManager&&) = delete;
+            ~TypeManager();
+
+            TypeRef duplicate          (TypeInfo::Category cat, CodegenCallback codegen, TypeRef src);
+
+            TypeRef create_type        (TypeInfo::Category cat, CodegenCallback codegen, TypeRef base);
+            TypeRef create_placeholder ();  // always virtual
+            TypeRef create_generic     (TypeInfo::Category cat, CodegenCallback codegen);
+            TypeRef create_unpack      (CodegenCallback codegen, TypeRef elem);
+            TypeRef create_fty         (TypeInfo::Category cat, CodegenCallback codegen);
+            TypeRef create_bool        (TypeInfo::Category cat, CodegenCallback codegen);
+            TypeRef create_int         (TypeInfo::Category cat, CodegenCallback codegen);
+            TypeRef create_float       (TypeInfo::Category cat, CodegenCallback codegen);
+            TypeRef create_string      (TypeInfo::Category cat, CodegenCallback codegen);
+            TypeRef create_array       (TypeInfo::Category cat, CodegenCallback codegen, TypeRef elem);
+            TypeRef create_tuple       (TypeInfo::Category cat, CodegenCallback codegen, std::vector<TypeRef> elems);
+            
+            TypeRef create_lookup      (std::string name, CodeModule::LookupResult lookup);  // always virtual'
+            TypeRef create_cargbind    (CodeModule::LookupResult lookup, const std::vector<AstExpr>& cargs); // always virtual
+            TypeRef create_struct      (TypeInfo::Category cat, CodegenCallback codegen);
+            TypeRef create_init        (TypeInfo::Category cat, CodegenCallback codegen);
+            
+            TypeRef create_node        (TypeInfo::Category cat);
+            TypeRef create_block       (TypeInfo::Category cat);
+            TypeRef create_edge        (TypeInfo::Category cat, CodegenCallback codegen, TypeRef fp, TypeRef shape);
+            TypeRef create_tensor      (TypeInfo::Category cat, CodegenCallback codegen, TypeRef fp, TypeRef shape);
+        };
+
+        bool operator==(const TypeRef& lhs, const TypeRef& rhs);
 
         class Scope
         {
-            friend bool codegen_exit(ByteCodeBody& body, Scope& scope, const AstNodeInfo& info);
+            friend bool codegen_exit(Scope& scope, const AstNodeInfo& info);
 
         public:
             struct StackVar
             {
-                TypeInfo info;
+                TypeRef type;
                 size_t ptr;
             };
 
         private:
             std::map<std::string, StackVar> stack_vars;
             Scope* parent = nullptr;
+            size_t curr_var_name = 0;
 
         public:
             Scope(Scope* parent) : parent(parent) {}
 
+            bool contains(const std::string& var_name) const;
             bool at(const std::string& var_name, StackVar& var) const;
-            bool add(const std::string& var_name, const TypeInfo& info, const AstNodeInfo& node_info);
+            bool add(const std::string& var_name, TypeRef type, const AstNodeInfo& node_info);
+            std::string generate_var_name();
+            bool empty() const;
 
-            void push(size_t n);
-            void pop(size_t n);
+            bool push(size_t n=1);
+            bool pop(size_t n=1);
 
             bool local_size(size_t& sz, const Scope* scope) const;
             bool list_local_vars(std::vector<StackVar>& vars, const Scope* scope);
         };
 
+        // Responsible for building the dependancy graph for signature cargs, vargs, and rets
+        // Also for initializing the graph with types and values, and for deducing and checking the remaining elements
+        class ProcCall
+        {
+        public:
+            ProcCall(const std::vector<std::string>& sig_ns);
+
+        protected:
+            struct TypeNode;
+            struct ValNode;
+
+            // The value of a node can never be determined from its inputs, but the inputs can be determined by its
+            struct Arg
+            {
+                // For stack variables (cargs and vargs), this is the name of the argument.
+                // For return values, this is ret%d.  Where %d is the return value's position.
+                // For temporary values, this is ~
+                std::string name;
+                TypeNode* type;
+                bool visited = false;
+                TypeRef default_type = TypeInfo::null;
+            };
+
+            struct UnaryOp
+            {
+                ValNode* inp = nullptr;
+            };
+
+            struct BinaryOp
+            {
+                ValNode* lhs = nullptr;
+                ValNode* rhs = nullptr;
+            };
+
+            struct ValType
+            {
+                ValNode* val = nullptr;
+            };
+
+            struct ArrayType
+            {
+                TypeNode* carg = nullptr;
+            };
+
+            struct TupleType
+            {
+                std::vector<TypeNode> cargs;
+            };
+
+            struct TensorType
+            {
+                ValNode* fp = nullptr;
+                std::vector<ValNode> shape;
+            };
+
+            struct ValNode
+            {
+                enum class Type
+                {
+                    INVALID = 0,
+                    ARG_VAL,
+                    CONST_VAL,
+                    UNARY_POS,
+                    UNARY_NEG,
+                    UNARY_NOT,
+                    UNARY_UNPACK,
+                    BINARY_ADD,
+                    BINARY_SUB
+                } ty = Type::INVALID;
+
+                union
+                {
+                    Arg      val_arg;
+                    UnaryOp  val_unary;
+                    BinaryOp val_binary;
+                };
+
+                ValNode() {}
+                ValNode(ValNode&& node);
+                ValNode& operator=(ValNode&& node) noexcept;
+                ~ValNode();
+
+                bool get_type(const AstNodeInfo& node_info, std::vector<TypeRef>& rets) const;
+
+                // Start by assuming all nodes are root nodes,
+                // then during SigDeduction::create_op calls, if the node name pops up
+                // it means that the Node wasn't a root node
+                bool is_root = true;
+                const AstNodeInfo* node_info;
+                TypeRef val = TypeInfo::null;  // This field gets initialized during codegen
+
+            private:
+                void do_move(ValNode&& node) noexcept;
+            };
+
+            struct TypeNode
+            {
+                enum class Type
+                {
+                    INVALID = 0,
+                    TYPE,     // the type of a generic
+                    INIT,
+                    FTY,
+                    BOOL,
+                    INT,
+                    FLOAT,
+                    STRING,
+                    GENERIC,  // a compile time variable type
+                    UNPACK,  // Unpacked types
+                    ARRAY,
+                    TUPLE,
+                    TENSOR
+                } ty = Type::INVALID;
+
+                union
+                {
+                    ArrayType   type_array;
+                    TupleType   type_tuple;
+                    TensorType  type_tensor;
+                    ValType     type_val;
+                };
+
+                TypeNode() {}
+                TypeNode(TypeNode&& node);
+                TypeNode& operator=(TypeNode&& node) noexcept;
+                ~TypeNode();
+
+                TypeRef as_type(const AstNodeInfo& node_info) const;
+
+                const AstNodeInfo* node_info;
+
+            private:
+                void do_move(TypeNode&& node) noexcept;
+            };
+
+            bool create_arg(Scope& scope, const AstArgDecl& decl, ValNode& node);
+            bool create_type(const AstExpr& expr, TypeNode& node);
+            bool create_value(const AstExpr& expr, ValNode& node);
+
+            bool codegen_root_arg(Scope& scope, ValNode& node);
+
+            bool codegen_value_arg    (Scope& scope, ValNode& node, TypeRef& val);
+            bool codegen_value_pos    (Scope& scope, ValNode& node, TypeRef& val);
+            bool codegen_value_neg    (Scope& scope, ValNode& node, TypeRef& val);
+            bool codegen_value_not    (Scope& scope, ValNode& node, TypeRef& val);
+            bool codegen_value_unpack (Scope& scope, ValNode& node, TypeRef& val);
+            bool codegen_value_add    (Scope& scope, ValNode& node, TypeRef& val);
+            bool codegen_value_sub    (Scope& scope, ValNode& node, TypeRef& val);
+
+            bool codegen_value(Scope& scope, ValNode& node, TypeRef& val);
+            
+            bool codegen_type_type    (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_init    (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_fty     (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_bool    (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_int     (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_float   (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_string  (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_generic (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_array   (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_tuple   (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_tensor  (Scope& scope, TypeNode& node, TypeRef& type);
+
+            bool codegen_type(Scope& scope, TypeNode& node, TypeRef& type);
+
+            std::vector<std::string> sig_ns;
+            std::map<std::string, ValNode> carg_nodes;
+            std::vector<std::string> carg_stack;
+            // EDGE for intr, otherwise its TENSOR
+            // Initializing the the call-specific init function
+            TypeInfo::Type tensor_type;
+            const AstNodeInfo* node_info;
+        };
+
+        class InitCall :
+            public ProcCall
+        {
+        public:
+            using ProcCall::ProcCall;
+
+            bool init(const AstInit& sig);
+            bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs);
+            bool codegen(Scope& scope, std::vector<TypeRef>& rets);
+
+        private:
+            std::string init_name;
+            const AstNodeInfo* pinfo;
+        };
+
+        class StructCall :
+            public ProcCall
+        {
+        public:
+            using ProcCall::ProcCall;
+
+            bool init(const AstStruct& sig);
+            bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs);
+            bool codegen(Scope& scope, std::vector<TypeRef>& rets);
+        };
+
+        class IntrCall :
+            public ProcCall
+        {
+        public:
+            using ProcCall::ProcCall;
+
+            bool init(const AstBlock& sig);
+
+        private:
+            std::map<std::string, ValNode> varg_nodes;
+            std::vector<std::string> varg_stack;
+        };
+
+        class DefCall :
+            public ProcCall
+        {
+        public:
+            using ProcCall::ProcCall;
+
+            bool init(const AstBlock& sig);
+            bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs, const std::vector<TypeRef>& vargs);
+            bool codegen(Scope& scope, std::vector<TypeRef>& rets);
+
+        private:
+            std::map<std::string, ValNode> varg_nodes;
+            std::vector<std::string> varg_stack;
+            std::map<std::string, TypeNode> ret_nodes;
+            std::vector<std::string> ret_stack;
+        };
+
+        class FnCall :
+            public ProcCall
+        {
+        public:
+            using ProcCall::ProcCall;
+
+            bool init(const AstFn& sig);
+            bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs, const std::vector<TypeRef>& vargs);
+            bool codegen(Scope& scope, std::vector<TypeRef>& rets);
+
+        private:
+            std::map<std::string, ValNode> varg_nodes;
+            std::vector<std::string> varg_stack;
+        };
+
+        class ModuleInfo
+        {
+            struct EntryPoint
+            {
+                std::string bc_name;
+                AstBlockSig* sig;
+            };
+
+            std::map<std::string, std::vector<EntryPoint>> entry_points;
+
+            CodeModule mod;
+
+        public:
+            ModuleInfo();
+
+            bool entry_setup(std::string& ep_name, ByteCodeModule& bc, const std::string& name, const std::map<std::string, std::pair<Obj, TypeInfo>>& cargs) const;
+        };
+
         std::string label_prefix(const AstNodeInfo& info);
+        std::string generate_var_name();
 
-        bool arg_type(TypeInfo& info, const Scope& scope, const AstArgDecl& arg);
+        bool parse_cargs(const std::vector<AstExpr>& args, std::map<std::string, const AstExpr*>& cargs);
+        bool arg_type(TypeRef& type, const Scope& scope, const AstArgDecl& arg);
+        bool match_elems(const std::vector<AstExpr>& lhs, const std::vector<TypeRef>& rhs, CodegenCallback& setup_fn, std::vector<CodegenCallback>& elem_fns);
+        bool match_carg_sig(Scope& scope, Scope& sig_scope, const std::vector<AstArgDecl>& sig, const std::vector<AstExpr>& args, std::map<std::string, TypeRef>& cargs);
+        bool match_def_sig(Scope& scope, Scope& sig_scope, const AstBlockSig& def,
+            const std::vector<AstExpr>& param_cargs, const std::vector<TypeRef>& param_vargs,
+            std::map<std::string, TypeRef>& cargs, std::vector<TypeRef>& vargs);
+        bool match_intr_sig(Scope& scope, Scope& sig_scope, const AstBlockSig& intr,
+            const std::vector<AstExpr>& param_cargs, const std::vector<TypeRef>& param_vargs,
+            std::map<std::string, TypeRef>& cargs, std::vector<TypeRef>& vargs);
+        bool match_fn_sig(Scope& scope, Scope& sig_scope, const AstFnSig& fn,
+            const std::vector<AstExpr>& param_cargs, const std::vector<TypeRef>& param_vargs,
+            std::map<std::string, TypeRef>& cargs, std::vector<TypeRef>& vargs);
 
-        bool codegen_expr_bool     (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_int      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_float    (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_string   (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_array    (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_tuple    (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_pos      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_neg      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_not      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_unpack   (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_add      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_sub      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_mul      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_div      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_mod      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_iadd     (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_isub     (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_imul     (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_idiv     (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_imod     (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_assign   (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_and      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_or       (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_eq       (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_ne       (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_gt       (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_lt       (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_ge       (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_le       (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_idx      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_dot      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_decl     (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_cargs    (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_vargs    (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_fndecl   (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_defdecl  (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_kw       (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_expr_var      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
+        bool codegen_expr_callee_var   (Scope& scope, const AstExpr& expr, TypeRef& ret);
+        bool codegen_expr_callee_dot   (Scope& scope, const AstExpr& expr, TypeRef& ret);
+        bool codegen_expr_callee_cargs (Scope& scope, const AstExpr& expr, TypeRef& ret);
 
-        bool codegen_expr(ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstExpr& expr, std::vector<TypeInfo>& rets);
-        bool codegen_exit(ByteCodeBody& body, Scope& scope, const AstNodeInfo& info);  // unwinds and exits a scope updating the parent scope's pointers
+        // codegens the expr while keeping an ambiguities that may exist - used to prevent resolving lookups
+        bool codegen_expr_callee(Scope& scope, const AstExpr& expr, TypeRef& ret);
 
-        bool codegen_line_break    (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);
-        bool codegen_line_continue (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);
-        bool codegen_line_export   (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);
-        bool codegen_line_extern   (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);
-        bool codegen_line_raise    (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);
-        bool codegen_line_print    (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);
-        bool codegen_line_return   (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);
-        bool codegen_line_branch   (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line, const std::string& end_label);  // if or elif statement
-        bool codegen_line_block    (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);
-        bool codegen_line_while    (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);
-        bool codegen_line_for      (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);
-        bool codegen_line_expr     (ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);
+        bool codegen_expr_bool     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_int      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_float    (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_string   (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_array    (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_tuple    (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_pos      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_neg      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_not      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_unpack   (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_add      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_sub      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_mul      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_div      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_mod      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_iadd     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_isub     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_imul     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_idiv     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_imod     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_assign   (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_and      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_or       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_eq       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_ne       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_gt       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_lt       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_ge       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_le       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_idx      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_dot      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_decl     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_cargs    (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_vargs    (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_fndecl   (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_defdecl  (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_kw       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_var      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
 
-        bool codegen_line(ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const AstLine& line);  // generates code for independent lines.  Can't handle if, elif, else, forward.
-        bool codegen_lines(ByteCodeModule& bc, ByteCodeBody& body, Scope& scope, const std::vector<AstLine>& lines);
+        bool codegen_expr(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_exit(Scope& scope, const AstNodeInfo& info);  // unwinds and exits a scope updating the parent scope's pointers
 
-        bool codegen_struct(ByteCodeModule& bc, const std::string& name, const AstStruct& ast_struct, const std::vector<std::string>& ns);
-        bool codegen_func(ByteCodeModule& bc, const std::string& name, const AstFn& ast_fn, const std::vector<std::string>& ns);
-        bool codegen_def(ByteCodeModule& bc, const std::string& name, const AstBlock& ast_def, const std::vector<std::string>& ns);
-        bool codegen_intr(ByteCodeModule& bc, const std::string& name, const AstBlock& ast_intr, const std::vector<std::string&> ns);
-        bool codegen_attr(ByteCodeModule& bc, const std::string& name, const CodeModule::Attr& attr, std::vector<std::string>& ns);
+        bool codegen_line_break    (Scope& scope, const AstLine& line);
+        bool codegen_line_continue (Scope& scope, const AstLine& line);
+        bool codegen_line_export   (Scope& scope, const AstLine& line);
+        bool codegen_line_extern   (Scope& scope, const AstLine& line);
+        bool codegen_line_raise    (Scope& scope, const AstLine& line);
+        bool codegen_line_print    (Scope& scope, const AstLine& line);
+        bool codegen_line_return   (Scope& scope, const AstLine& line);
+        bool codegen_line_branch   (Scope& scope, const AstLine& line, const std::string& end_label);  // if or elif statement
+        bool codegen_line_block    (Scope& scope, const AstLine& line);
+        bool codegen_line_while    (Scope& scope, const AstLine& line);
+        bool codegen_line_for      (Scope& scope, const AstLine& line);
+        bool codegen_line_expr     (Scope& scope, const AstLine& line);
 
-        bool codegen_module(ByteCodeModule& bc, const AstModule& ast, const std::vector<std::string>& imp_dirs);
+        bool codegen_line(Scope& scope, const AstLine& line);  // generates code for independent lines.  Can't handle if, elif, else, forward.
+        bool codegen_lines(Scope& scope, const std::vector<AstLine>& lines);
+
+        bool codegen_struct(const std::string& name, const AstStruct& ast_struct, const std::vector<std::string>& ns);
+        bool codegen_func(const std::string& name, const AstFn& ast_fn, const std::vector<std::string>& ns);
+        bool codegen_def(const std::string& name, const AstBlock& ast_def, const std::vector<std::string>& ns);
+        bool codegen_intr(const std::string& name, const AstBlock& ast_intr, const std::vector<std::string&> ns);
+        bool codegen_attr(const std::string& name, const CodeModule::Attr& attr, std::vector<std::string>& ns);
+
+        bool codegen_module(ByteCodeModule& bc, ModuleInfo& info, const AstModule& ast, const std::vector<std::string>& imp_dirs);
     }
 }
 

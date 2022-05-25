@@ -71,7 +71,7 @@ namespace nn
             bool create_type_agg   (Obj& obj, std::vector<TypeObj*> tys);
 
             bool create_obj_bool   (Obj& obj, BoolObj val);
-            bool create_obj_fwidth (Obj& obj, FtyObj val);
+            bool create_obj_fty    (Obj& obj, FtyObj val);
             bool create_obj_int    (Obj& obj, IntObj val);
             bool create_obj_float  (Obj& obj, FloatObj val);
             bool create_obj_str    (Obj& obj, const StrObj& val);
@@ -107,6 +107,7 @@ namespace nn
             virtual bool land (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
             virtual bool lor  (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
             virtual bool idx  (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
+            virtual bool len  (ProgramHeap& heap, Obj& dst, const Obj src);
             virtual bool xstr (ProgramHeap& heap, Obj& dst, const Obj src);
             virtual bool xflt (ProgramHeap& heap, Obj& dst, const Obj src);
             virtual bool xint (ProgramHeap& heap, Obj& dst, const Obj src);
@@ -245,6 +246,7 @@ namespace nn
             virtual bool eq   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool ne   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool idx  (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool len  (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xstr (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool cfg  (core::Config*& cfg, const Obj src) override;
         };
@@ -263,6 +265,7 @@ namespace nn
             virtual bool eq   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool ne   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool idx  (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool len  (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xstr (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool cfg  (core::Config*& cfg, const Obj src) override;
         };

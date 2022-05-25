@@ -14,13 +14,13 @@ extern "C" std::shared_ptr<lang::Obj> pyToNed(PyObject * pVal)
         char* str = PyBytes_AsString(pAsciiStr);
 
         if (strcmp(str, "dtype.f16") == 0)
-            return lang::create_obj_fwidth(core::tensor_dty::F16);
+            return lang::create_obj_fty(core::tensor_dty::F16);
         else if (strcmp(str, "dtype.f32") == 0)
-            return lang::create_obj_fwidth(core::tensor_dty::F32);
+            return lang::create_obj_fty(core::tensor_dty::F32);
         else if (strcmp(str, "dtype.f64") == 0)
-            return lang::create_obj_fwidth(core::tensor_dty::F64);
+            return lang::create_obj_fty(core::tensor_dty::F64);
         else if (strcmp(str, "fwidth") == 0)
-            return lang::create_obj_dtype(lang::ObjType::FWIDTH);
+            return lang::create_obj_dtype(lang::ObjType::FTY);
         else if (strcmp(str, "bool") == 0)
             return lang::create_obj_dtype(lang::ObjType::BOOL);
         else if (strcmp(str, "int") == 0)
@@ -110,7 +110,7 @@ extern "C" PyObject* nedToPy(const std::shared_ptr<lang::Obj>& obj)
     case lang::ObjType::VAR:
         PyErr_SetString(PyExc_ValueError, "Ned var object does not have a python mapping");
         return NULL;
-    case lang::ObjType::FWIDTH:
+    case lang::ObjType::FTY:
         PyErr_SetString(PyExc_ValueError, "Ned fwidth object does not have a python mapping");
         return NULL;
     case lang::ObjType::BOOL:

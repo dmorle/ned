@@ -46,7 +46,9 @@ namespace nn
         public:
             ByteCodeDebugInfo::Record create_debug_record(size_t addr) const;
             virtual CodeSegPtr to_bytes(CodeSegPtr buf) const = 0;
+            virtual std::string to_string(const std::vector<std::string>& statics_strings) const = 0;
             virtual bool set_labels(const std::map<std::string, size_t>& label_map) = 0;
+            virtual size_t get_size() const = 0;
         };
         
         class ByteCodeBody
@@ -96,16 +98,34 @@ namespace nn
 
             std::map<std::string, ByteCodeBody> procs;
             std::vector<Obj> statics;
+            std::vector<std::string> statics_strings;
             std::vector<ProcRef> static_proc_refs;
 
         public:
             ProgramHeap& heap;
             ByteCodeModule(ProgramHeap& heap) : heap(heap) {}
+            
+            bool add_type_bool  (size_t& addr);
+            bool add_type_fty   (size_t& addr);
+            bool add_type_int   (size_t& addr);
+            bool add_type_float (size_t& addr);
+            bool add_type_str   (size_t& addr);
+
+            bool add_obj_bool   (size_t& addr, BoolObj val);
+            bool add_obj_fty    (size_t& addr, FtyObj val);
+            bool add_obj_int    (size_t& addr, IntObj val);
+            bool add_obj_float  (size_t& addr, FloatObj val);
+            bool add_obj_str    (size_t& addr, const StrObj& val);
+
             bool add_block(const std::string& name, const ByteCodeBody& body);
-            bool add_static_obj(Obj obj, size_t& addr);                                // add static object to data_segment
+            bool has_proc(const std::string& name);
             bool add_static_ref(const TokenImp<TokenType::IDN>* label, size_t& addr);  // add static Obj{.ptr} to data_segment
             bool add_static_ref(const AstNodeInfo& info, const std::string& label, size_t& addr);
             bool export_module(ByteCode& byte_code);
+            std::string to_string() const;
+
+        private:
+            bool add_static_obj(Obj obj, size_t& addr);  // add static object to data_segment
         };
 
         enum class InstructionType : uint8_t
@@ -141,6 +161,7 @@ namespace nn
             GE,
             LE,
             IDX,
+            LEN,
             XSTR,
             XFLT,
             XINT,
@@ -159,6 +180,26 @@ namespace nn
             SBWD,
             SINI,
             MRG,
+            TSHP,
+            TFTY,
+            ESHP,
+            EFTY,
+            TTADD,
+            TSADD,
+            TTSUB,
+            TSSUB,
+            STSUB,
+            TTMUL,
+            TSMUL,
+            TTDIV,
+            TSDIV,
+            STDIV,
+            TTPOW,
+            TSPOW,
+            STPOW,
+            SLC,
+            CAT,
+            RSH,
             NDCFG,
             BKCFG,
             INCFG,
@@ -176,6 +217,9 @@ namespace nn
 
         namespace instruction
         {
+            template<InstructionType ty>
+            std::string ins_str();
+
             template<InstructionType OPCODE>
             class Labeled :  // instructions of the form <opcode> <label>
                 public Instruction
@@ -203,6 +247,9 @@ namespace nn
                     buf += sizeof(size_t);
                     return buf;
                 }
+
+                virtual std::string to_string(const std::vector<std::string>& statics_strings) const override { return ins_str<OPCODE>() + " " + label; }
+                virtual size_t get_size() const { return size; }
             };
 
             template<InstructionType OPCODE>
@@ -225,6 +272,9 @@ namespace nn
                     buf += sizeof(size_t);
                     return buf;
                 }
+
+                virtual std::string to_string(const std::vector<std::string>& statics_strings) const override;
+                virtual size_t get_size() const { return size; }
             };
 
             template<InstructionType OPCODE>
@@ -244,6 +294,9 @@ namespace nn
                     buf += sizeof(InstructionType);
                     return buf;
                 }
+
+                virtual std::string to_string(const std::vector<std::string>& statics_strings) const { return ins_str<OPCODE>(); }
+                virtual size_t get_size() const { return size; }
             };
 
             using enum ::nn::lang::InstructionType;
@@ -279,6 +332,7 @@ namespace nn
             using Gt    = Implicit < GT    >;
             using Lt    = Implicit < LT    >;
             using Idx   = Implicit < IDX   >;
+            using Len   = Implicit < LEN   >;
             using XStr  = Implicit < XSTR  >;
             using XFlt  = Implicit < XFLT  >;
             using XInt  = Implicit < XINT  >;
@@ -297,6 +351,26 @@ namespace nn
             using SBwd  = Implicit < SBWD  >;
             using SIni  = Implicit < SINI  >;
             using Mrg   = Implicit < MRG   >;
+            using Tshp  = Implicit < TSHP  >;
+            using Tfty  = Implicit < TFTY  >;
+            using Eshp  = Implicit < ESHP  >;
+            using Efty  = Implicit < EFTY  >;
+            using TTAdd = Implicit < TTADD >;
+            using TSAdd = Implicit < TSADD >;
+            using TTSub = Implicit < TTSUB >;
+            using TSSub = Implicit < TSSUB >;
+            using STSub = Implicit < STSUB >;
+            using TTMul = Implicit < TTMUL >;
+            using TSMul = Implicit < TSMUL >;
+            using TTDiv = Implicit < TTDIV >;
+            using TSDiv = Implicit < TSDIV >;
+            using STDiv = Implicit < STDIV >;
+            using TTPow = Implicit < TTPOW >;
+            using TSPow = Implicit < TSPOW >;
+            using STPow = Implicit < STPOW >;
+            using Slc   = Implicit < SLC   >;
+            using Cat   = Implicit < CAT   >;
+            using Rsh   = Implicit < RSH   >;
             using NdCfg = Implicit < NDCFG >;
             using BkCfg = Implicit < BKCFG >;
             using InCfg = Implicit < INCFG >;
@@ -366,7 +440,8 @@ namespace nn
 * gt           Checks if the left is greater than the right
 * lt           Checks if the left is less than the right
 * 
-* idx          Retrieves the left at the index of the right (does not need type info)
+* idx          Retrieves the left at the index of the right
+* len          Retrieves the length of the tos
 * 
 * xstr         Converts any object to a string object
 * xflt         Converts any object to a float object
@@ -385,11 +460,32 @@ namespace nn
 * 
 * gfwd         Extracts the forward edge from a tensor
 * gbwd         Extracts the backward edge from a tensor
-* gini         Extracts the backward edge from a tensor
+* gini         Extracts the initializer from a tensor
 * sfwd         Sets the forward edge of a tensor
 * sbwd         Sets the backward edge of a tensor
 * sini         Sets the initializer of a tensor
 * mrg          Merges the connections of two edges together
+* tshp         Gets the shape of a tensor
+* tfty         Gets the fty of a tensor
+* eshp         Gets the shape of an edge
+* efty         Gets the fty of an edge
+* 
+* ttadd        Adds two tensors
+* tsadd        Adds a tensor and a float
+* ttsub        Subtracts two tensors
+* tssub        Subtracts a scalar from a tensor
+* stsub        Subtracts a tensor from a float
+* ttmul        Multiplies two tensors pointwise
+* tsmul        Multiplies a tensor and a float
+* ttdiv        Divides two tensors
+* tsdiv        Divides tensor by a float
+* stdiv        Divides a float by a tensor
+* ttpow        Exponentiates two tensors
+* tspow        Exponentiates tensor by a float
+* stpow        Exponentiates a float by a tensor
+* slc          Slices a tensor
+* cat          Concatenates two tensors
+* rsh          Reshapes a tensor
 * 
 * ndcfg        Adds a named configuration to a node
 * bkcfg        Adds a named configuration to a block

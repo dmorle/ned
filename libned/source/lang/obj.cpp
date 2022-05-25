@@ -102,7 +102,7 @@ namespace nn
             return false;
         }
 
-        bool ProgramHeap::create_obj_fwidth(Obj& obj, FtyObj val)
+        bool ProgramHeap::create_obj_fty(Obj& obj, FtyObj val)
         {
             fty_objs.push_back(new FtyObj(val));
             obj.fty_obj = fty_objs.back();
@@ -247,6 +247,11 @@ namespace nn
             return true;
         }
 
+        bool TypeObj::len(ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return true;
+        }
+
         bool TypeObj::xstr(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return true;
@@ -311,12 +316,12 @@ namespace nn
 
         bool FtyType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            return heap.create_obj_fwidth(dst, *src.fty_obj);
+            return heap.create_obj_fty(dst, *src.fty_obj);
         }
 
         bool FtyType::inst(ProgramHeap& heap, Obj& dst)
         {
-            return heap.create_obj_fwidth(dst, core::EdgeFty::F32);
+            return heap.create_obj_fty(dst, core::EdgeFty::F32);
         }
 
         bool FtyType::set(ProgramHeap& heap, Obj& dst, const Obj src)
@@ -751,6 +756,11 @@ namespace nn
             return false;
         }
 
+        bool ArrType::len(ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_int(dst, src.agg_obj->size());
+        }
+
         bool ArrType::xstr(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             if (src.agg_obj->size() == 0)
@@ -871,6 +881,11 @@ namespace nn
 
             dst = lhs.agg_obj->operator[](*rhs.int_obj);
             return false;
+        }
+
+        bool ArrType::len(ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_int(dst, src.agg_obj->size());
         }
 
         bool AggType::xstr(ProgramHeap& heap, Obj& dst, const Obj src)

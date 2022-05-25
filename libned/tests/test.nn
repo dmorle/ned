@@ -1,34 +1,18 @@
-struct sub_data<struct T, int N>:
-    T m_data
-    array<str, N> str_list
+# struct T<int n>:
+# 	int i = n
+# 
+# fn f<int n, int m, T<n> tca>(T<n + m> tva) -> T<n - m>:
+# 	T<n - m> t
+# 	return t
+# 
+# def test():
+# 	T<3> tca
+# 	T<5> tva
+# 	f<tca=tca>(tva)
 
-struct data:
-    int x
-    def y
-    intr z
-    fn w
-    bool has_data
-    data sub_data
+def test() -> fp<*shape> out, fp<> loss:
+	print("hello world")
 
-fn func():
-    data d
-    d.x = 0
-    d.y = xavier
-    d.z = add
-    d.w = func
-    d.has_data = false
-    d.data
 
-intr add<fwidth fw, int *shape>(tensor<fw, *shape> t1, tensor<fw, *shape> t2):
-    tensor<fw, *shape> out
-    return out
-
-def xavier<fwidth fw, int *shape>():
-    tensor<fw, *shape> w
-    return w
-
-def model<int N>(tensor<f32, N> inp):
-    tensor<f32, 2 * N> out1 = xavier<f32, 2 * N>()
-    tensor out2 = xavier<f32, N, N>()
-    out2 = add(out2, out2)
-    return out1, out2
+def main<fty fp, int* shape>(fp<*shape> lhs, fp<1, *shape> rhs) -> out:
+	return lhs |1| (fp<...>)rhs

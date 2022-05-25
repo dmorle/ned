@@ -27,21 +27,25 @@ namespace nn
             ROUND_C,
             SQUARE_O,
             SQUARE_C,
+            VBAR,     // |
             DOT,
-            ARROW,  // ->
+            ELLIPSES, // ...
+            ARROW,    // ->
             COLON,
             COMMA,
-            MODE,    // !
+            MODE,     // !
             ADD,
             SUB,
             STAR,
             DIV,
             MOD,
+            POW,      // ^
             IADD,
             ISUB,
             IMUL,
             IDIV,
             IMOD,
+            IPOW,
             ASSIGN,
             CMP_EQ,
             CMP_NE,
@@ -84,8 +88,6 @@ namespace nn
             KW_RAISE,
             KW_EXPORT,
             KW_EXTERN,
-            KW_FORWARD,
-            KW_BACKWARD,
             KW_F16,
             KW_F32,
             KW_F64,

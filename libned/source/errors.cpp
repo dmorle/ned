@@ -20,6 +20,17 @@ namespace nn
     {
         std::vector<std::string> errors;
 
+        bool no_memory()
+        {
+            errors.push_back("Error: Out of memory");
+            return true;
+        }
+
+        void pop_last()
+        {
+            errors.pop_back();
+        }
+
         template<>
         bool general<>(const std::string& errmsg)
         {
@@ -74,13 +85,13 @@ namespace nn
         }
 
         template<>
-        bool compiler<>(const lang::AstNodeInfo& info, const std::string& errmsg)
+        bool compiler<>(const lang::AstNodeInfo& type, const std::string& errmsg)
         {
             std::stringstream ss;
             ss << "Compilation Error: " << errmsg
-                << "\nline: " << info.line_start
-                << " column: " << info.col_start
-                << " file: " << info.fname;
+                << "\nline: " << type.line_start
+                << " column: " << type.col_start
+                << " file: " << type.fname;
             errors.push_back(ss.str());
             return true;
         }

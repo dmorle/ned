@@ -10,17 +10,52 @@ namespace nn
 {
     namespace lang
     {
+        std::string to_string(ExprKW kw)
+        {
+            switch (kw)
+            {
+            case ExprKW::TYPE:
+                return "type";
+            case ExprKW::INIT:
+                return "type";
+            case ExprKW::FTY:
+                return "type";
+            case ExprKW::BOOL:
+                return "type";
+            case ExprKW::INT:
+                return "type";
+            case ExprKW::FLOAT:
+                return "type";
+            case ExprKW::STR:
+                return "type";
+            case ExprKW::ARRAY:
+                return "type";
+            case ExprKW::TUPLE:
+                return "type";
+            case ExprKW::F16:
+                return "type";
+            case ExprKW::F32:
+                return "type";
+            case ExprKW::F64:
+                return "type";
+            default:
+                return "INVALID";
+            }
+        }
+
         // Parses comma deliminated token sequences within a matching set of brackets
         // Returns the index in tarr immediately after the CLOSE token was found
         // On failure, this function returns -1
         template<typename T, bool(*parse_fn)(const TokenArray&, T&), TokenType OPEN, TokenType CLOSE>
         inline int parse_args(const TokenArray& tarr, int i, std::vector<T>& args)
         {
-            assert(tarr[0]->ty == OPEN);
+            assert(tarr[i]->ty == OPEN);
 
             // Advancing one token past the opening bracket
             i++;
             int end = tarr.search(ArgEndCriteria(CLOSE), i);
+            if (end == -1)
+                return error::syntax(tarr[0], "Unable to find the closing token %", to_string(CLOSE));
             if (tarr[end]->ty == CLOSE)
             {
                 // either a single arg, or its empty
@@ -36,7 +71,7 @@ namespace nn
                         }
                         break;
                     }
-                return end;
+                return end + 1;
             }
 
             // General case for parsing multiple args
@@ -85,6 +120,167 @@ namespace nn
                     }
                 i = end + 1;
             } while (end < tarr.size());
+            return false;
+        }
+
+        template<>
+        bool parse_signature<AstStructSig>(const TokenArray& tarr, AstCargSig& ast_struct_sig)
+        {
+            assert(tarr.size() > 0);
+
+            // Setup and getting the name of the struct definition
+            int i = 0;
+            for (; tarr[i]->is_whitespace(); i++);
+            if (tarr[i]->expect<TokenType::IDN>())
+                return true;
+            ast_struct_sig.name = tarr[i]->get<TokenType::IDN>().val;
+            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (i == tarr.size())
+                return false;
+
+            // Parsing out the cargs from the struct definition
+            if (tarr[i]->expect<TokenType::ANGLE_O>())
+                return true;
+            i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(tarr, i, ast_struct_sig.cargs);
+            if (i == -1)
+                return error::syntax(tarr[0], "Error parsing struct cargs");
+            for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (i != tarr.size())
+                return error::syntax(tarr[i], "Unexpected token after struct cargs");
+            return false;
+        }
+
+        template<>
+        bool parse_signature<AstFnSig>(const TokenArray& tarr, AstFnSig& ast_fn_sig)
+        {
+            assert(tarr.size() > 0);
+
+            // Setup and getting the name of the fn definition
+            int i = 0;
+            for (; tarr[i]->is_whitespace(); i++);
+            if (tarr[i]->expect<TokenType::IDN>())
+                return true;
+            ast_fn_sig.name = tarr[i]->get<TokenType::IDN>().val;
+            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (i == tarr.size())
+                return error::syntax(tarr[tarr.size() - 1], "Unexpected end of signature after name");
+
+            // Parsing out the cargs from the fn definition
+            if (tarr[i]->ty == TokenType::ANGLE_O)
+            {
+                i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(tarr, i, ast_fn_sig.cargs);
+                if (i == -1)
+                    return true;
+                for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+                if (i == tarr.size())
+                    return error::syntax(tarr[tarr.size() - 1], "Unexpected end of signature after cargs");
+            }
+
+            // Parsing out the vargs from the fn definition
+            if (tarr[i]->expect<TokenType::ROUND_O>())
+                return true;
+            i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ROUND_O, TokenType::ROUND_C>(tarr, i, ast_fn_sig.vargs);
+            if (i == -1)
+                return true;
+            for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (i == tarr.size())
+                return false;  // No return values
+
+            // Parsing out the rets from the fn definition
+            if (tarr[i]->expect<TokenType::ARROW>())
+                return true;
+            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (i == tarr.size())
+                return error::syntax(tarr[tarr.size() - 1], "Expected an expression after '->'");
+            // commas are valid operators in expression parsing resulting in a tuple
+            // so I can reuse the expression parsing I already wrote to parse all the rets in the signature
+            // then if a tuple is returned, I can just flatten it.  Otherwise, theres a single ret.
+            // This has the added value of allowing for bracketed return values, which is needed for function references
+            AstExpr ret_expr;
+            if (parse_expr({ tarr, i }, ret_expr))
+                return true;
+            if (ret_expr.ty == ExprType::LIT_TUPLE)
+                ast_fn_sig.rets = std::move(ret_expr.expr_agg.elems);
+            else
+                ast_fn_sig.rets.push_back(std::move(ret_expr));
+
+            return false;
+        }
+
+        template<>
+        bool parse_signature<AstBlockSig>(const TokenArray& tarr, AstBlockSig& ast_block_sig)
+        {
+            assert(tarr.size() > 0);
+
+            // Setup and getting the name of the block definition
+            int i = 0;
+            for (; tarr[i]->is_whitespace(); i++);
+            if (tarr[i]->expect<TokenType::IDN>())
+                return true;
+            ast_block_sig.name = tarr[i]->get<TokenType::IDN>().val;
+            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (i == tarr.size())
+                return error::syntax(tarr[tarr.size() - 1], "Unexpected end of signature after name");
+
+            // Parsing out the cargs from the block definition
+            if (tarr[i]->ty == TokenType::ANGLE_O)
+            {
+                i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(tarr, i, ast_block_sig.cargs);
+                if (i == -1)
+                    return true;
+                for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+                if (i == tarr.size())
+                    return error::syntax(tarr[tarr.size() - 1], "Unexpected end of signature after cargs");
+            }
+
+            // Parsing out the vargs from the block definition
+            if (tarr[i]->expect<TokenType::ROUND_O>())
+                return true;
+            i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ROUND_O, TokenType::ROUND_C>(tarr, i, ast_block_sig.vargs);
+            if (i == -1)
+                return true;
+            for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (i == tarr.size())
+                return false;  // No return values
+
+            // Parsing out the first ret from the block definition
+            if (tarr[i]->expect<TokenType::ARROW>())
+                return true;
+            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (i == tarr.size())
+                return error::syntax(tarr[tarr.size() - 1], "Expected an indentifier after '->'");
+            int end = tarr.size();
+            if (tarr[i]->ty == TokenType::ROUND_O)  // Allowing for bracketed rets (mainly for block references)
+            {
+                end = tarr.search(IsSameCriteria(TokenType::ROUND_C), ++i);
+                if (end == -1)
+                    return error::syntax(tarr[i], "Missing closing ')' for block return values");
+                // making sure everything past the ')' is whitespace
+                for (const Token& tk : TokenArray(tarr, end))
+                    if (!tk.is_whitespace())
+                        return error::syntax(tk, "Unexpected token after block return values");
+                for (i++; i < end && tarr[i]->is_whitespace(); i++);  // catching up start
+                if (i == end)  // no return values: "-> ()"
+                    return false;
+            }
+            if (tarr[i]->expect<TokenType::IDN>())
+                return true;
+            ast_block_sig.rets.push_back(tarr[i]->get<TokenType::IDN>().val);
+            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+
+            // Parsing out all the other rets
+            while (i < end)
+            {
+                if (tarr[i]->expect<TokenType::COMMA>())
+                    return true;
+                for (i++; i < end && tarr[i]->is_whitespace(); i++);
+                if (i == end)
+                    return error::syntax(tarr[(size_t)i - 1], "Expected identifier after ',' in block return values");
+                if (tarr[i]->expect<TokenType::IDN>())
+                    return true;
+                ast_block_sig.rets.push_back(tarr[i]->get<TokenType::IDN>().val);
+                for (i++; i < end && tarr[i]->is_whitespace(); i++);
+            }
             return false;
         }
 
@@ -441,7 +637,7 @@ namespace nn
                 // This is used to determine if any mods exist on the expression
                 int end;
                 for (end = i + 1; end < tarr.size() && tarr[end]->is_whitespace(); end++);
-                if (end == tarr.size() - 1)
+                if (end == tarr.size())
                     return parse_expr({ tarr, 1, i }, ast_expr);
 
                 lhs = std::make_unique<AstExpr>();
@@ -728,7 +924,7 @@ namespace nn
                 new (&ast_line.line_extern) AstLineExtern();
                 ast_line.ty = LineType::EXTERN;
                 ast_line.line_extern.var_name = tarr[end]->get<TokenType::IDN>().val;
-                if (parse_expr({ tarr, 1, end }, ast_line.line_extern.init_expr))
+                if (parse_expr({ tarr, i, end }, ast_line.line_extern.init_expr))
                     return error::syntax(tarr[1], "Invalid syntax in weight init expression");
                 break;
 
@@ -878,35 +1074,10 @@ namespace nn
                     return true;
                 break;
 
-            case TokenType::KW_FORWARD:
-                new (&ast_line.line_block) AstLineBlock();
-                ast_line.ty = LineType::FORWARD;
-
-                for (end = i + 1; tarr[i]->is_whitespace(); i++);
-                if (tarr[end]->expect<TokenType::COLON>())
-                    return error::syntax(tarr[i], "Missing ':' in forward block");
-
-                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
-                if (end == tarr.size())
-                    return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
-                if (tarr[end]->expect<TokenType::ENDL>() ||
-                    parse_lines<AstLine, parse_line>(tarr, end, indent_level + 1, ast_line.line_block.body))
-                    return true;
-                break;
-
-            case TokenType::KW_BACKWARD:
-                new (&ast_line.line_block) AstLineBlock();
-                ast_line.ty = LineType::BACKWARD;
-
-                for (end = i + 1; tarr[i]->is_whitespace(); i++);
-                if (tarr[end]->expect<TokenType::COLON>())
-                    return error::syntax(tarr[i], "Missing ':' in backward block");
-
-                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
-                if (end == tarr.size())
-                    return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
-                if (tarr[end]->expect<TokenType::ENDL>() ||
-                    parse_lines<AstLine, parse_line>(tarr, end, indent_level + 1, ast_line.line_block.body))
+            default:
+                new (&ast_line.line_expr) AstLineExpr();
+                ast_line.ty = LineType::EXPR;
+                if (parse_expr({ tarr, i }, ast_line.line_expr.line))
                     return true;
                 break;
             }
@@ -1036,164 +1207,6 @@ namespace nn
             return parse_expr({ tarr, 0, i + 1 }, *ast_arg_decl.type_expr);
         }
 
-        bool parse_signature(const TokenArray& tarr, AstStructSig& ast_struct_sig)
-        {
-            assert(tarr.size() > 0);
-
-            // Setup and getting the name of the struct definition
-            int i = 0;
-            for (; tarr[i]->is_whitespace(); i++);
-            if (tarr[i]->expect<TokenType::IDN>())
-                return true;
-            ast_struct_sig.name = tarr[i]->get<TokenType::IDN>().val;
-            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-            if (i == tarr.size())
-                return false;
-
-            // Parsing out the cargs from the struct definition
-            if (tarr[i]->expect<TokenType::ANGLE_O>())
-                return true;
-            i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(tarr, i, ast_struct_sig.cargs);
-            if (i == -1)
-                return error::syntax(tarr[0], "Error parsing struct cargs");
-            for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-            if (i != tarr.size())
-                return error::syntax(tarr[i], "Unexpected token after struct cargs");
-            return false;
-        }
-
-        bool parse_signature(const TokenArray& tarr, AstFnSig& ast_fn_sig)
-        {
-            assert(tarr.size() > 0);
-
-            // Setup and getting the name of the fn definition
-            int i = 0;
-            for (; tarr[i]->is_whitespace(); i++);
-            if (tarr[i]->expect<TokenType::IDN>())
-                return true;
-            ast_fn_sig.name = tarr[i]->get<TokenType::IDN>().val;
-            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-            if (i == tarr.size())
-                return error::syntax(tarr[tarr.size() - 1], "Unexpected end of signature after name");
-
-            // Parsing out the cargs from the fn definition
-            if (tarr[i]->ty == TokenType::ANGLE_O)
-            {
-                i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(tarr, i, ast_fn_sig.cargs);
-                if (i == -1)
-                    return true;
-                for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-                if (i == tarr.size())
-                    return error::syntax(tarr[tarr.size() - 1], "Unexpected end of signature after cargs");
-            }
-
-            // Parsing out the vargs from the fn definition
-            if (tarr[i]->expect<TokenType::ROUND_O>())
-                return true;
-            i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ROUND_O, TokenType::ROUND_C>(tarr, i, ast_fn_sig.vargs);
-            if (i == -1)
-                return true;
-            for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-            if (i == tarr.size())
-                return false;  // No return values
-
-            // Parsing out the rets from the fn definition
-            if (tarr[i]->expect<TokenType::ARROW>())
-                return true;
-            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-            if (i == tarr.size())
-                return error::syntax(tarr[tarr.size() - 1], "Expected an expression after '->'");
-            // commas are valid operators in expression parsing resulting in a tuple
-            // so I can reuse the expression parsing I already wrote to parse all the rets in the signature
-            // then if a tuple is returned, I can just flatten it.  Otherwise, theres a single ret.
-            // This has the added value of allowing for bracketed return values, which is needed for function references
-            AstExpr ret_expr;
-            if (parse_expr({ tarr, i }, ret_expr))
-                return true;
-            if (ret_expr.ty == ExprType::LIT_TUPLE)
-                ast_fn_sig.rets = std::move(ret_expr.expr_agg.elems);
-            else
-                ast_fn_sig.rets.push_back(std::move(ret_expr));
-
-            return false;
-        }
-
-        bool parse_signature(const TokenArray& tarr, AstBlockSig& ast_block_sig)
-        {
-            assert(tarr.size() > 0);
-
-            // Setup and getting the name of the block definition
-            int i = 0;
-            for (; tarr[i]->is_whitespace(); i++);
-            if (tarr[i]->expect<TokenType::IDN>())
-                return true;
-            ast_block_sig.name = tarr[i]->get<TokenType::IDN>().val;
-            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-            if (i == tarr.size())
-                return error::syntax(tarr[tarr.size() - 1], "Unexpected end of signature after name");
-
-            // Parsing out the cargs from the block definition
-            if (tarr[i]->ty == TokenType::ANGLE_O)
-            {
-                i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(tarr, i, ast_block_sig.cargs);
-                if (i == -1)
-                    return true;
-                for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-                if (i == tarr.size())
-                    return error::syntax(tarr[tarr.size() - 1], "Unexpected end of signature after cargs");
-            }
-
-            // Parsing out the vargs from the block definition
-            if (tarr[i]->expect<TokenType::ROUND_O>())
-                return true;
-            i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ROUND_O, TokenType::ROUND_C>(tarr, i, ast_block_sig.vargs);
-            if (i == -1)
-                return true;
-            for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-            if (i == tarr.size())
-                return false;  // No return values
-
-            // Parsing out the first ret from the block definition
-            if (tarr[i]->expect<TokenType::ARROW>())
-                return true;
-            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-            if (i == tarr.size())
-                return error::syntax(tarr[tarr.size() - 1], "Expected an indentifier after '->'");
-            int end = tarr.size();
-            if (tarr[i]->ty == TokenType::ROUND_O)  // Allowing for bracketed rets (mainly for block references)
-            {
-                end = tarr.search(IsSameCriteria(TokenType::ROUND_C), ++i);
-                if (end == -1)
-                    return error::syntax(tarr[i], "Missing closing ')' for block return values");
-                // making sure everything past the ')' is whitespace
-                for (const Token& tk : TokenArray(tarr, end))
-                    if (!tk.is_whitespace())
-                        return error::syntax(tk, "Unexpected token after block return values");
-                for (i++; i < end && tarr[i]->is_whitespace(); i++);  // catching up start
-                if (i == end)  // no return values: "-> ()"
-                    return false;
-            }
-            if (tarr[i]->expect<TokenType::IDN>())
-                return true;
-            ast_block_sig.rets.push_back(tarr[i]->get<TokenType::IDN>().val);
-            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-
-            // Parsing out all the other rets
-            while (i < end)
-            {
-                if (tarr[i]->expect<TokenType::COMMA>())
-                    return true;
-                for (i++; i < end && tarr[i]->is_whitespace(); i++);
-                if (i == end)
-                    return error::syntax(tarr[(size_t)i - 1], "Expected identifier after ',' in block return values");
-                if (tarr[i]->expect<TokenType::IDN>())
-                    return true;
-                ast_block_sig.rets.push_back(tarr[i]->get<TokenType::IDN>().val);
-                for (i++; i < end && tarr[i]->is_whitespace(); i++);
-            }
-            return false;
-        }
-
         template<CodeBlockSig SIG>
         bool parse_code_block(const TokenArray& tarr, AstCodeBlock<SIG>& ast_code_block, int indent_level)
         {
@@ -1261,13 +1274,20 @@ namespace nn
         bool parse_init(const TokenArray& tarr, AstInit& ast_init)
         {
             assert(tarr.size() > 0);
+            ast_init.node_info = {
+                .fname = tarr[0]->fname,
+                .line_start = tarr[0]->line_num,
+                .line_end = tarr[tarr.size() - 1]->line_num,
+                .col_start = tarr[0]->col_num,
+                .col_end = tarr[tarr.size() - 1]->col_num
+            };
 
             // Setup and getting the name of the struct definition
             int i = 0;
             for (; tarr[i]->is_whitespace(); i++);
             if (tarr[i]->expect<TokenType::IDN>())
                 return true;
-            ast_init.name = tarr[i]->get<TokenType::IDN>().val;
+            ast_init.signature.name = tarr[i]->get<TokenType::IDN>().val;
             for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
             if (i == tarr.size())
                 return false;  // No cargs needed for init
@@ -1275,7 +1295,7 @@ namespace nn
             // Parsing out the init cargs
             if (tarr[i]->expect<TokenType::ANGLE_O>())
                 return error::syntax(tarr[i], "Unexpected token after init declaration");
-            i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(tarr, i, ast_init.cargs);
+            i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(tarr, i, ast_init.signature.cargs);
             if (i == -1)
                 return error::syntax(tarr[0], "Error parsing init cargs");
             for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
@@ -1395,7 +1415,7 @@ namespace nn
                     ast_module.imports.push_back(AstImport());
                     if (ret = ret || parse_import({ tarr, i, end }, ast_module.imports.back()))
                         ast_module.imports.pop_back();
-                    continue;
+                    break;
                 case TokenType::KW_NAMESPACE:
                     i++;
                     end = tarr.search(LineEndCriteria(0), i);
@@ -1406,7 +1426,7 @@ namespace nn
                     ast_module.namespaces.push_back(AstNamespace());
                     if (ret = ret || parse_namespace({ tarr, i, end }, ast_module.namespaces.back(), 1))
                         ast_module.namespaces.pop_back();
-                    continue;
+                    break;
                 case TokenType::KW_STRUCT:
                     i++;
                     end = tarr.search(LineEndCriteria(0), i);
@@ -1417,7 +1437,7 @@ namespace nn
                     ast_module.structs.push_back(AstStruct());
                     if (ret = ret || parse_code_block({ tarr, i, end }, ast_module.structs.back(), 1))
                         ast_module.structs.pop_back();
-                    continue;
+                    break;
                 case TokenType::KW_FN:
                     i++;
                     end = tarr.search(LineEndCriteria(0), i);
@@ -1428,7 +1448,7 @@ namespace nn
                     ast_module.funcs.push_back(AstFn());
                     if (ret = ret || parse_code_block({ tarr, i, end }, ast_module.funcs.back(), 1))
                         ast_module.funcs.pop_back();
-                    continue;
+                    break;
                 case TokenType::KW_DEF:
                     i++;
                     end = tarr.search(LineEndCriteria(0), i);
@@ -1439,7 +1459,7 @@ namespace nn
                     ast_module.defs.push_back(AstBlock());
                     if (ret = ret || parse_code_block({ tarr, i, end }, ast_module.defs.back(), 1))
                         ast_module.defs.pop_back();
-                    continue;
+                    break;
                 case TokenType::KW_INTR:
                     i++;
                     end = tarr.search(LineEndCriteria(0), i);
@@ -1450,7 +1470,7 @@ namespace nn
                     ast_module.intrs.push_back(AstBlock());
                     if (ret = ret || parse_code_block({ tarr, i, end }, ast_module.intrs.back(), 1))
                         ast_module.intrs.pop_back();
-                    continue;
+                    break;
                 case TokenType::KW_INIT:
                     i++;
                     end = tarr.search(IsSameCriteria(TokenType::ENDL), i);
@@ -1461,10 +1481,11 @@ namespace nn
                     ast_module.inits.push_back(AstInit());
                     if (ret = ret || parse_init({ tarr, i, end }, ast_module.inits.back()))
                         ast_module.inits.pop_back();
-                    continue;
+                    break;
                 default:
                     return error::syntax(tarr[i], "Invalid token in module");
                 }
+                i = end;
             }
             return ret;
         }
@@ -1495,6 +1516,7 @@ namespace nn
             case ExprType::LIT_BOOL:
             case ExprType::LIT_INT:
             case ExprType::LIT_FLOAT:
+            case ExprType::KW:
                 break;
             case ExprType::LIT_STRING:
             case ExprType::VAR:
@@ -1565,6 +1587,7 @@ namespace nn
             case ExprType::LIT_BOOL:
             case ExprType::LIT_INT:
             case ExprType::LIT_FLOAT:
+            case ExprType::KW:
                 break;
             case ExprType::LIT_STRING:
             case ExprType::VAR:
@@ -1662,8 +1685,6 @@ namespace nn
                 line_branch.~AstLineBranch();
                 break;
             case LineType::ELSE:
-            case LineType::FORWARD:
-            case LineType::BACKWARD:
                 line_block.~AstLineBlock();
                 break;
             case LineType::FOR:
@@ -1708,8 +1729,6 @@ namespace nn
                 new (&line_branch) decltype(line_branch)(std::move(line.line_branch));
                 break;
             case LineType::ELSE:
-            case LineType::FORWARD:
-            case LineType::BACKWARD:
                 new (&line_block) decltype(line_block)(std::move(line.line_block));
                 break;
             case LineType::FOR:

@@ -58,15 +58,19 @@ namespace nn
             case TokenType::ANGLE_C:
                 return "closed angle bracket '>'";
             case TokenType::ROUND_O:
-                return "opend round bracket '('";
+                return "opened round bracket '('";
             case TokenType::ROUND_C:
                 return "closed round bracket ')'";
             case TokenType::SQUARE_O:
                 return "opened square bracket '['";
             case TokenType::SQUARE_C:
                 return "closed square bracket ']'";
+            case TokenType::VBAR:
+                return "vertical var '|'";
             case TokenType::DOT:
                 return "dot operator '.'";
+            case TokenType::ELLIPSES:
+                return "ellipses '...'";
             case TokenType::ARROW:
                 return "arrow token '->'";
             case TokenType::COLON:
@@ -84,17 +88,21 @@ namespace nn
             case TokenType::DIV:
                 return "division operator '/'";
             case TokenType::MOD:
-                return "division operator '%'";
+                return "modulus operator '%'";
+            case TokenType::POW:
+                return "power operator '^'";
             case TokenType::IADD:
                 return "assignment addition operator '+='";
             case TokenType::ISUB:
                 return "assignment subtraction operator '-='";
             case TokenType::IMUL:
-                return "assingment multiplication operator'*='";
+                return "assignment multiplication operator'*='";
             case TokenType::IDIV:
                 return "assignment division operator '/='";
             case TokenType::IMOD:
-                return "assignment division operator '%='";
+                return "assignment modulus operator '%='";
+            case TokenType::IPOW:
+                return "assignment power operator '^='";
             case TokenType::ASSIGN:
                 return "assignment operator '='";
             case TokenType::CMP_EQ:
@@ -175,10 +183,6 @@ namespace nn
                 return "keyword export";
             case TokenType::KW_EXTERN:
                 return "keyword extern";
-            case TokenType::KW_FORWARD:
-                return "keyword forward";
-            case TokenType::KW_BACKWARD:
-                return "keyword backward";
             case TokenType::KW_F16:
                 return "keyword f16";
             case TokenType::KW_F32:
@@ -220,8 +224,12 @@ namespace nn
                 return "[";
             case TokenType::SQUARE_C:
                 return "]";
+            case TokenType::VBAR:
+                return "|";
             case TokenType::DOT:
                 return ".";
+            case TokenType::ELLIPSES:
+                return "...";
             case TokenType::ARROW:
                 return " -> ";
             case TokenType::COLON:
@@ -240,6 +248,8 @@ namespace nn
                 return " / ";
             case TokenType::MOD:
                 return " % ";
+            case TokenType::POW:
+                return " ^ ";
             case TokenType::IADD:
                 return " += ";
             case TokenType::ISUB:
@@ -250,6 +260,8 @@ namespace nn
                 return " /= ";
             case TokenType::IMOD:
                 return " %= ";
+            case TokenType::IPOW:
+                return " ^= ";
             case TokenType::ASSIGN:
                 return " = ";
             case TokenType::CMP_EQ:
@@ -330,10 +342,6 @@ namespace nn
                 return "export ";
             case TokenType::KW_EXTERN:
                 return "extern ";
-            case TokenType::KW_FORWARD:
-                return "forward";
-            case TokenType::KW_BACKWARD:
-                return "backward";
             case TokenType::KW_F16:
                 return "f16 ";
             case TokenType::KW_F32:
@@ -556,9 +564,21 @@ namespace nn
                     use_indents = false;
                     tarr.push_back(TokenImp<TokenType::SQUARE_C>(fname, line_num, i - line_start));
                     break;
+                case '|':
+                    use_indents = false;
+                    tarr.push_back(TokenImp<TokenType::VBAR>(fname, line_num, i - line_start));
+                    break;
                 case '.':
                     use_indents = false;
                     tarr.push_back(TokenImp<TokenType::DOT>(fname, line_num, i - line_start));
+                    break;
+                    if (bufsz - i >= 3 && buf[i + 1] == '.' && buf[i + 2] == '.')
+                    {
+                        tarr.push_back(TokenImp<TokenType::ELLIPSES>(fname, line_num, i - line_start));
+                        i += 3;
+                        continue;
+                    }
+                    tarr.push_back(TokenImp<TokenType::ADD>(fname, line_num, i - line_start));
                     break;
                 case ':':
                     use_indents = false;
@@ -611,6 +631,17 @@ namespace nn
                         continue;
                     }
                     tarr.push_back(TokenImp<TokenType::MOD>(fname, line_num, i - line_start));
+                    break;
+                case '^':
+                    use_indents = false;
+
+                    if (bufsz - i >= 2 && buf[i + 1] == '=')
+                    {
+                        tarr.push_back(TokenImp<TokenType::IPOW>(fname, line_num, i - line_start));
+                        i += 2;
+                        continue;
+                    }
+                    tarr.push_back(TokenImp<TokenType::POW>(fname, line_num, i - line_start));
                     break;
                 case '!':
                     use_indents = false;
@@ -867,12 +898,6 @@ namespace nn
                     case hash("extern"):
                         tarr.push_back(TokenImp<TokenType::KW_EXTERN>(fname, line_num, col_num));
                         continue;
-                    case hash("forward"):
-                        tarr.push_back(TokenImp<TokenType::KW_FORWARD>(fname, line_num, col_num));
-                        continue;
-                    case hash("backward"):
-                        tarr.push_back(TokenImp<TokenType::KW_BACKWARD>(fname, line_num, col_num));
-                        continue;
                     case hash("f16"):
                         tarr.push_back(TokenImp<TokenType::KW_F16>(fname, line_num, col_num));
                         continue;
@@ -985,16 +1010,16 @@ namespace nn
         int IsInCriteria::accept(const Token* ptk, int idx)
         {
             count_token(ptk);
-            return (idx + 1) * (!in_bracket() && std::find(tys.begin(), tys.end(), ptk->ty) != tys.end());
+            return (idx + 1) * (!in_bracket() && std::find(tys.begin(), tys.end(), ptk->ty) != tys.end()) - 1;
         }
 
         ArgEndCriteria::ArgEndCriteria(TokenType close) : close(close) {}
 
         int ArgEndCriteria::accept(const Token* ptk, int idx)
         {
-            count_token(ptk);
             if (!in_bracket() && (ptk->ty == close || ptk->ty == TokenType::COMMA))
                 return idx;
+            count_token(ptk);
             return -1;
         }
 

@@ -24,7 +24,7 @@ extern "C" PyObject* NodeObjectNew(PyTypeObject* type, PyObject* args, PyObject*
 extern "C" int NodeObjectInit(PyObject* self, PyObject* args, PyObject* kwargs)
 {
     // Ignoring all arguments
-    pSelf->pNode = new (std::nothrow) core::Node();
+    pSelf->pNode = new (std::nothrow) core::Arg();
     if (!pSelf->pNode)
     {
         PyErr_NoMemory();

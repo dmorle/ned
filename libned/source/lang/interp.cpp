@@ -507,7 +507,7 @@ namespace nn
             // Exporting the feeding nodes and binding the inputs
             for (const auto& [name, conn] : edges[i]->md_inps)
             {
-                core::Node* node;
+                core::Arg* node;
                 if (export_node(node, conn.node))
                 {
                     delete edge;
@@ -519,7 +519,7 @@ namespace nn
             return false;
         }
 
-        bool GraphBuilder::export_node(core::Node*& node, uint64_t i)
+        bool GraphBuilder::export_node(core::Arg*& node, uint64_t i)
         {
             if (!node_exists(i))
                 return error::graph("Found an invalid node during graph exporting");
@@ -529,7 +529,7 @@ namespace nn
                 node = nodes[i]->node;
                 return false;
             }
-            node = new core::Node();
+            node = new core::Arg();
             nodes[i]->node = node;
 
             // Binding the outputs
@@ -634,7 +634,7 @@ namespace nn
             blocks[i]->block = &block;
 
             // making sure all the tensor are exported
-            // This will also give info to the edges about which tensors they're bound to
+            // This will also give type to the edges about which tensors they're bound to
             for (const auto& [name, tensor] : blocks[i]->inps)
             {
                 if (export_tensor(tensor))
@@ -1101,6 +1101,16 @@ namespace nn
                 stack.push(dst);
         }
 
+        inline bool exec_len(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj type, src, dst;
+            return
+                stack.pop(type) ||
+                stack.pop(src) ||
+                type.type_obj->len(heap, dst, src) ||
+                stack.push(dst);
+        }
+
         inline bool exec_xstr(CallStack& stack, ProgramHeap& heap)
         {
             Obj type, src, dst;
@@ -1556,6 +1566,10 @@ namespace nn
                     if (exec_idx(stack, heap))
                         goto runtime_error;
                     break;
+                case InstructionType::LEN:
+                    if (exec_len(stack, heap))
+                        goto runtime_error;
+                    break;
                 case InstructionType::XSTR:
                     if (exec_xstr(stack, heap))
                         goto runtime_error;
@@ -1686,7 +1700,7 @@ namespace nn
             return false;
 
         runtime_error:
-            // TODO: unwind the call stack with location info
+            // TODO: unwind the call stack with location type
             return true;
 		}
 	}

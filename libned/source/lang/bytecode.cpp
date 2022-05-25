@@ -56,8 +56,8 @@ namespace nn
         ByteCodeBody::ByteCodeBody(const Token* ptk) :
             fname(ptk->fname), line_num(ptk->line_num), col_num(ptk->col_num), body_sz(0) {}
 
-        ByteCodeBody::ByteCodeBody(const AstNodeInfo& info) :
-            fname(info.fname), line_num(info.line_start), col_num(info.col_start), body_sz(0) {}
+        ByteCodeBody::ByteCodeBody(const AstNodeInfo& type) :
+            fname(type.fname), line_num(type.line_start), col_num(type.col_start), body_sz(0) {}
 
         size_t ByteCodeBody::size() const
         {
@@ -89,12 +89,115 @@ namespace nn
             return false;
         }
 
-        bool ByteCodeBody::add_label(const AstNodeInfo& info, const std::string& lbl)
+        bool ByteCodeBody::add_label(const AstNodeInfo& type, const std::string& lbl)
         {
             if (label_map.contains(lbl))
-                return error::compiler(info, "Internal error: label % redefinition", lbl);
+                return error::compiler(type, "Internal error: label % redefinition", lbl);
             label_map[lbl] = size();
             return false;
+        }
+
+        bool ByteCodeModule::add_type_bool(size_t& addr)
+        {
+            statics_strings.push_back("type bool");
+
+            Obj obj;
+            return
+                heap.create_type_bool(obj) ||
+                add_static_obj(obj, addr);
+        }
+
+        bool ByteCodeModule::add_type_fty(size_t& addr)
+        {
+            statics_strings.push_back("type fty");
+
+            Obj obj;
+            return
+                heap.create_type_fty(obj) ||
+                add_static_obj(obj, addr);
+        }
+
+        bool ByteCodeModule::add_type_int(size_t& addr)
+        {
+            statics_strings.push_back("type int");
+
+            Obj obj;
+            return
+                heap.create_type_int(obj) ||
+                add_static_obj(obj, addr);
+        }
+
+        bool ByteCodeModule::add_type_float(size_t& addr)
+        {
+            statics_strings.push_back("type float");
+
+            Obj obj;
+            return
+                heap.create_type_float(obj) ||
+                add_static_obj(obj, addr);
+        }
+
+        bool ByteCodeModule::add_type_str(size_t& addr)
+        {
+            statics_strings.push_back("type str");
+
+            Obj obj;
+            return
+                heap.create_type_str(obj) ||
+                add_static_obj(obj, addr);
+        }
+
+        bool ByteCodeModule::add_obj_bool(size_t& addr, BoolObj val)
+        {
+            statics_strings.push_back(std::string("bool ") + (val ? "true" : "false"));
+
+            Obj obj;
+            return
+                heap.create_obj_bool(obj, val) ||
+                add_static_obj(obj, addr);
+        }
+
+        bool ByteCodeModule::add_obj_fty(size_t& addr, FtyObj val)
+        {
+            std::string fty;
+            if (core::fty_str(val, fty))
+                return true;
+            statics_strings.push_back(std::string("fty ") + fty);
+
+            Obj obj;
+            return
+                heap.create_obj_fty(obj, val) ||
+                add_static_obj(obj, addr);
+        }
+
+        bool ByteCodeModule::add_obj_int(size_t& addr, IntObj val)
+        {
+            statics_strings.push_back(std::string("int ") + std::to_string(val));
+
+            Obj obj;
+            return
+                heap.create_obj_int(obj, val) ||
+                add_static_obj(obj, addr);
+        }
+
+        bool ByteCodeModule::add_obj_float(size_t& addr, FloatObj val)
+        {
+            statics_strings.push_back(std::string("float ") + std::to_string(val));
+
+            Obj obj;
+            return
+                heap.create_obj_float(obj, val) ||
+                add_static_obj(obj, addr);
+        }
+
+        bool ByteCodeModule::add_obj_str(size_t& addr, const StrObj& val)
+        {
+            statics_strings.push_back(std::string("str \"") + val + "\"");
+
+            Obj obj;
+            return
+                heap.create_obj_str(obj, val) ||
+                add_static_obj(obj, addr);
         }
 
         bool ByteCodeModule::add_block(const std::string& name, const ByteCodeBody& body)
@@ -105,26 +208,26 @@ namespace nn
             return false;
         }
 
-        bool ByteCodeModule::add_static_obj(Obj obj, size_t& addr)
+        bool ByteCodeModule::has_proc(const std::string& name)
         {
-            addr = statics.size();
-            statics.push_back(obj);
-            return false;
+            return procs.contains(name);
         }
 
         bool ByteCodeModule::add_static_ref(const TokenImp<TokenType::IDN>* label, size_t& addr)
         {
+            statics_strings.push_back(std::string("proc ") + label->val);
             addr = statics.size();
             statics.push_back({ .ptr = 0 });
             static_proc_refs.push_back({ addr, label->val, label->fname, label->line_num, label->col_num });
             return false;
         }
 
-        bool ByteCodeModule::add_static_ref(const AstNodeInfo& info, const std::string& label, size_t& addr)
+        bool ByteCodeModule::add_static_ref(const AstNodeInfo& type, const std::string& label, size_t& addr)
         {
+            statics_strings.push_back(std::string("proc ") + label);
             addr = statics.size();
             statics.push_back({ .ptr = 0 });
-            static_proc_refs.push_back({ addr, label, info.fname, info.line_start, info.col_start });
+            static_proc_refs.push_back({ addr, label, type.fname, type.line_start, type.col_start });
             return false;
         }
 
@@ -168,9 +271,127 @@ namespace nn
             return false;
         }
 
+        std::string ByteCodeModule::to_string() const
+        {
+            std::stringstream ss;
+            for (const auto& [name, proc] : procs)
+            {
+                // Building a mapping from byte offsets to labels
+                std::map<size_t, std::string> inv_labels;
+                for (const auto& [lbl_name, lbl_offset] : proc.label_map)
+                    inv_labels[lbl_offset] = lbl_name;
+
+                ss << "\n.proc " << name << "\n";
+                size_t offset = 0;
+                for (const Instruction* ins : proc.instructions)
+                {
+                    ss << "    " << ins->to_string(statics_strings) << "\n";
+                    offset += ins->get_size();
+                    auto it = inv_labels.find(offset);
+                    if (it != inv_labels.end())
+                        ss << ":" << it->second << "\n";
+                }
+            }
+            return ss.str();
+        }
+
+        bool ByteCodeModule::add_static_obj(Obj obj, size_t& addr)
+        {
+            addr = statics.size();
+            statics.push_back(obj);
+            return false;
+        }
+
+        namespace instruction
+        {
+            template<> std::string ins_str<InstructionType::JMP  >() { return "jmp"  ; }
+            template<> std::string ins_str<InstructionType::BRT  >() { return "brt"  ; }
+            template<> std::string ins_str<InstructionType::BRF  >() { return "brf"  ; }
+            template<> std::string ins_str<InstructionType::NEW  >() { return "new"  ; }
+            template<> std::string ins_str<InstructionType::AGG  >() { return "agg"  ; }
+            template<> std::string ins_str<InstructionType::ARR  >() { return "arr"  ; }
+            template<> std::string ins_str<InstructionType::ATY  >() { return "aty"  ; }
+            template<> std::string ins_str<InstructionType::POP  >() { return "pop"  ; }
+            template<> std::string ins_str<InstructionType::DUP  >() { return "dup"  ; }
+            template<> std::string ins_str<InstructionType::CPY  >() { return "cpy"  ; }
+            template<> std::string ins_str<InstructionType::INST >() { return "inst" ; }
+            template<> std::string ins_str<InstructionType::CALL >() { return "call" ; }
+            template<> std::string ins_str<InstructionType::RET  >() { return "ret"  ; }
+            template<> std::string ins_str<InstructionType::SET  >() { return "set"  ; }
+            template<> std::string ins_str<InstructionType::IADD >() { return "iadd" ; }
+            template<> std::string ins_str<InstructionType::ISUB >() { return "isub" ; }
+            template<> std::string ins_str<InstructionType::IMUL >() { return "imul" ; }
+            template<> std::string ins_str<InstructionType::IDIV >() { return "idiv" ; }
+            template<> std::string ins_str<InstructionType::IMOD >() { return "imod" ; }
+            template<> std::string ins_str<InstructionType::ADD  >() { return "add"  ; }
+            template<> std::string ins_str<InstructionType::SUB  >() { return "sub"  ; }
+            template<> std::string ins_str<InstructionType::MUL  >() { return "mul"  ; }
+            template<> std::string ins_str<InstructionType::DIV  >() { return "div"  ; }
+            template<> std::string ins_str<InstructionType::MOD  >() { return "mod"  ; }
+            template<> std::string ins_str<InstructionType::EQ   >() { return "eq"   ; }
+            template<> std::string ins_str<InstructionType::NE   >() { return "ne"   ; }
+            template<> std::string ins_str<InstructionType::GT   >() { return "gt"   ; }
+            template<> std::string ins_str<InstructionType::LT   >() { return "lt"   ; }
+            template<> std::string ins_str<InstructionType::GE   >() { return "ge"   ; }
+            template<> std::string ins_str<InstructionType::LE   >() { return "le"   ; }
+            template<> std::string ins_str<InstructionType::IDX  >() { return "idx"  ; }
+            template<> std::string ins_str<InstructionType::LEN  >() { return "len"  ; }
+            template<> std::string ins_str<InstructionType::XSTR >() { return "xstr" ; }
+            template<> std::string ins_str<InstructionType::XFLT >() { return "xflt" ; }
+            template<> std::string ins_str<InstructionType::XINT >() { return "xint" ; }
+            template<> std::string ins_str<InstructionType::DSP  >() { return "dsp"  ; }
+            template<> std::string ins_str<InstructionType::ERR  >() { return "err"  ; }
+            template<> std::string ins_str<InstructionType::EDG  >() { return "edg"  ; }
+            template<> std::string ins_str<InstructionType::TSR  >() { return "tsr"  ; }
+            template<> std::string ins_str<InstructionType::NDE  >() { return "nde"  ; }
+            template<> std::string ins_str<InstructionType::INI  >() { return "ini"  ; }
+            template<> std::string ins_str<InstructionType::BLK  >() { return "blk"  ; }
+            template<> std::string ins_str<InstructionType::GFWD >() { return "gfwd" ; }
+            template<> std::string ins_str<InstructionType::GBWD >() { return "gbwd" ; }
+            template<> std::string ins_str<InstructionType::GINI >() { return "gini" ; }
+            template<> std::string ins_str<InstructionType::SFWD >() { return "sfwd" ; }
+            template<> std::string ins_str<InstructionType::SBWD >() { return "sbwd" ; }
+            template<> std::string ins_str<InstructionType::SINI >() { return "sini" ; }
+            template<> std::string ins_str<InstructionType::MRG  >() { return "mrg"  ; }
+            template<> std::string ins_str<InstructionType::TSHP >() { return "tshp" ; }
+            template<> std::string ins_str<InstructionType::TFTY >() { return "tfty" ; }
+            template<> std::string ins_str<InstructionType::ESHP >() { return "eshp" ; }
+            template<> std::string ins_str<InstructionType::EFTY >() { return "efty" ; }
+            template<> std::string ins_str<InstructionType::TTADD>() { return "ttadd"; }
+            template<> std::string ins_str<InstructionType::TSADD>() { return "tsadd"; }
+            template<> std::string ins_str<InstructionType::TTSUB>() { return "ttsub"; }
+            template<> std::string ins_str<InstructionType::TSSUB>() { return "tssub"; }
+            template<> std::string ins_str<InstructionType::STSUB>() { return "stsub"; }
+            template<> std::string ins_str<InstructionType::TTMUL>() { return "ttmul"; }
+            template<> std::string ins_str<InstructionType::TSMUL>() { return "tsmul"; }
+            template<> std::string ins_str<InstructionType::TTDIV>() { return "ttdiv"; }
+            template<> std::string ins_str<InstructionType::TSDIV>() { return "tsdiv"; }
+            template<> std::string ins_str<InstructionType::STDIV>() { return "stdiv"; }
+            template<> std::string ins_str<InstructionType::SLC  >() { return "slc"  ; }
+            template<> std::string ins_str<InstructionType::CAT  >() { return "cat"  ; }
+            template<> std::string ins_str<InstructionType::RSH  >() { return "rsh"  ; }
+            template<> std::string ins_str<InstructionType::NDCFG>() { return "ndcfg"; }
+            template<> std::string ins_str<InstructionType::BKCFG>() { return "bkcfg"; }
+            template<> std::string ins_str<InstructionType::INCFG>() { return "incfg"; }
+            template<> std::string ins_str<InstructionType::NDPRT>() { return "ndprt"; }
+            template<> std::string ins_str<InstructionType::NDINP>() { return "ndinp"; }
+            template<> std::string ins_str<InstructionType::NDOUT>() { return "ndout"; }
+            template<> std::string ins_str<InstructionType::BKPRT>() { return "bkprt"; }
+            template<> std::string ins_str<InstructionType::BKINP>() { return "bkinp"; }
+            template<> std::string ins_str<InstructionType::BKOUT>() { return "bkout"; }
+            template<> std::string ins_str<InstructionType::BKEXT>() { return "bkext"; }
+            template<> std::string ins_str<InstructionType::BKEXP>() { return "bkexp"; }
+            template<> std::string ins_str<InstructionType::PSHMD>() { return "pshmd"; }
+            template<> std::string ins_str<InstructionType::POPMD>() { return "popmd"; }
+
+            template<InstructionType OPCODE> std::string Valued<OPCODE>::
+                to_string(const std::vector<std::string>& statics_strings) const { return ins_str<OPCODE>() + " " + std::to_string(val); }
+            template<> std::string Valued<InstructionType::NEW>::
+                to_string(const std::vector<std::string>& statics_strings) const { return "new " + statics_strings[val]; }
+        }
+
         bool parsebc_static(const TokenArray& tarr, ByteCodeModule& mod, size_t& addr)
         {
-            Obj obj;
             switch (tarr[0]->ty)
             {
             case TokenType::KW_TYPE:
@@ -179,25 +400,15 @@ namespace nn
                 switch (tarr[1]->ty)
                 {
                 case TokenType::KW_BOOL:
-                    return
-                        mod.heap.create_type_bool(obj) ||
-                        mod.add_static_obj(obj, addr);
+                    return mod.add_type_bool(addr);
                 case TokenType::KW_FTY:
-                    return
-                        mod.heap.create_type_fty(obj) ||
-                        mod.add_static_obj(obj, addr);
+                    return mod.add_type_fty(addr);
                 case TokenType::KW_INT:
-                    return
-                        mod.heap.create_type_int(obj) ||
-                        mod.add_static_obj(obj, addr);
+                    return mod.add_type_int(addr);
                 case TokenType::KW_FLOAT:
-                    return
-                        mod.heap.create_type_float(obj) ||
-                        mod.add_static_obj(obj, addr);
+                    return mod.add_type_float(addr);
                 case TokenType::KW_STR:
-                    return
-                        mod.heap.create_type_str(obj) ||
-                        mod.add_static_obj(obj, addr);
+                    return mod.add_type_str(addr);
                 }
                 return error::syntax(tarr[0], "Invalid static type '%'", to_string(tarr[1]));
             case TokenType::KW_BOOL:
@@ -206,13 +417,9 @@ namespace nn
                 switch (tarr[1]->ty)
                 {
                 case TokenType::KW_TRUE:
-                    return
-                        mod.heap.create_obj_bool(obj, true) ||
-                        mod.add_static_obj(obj, addr);
+                    return mod.add_obj_bool(addr, true);
                 case TokenType::KW_FALSE:
-                    return
-                        mod.heap.create_obj_bool(obj, false) ||
-                        mod.add_static_obj(obj, addr);
+                    return mod.add_obj_bool(addr, false);
                 }
                 return error::syntax(tarr[0], "Invalid static bool '%'", to_string(tarr[1]));
             case TokenType::KW_FTY:
@@ -221,17 +428,11 @@ namespace nn
                 switch (tarr[1]->ty)
                 {
                 case TokenType::KW_F16:
-                    return
-                        mod.heap.create_obj_fwidth(obj, core::EdgeFty::F16) ||
-                        mod.add_static_obj(obj, addr);
+                    return mod.add_obj_fty(addr, core::EdgeFty::F16);
                 case TokenType::KW_F32:
-                    return
-                        mod.heap.create_obj_fwidth(obj, core::EdgeFty::F32) ||
-                        mod.add_static_obj(obj, addr);
+                    return mod.add_obj_fty(addr, core::EdgeFty::F32);
                 case TokenType::KW_F64:
-                    return
-                        mod.heap.create_obj_fwidth(obj, core::EdgeFty::F64) ||
-                        mod.add_static_obj(obj, addr);
+                    return mod.add_obj_fty(addr, core::EdgeFty::F64);
                 }
                 return error::syntax(tarr[0], "Invalid static fp '%'", to_string(tarr[1]));
             case TokenType::KW_INT:
@@ -239,25 +440,19 @@ namespace nn
                     return error::syntax(tarr[0], "Malformed static int");
                 if (tarr[1]->expect<TokenType::LIT_INT>())
                     return true;
-                return
-                    mod.heap.create_obj_int(obj, tarr[1]->get<TokenType::LIT_INT>().val) ||
-                    mod.add_static_obj(obj, addr);
+                return mod.add_obj_int(addr, tarr[1]->get<TokenType::LIT_INT>().val);
             case TokenType::KW_FLOAT:
                 if (tarr.size() != 2)
                     return error::syntax(tarr[0], "Malformed static float");
                 if (tarr[1]->expect<TokenType::LIT_FLOAT>())
                     return true;
-                return
-                    mod.heap.create_obj_float(obj, tarr[1]->get<TokenType::LIT_FLOAT>().val) ||
-                    mod.add_static_obj(obj, addr);
+                return mod.add_obj_float(addr, tarr[1]->get<TokenType::LIT_FLOAT>().val);
             case TokenType::KW_STR:
                 if (tarr.size() != 2)
                     return error::syntax(tarr[0], "Malformed static string");
                 if (tarr[1]->expect<TokenType::LIT_STR>())
                     return true;
-                return
-                    mod.heap.create_obj_str(obj, tarr[1]->get<TokenType::LIT_STR>().val) ||
-                    mod.add_static_obj(obj, addr);
+                return mod.add_obj_str(addr, tarr[1]->get<TokenType::LIT_STR>().val);
             case TokenType::IDN:
                 if (std::string(tarr[0]->get<TokenType::IDN>().val) != "proc")
                     break;
@@ -430,6 +625,10 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(Idx(tarr[0]));
+            case hash("len"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Len(tarr[0]));
             case hash("xstr"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
@@ -499,6 +698,86 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(Mrg(tarr[0]));
+            case hash("tshp"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Tshp(tarr[0]));
+            case hash("tfty"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Tfty(tarr[0]));
+            case hash("eshp"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Eshp(tarr[0]));
+            case hash("efty"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Efty(tarr[0]));
+            case hash("ttadd"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(TTAdd(tarr[0]));
+            case hash("tsadd"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(TSAdd(tarr[0]));
+            case hash("ttsub"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(TTSub(tarr[0]));
+            case hash("tssub"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(TSSub(tarr[0]));
+            case hash("stsub"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(STSub(tarr[0]));
+            case hash("ttmul"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(TTMul(tarr[0]));
+            case hash("tsmul"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(TSMul(tarr[0]));
+            case hash("ttdiv"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(TTDiv(tarr[0]));
+            case hash("tsdiv"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(TSDiv(tarr[0]));
+            case hash("stdiv"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(STDiv(tarr[0]));
+            case hash("ttpow"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(TTPow(tarr[0]));
+            case hash("tspow"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(TSPow(tarr[0]));
+            case hash("stpow"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(STPow(tarr[0]));
+            case hash("slc"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Slc(tarr[0]));
+            case hash("cat"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Cat(tarr[0]));
+            case hash("rsh"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Rsh(tarr[0]));
             case hash("ndcfg"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");

@@ -56,6 +56,8 @@ namespace nn
             BINARY_CMP_GE,
             BINARY_CMP_LE,
             BINARY_IDX,
+            BINARY_CAST,
+            TERNARY_CONCAT,
             DOT,
             VAR_DECL,
             CARGS_CALL,
@@ -81,8 +83,8 @@ namespace nn
             std::unique_ptr<AstExpr> default_expr;
         };
 
-        // Top level structure definition (struct)
-        struct AstStructSig
+        // Top level carg only definition (struct/init)
+        struct AstCargSig
         {
             std::string name;
             std::vector<AstArgDecl> cargs;
@@ -122,6 +124,8 @@ namespace nn
             F64
         };
 
+        std::string to_string(ExprKW kw);
+
         // Linear aggregate types (array, tuple)
         struct AstExprAggLit
         {
@@ -149,7 +153,6 @@ namespace nn
         {
             std::unique_ptr<AstExpr> callee;
             std::vector<AstExpr> args = {};
-
         };
 
         struct AstExpr
@@ -199,8 +202,6 @@ namespace nn
             WHILE,
             FOR,
             EXPR,
-            FORWARD,
-            BACKWARD,
             EVALMODE
         };
 
@@ -286,9 +287,9 @@ namespace nn
 
         template<typename T>
         concept CodeBlockSig =
-            std::is_same<T, AstStructSig>::value ||
-            std::is_same<T, AstFnSig>    ::value ||
-            std::is_same<T, AstBlockSig> ::value ;
+            std::is_same<T, AstCargSig> ::value ||
+            std::is_same<T, AstFnSig>   ::value ||
+            std::is_same<T, AstBlockSig>::value ;
 
         // Top level block of code - contains a signature and body
         template<CodeBlockSig SIG>
@@ -299,9 +300,9 @@ namespace nn
             std::vector<AstLine> body;
         };
 
-        using AstStruct = AstCodeBlock<AstStructSig>;
-        using AstFn     = AstCodeBlock<AstFnSig    >;
-        using AstBlock  = AstCodeBlock<AstBlockSig >;
+        using AstStruct = AstCodeBlock<AstCargSig >;
+        using AstFn     = AstCodeBlock<AstFnSig   >;
+        using AstBlock  = AstCodeBlock<AstBlockSig>;
 
         struct AstImport
         {
@@ -311,8 +312,8 @@ namespace nn
 
         struct AstInit
         {
-            std::string name;
-            std::vector<AstArgDecl> cargs;
+            AstNodeInfo node_info;
+            AstCargSig signature;
         };
 
         struct AstNamespace
@@ -346,7 +347,7 @@ namespace nn
 
         bool parse_arg_decl   (const TokenArray& tarr, AstArgDecl&);
 
-        bool parse_struct_sig (const TokenArray& tarr, AstStructSig&);
+        bool parse_struct_sig (const TokenArray& tarr, AstCargSig&);
 
         template<CodeBlockSig SIG> bool parse_signature  (const TokenArray& tarr, SIG& sig);
         template<CodeBlockSig SIG> bool parse_code_block (const TokenArray& tarr, AstCodeBlock<SIG>&, int indent_level);
