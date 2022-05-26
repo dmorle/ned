@@ -27,11 +27,11 @@ namespace nn
             ROUND_C,
             SQUARE_O,
             SQUARE_C,
-            VBAR,     // |
             DOT,
             ELLIPSES, // ...
             ARROW,    // ->
-            COLON,
+            COLON,    // :
+            CAST,     // ::
             COMMA,
             MODE,     // !
             ADD,

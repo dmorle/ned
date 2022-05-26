@@ -41,11 +41,13 @@ namespace nn
             BINARY_MUL,
             BINARY_DIV,
             BINARY_MOD,
+            BINARY_POW,
             BINARY_IADD,
             BINARY_ISUB,
             BINARY_IMUL,
             BINARY_IDIV,
             BINARY_IMOD,
+            BINARY_IPOW,
             BINARY_ASSIGN,
             BINARY_AND,
             BINARY_OR,
@@ -55,9 +57,8 @@ namespace nn
             BINARY_CMP_LT,
             BINARY_CMP_GE,
             BINARY_CMP_LE,
-            BINARY_IDX,
             BINARY_CAST,
-            TERNARY_CONCAT,
+            INDEX,
             DOT,
             VAR_DECL,
             CARGS_CALL,
@@ -143,6 +144,26 @@ namespace nn
             std::unique_ptr<AstExpr> right;
         };
 
+        struct AstExprIndex
+        {
+            struct Elem
+            {
+                enum class Type
+                {
+                    INVALID,
+                    ELLIPSES,
+                    DIRECT,
+                    SLICE
+                } ty = Type::INVALID;
+
+                std::unique_ptr<AstExpr> lhs = nullptr;
+                std::unique_ptr<AstExpr> rhs = nullptr;
+            };
+
+            std::unique_ptr<AstExpr> expr;
+            std::vector<Elem> args;
+        };
+
         struct AstExprName
         {
             std::unique_ptr<AstExpr> expr;
@@ -170,6 +191,7 @@ namespace nn
                 AstExprAggLit expr_agg;
                 AstExprUnaryOp expr_unary;
                 AstExprBinaryOp expr_binary;
+                AstExprIndex expr_index;
                 AstExprName expr_name;
                 AstExprCall expr_call;
                 AstFnSig expr_fn_decl;

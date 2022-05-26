@@ -184,22 +184,6 @@ namespace nn
             TFTY,
             ESHP,
             EFTY,
-            TTADD,
-            TSADD,
-            TTSUB,
-            TSSUB,
-            STSUB,
-            TTMUL,
-            TSMUL,
-            TTDIV,
-            TSDIV,
-            STDIV,
-            TTPOW,
-            TSPOW,
-            STPOW,
-            SLC,
-            CAT,
-            RSH,
             NDCFG,
             BKCFG,
             INCFG,
@@ -355,22 +339,6 @@ namespace nn
             using Tfty  = Implicit < TFTY  >;
             using Eshp  = Implicit < ESHP  >;
             using Efty  = Implicit < EFTY  >;
-            using TTAdd = Implicit < TTADD >;
-            using TSAdd = Implicit < TSADD >;
-            using TTSub = Implicit < TTSUB >;
-            using TSSub = Implicit < TSSUB >;
-            using STSub = Implicit < STSUB >;
-            using TTMul = Implicit < TTMUL >;
-            using TSMul = Implicit < TSMUL >;
-            using TTDiv = Implicit < TTDIV >;
-            using TSDiv = Implicit < TSDIV >;
-            using STDiv = Implicit < STDIV >;
-            using TTPow = Implicit < TTPOW >;
-            using TSPow = Implicit < TSPOW >;
-            using STPow = Implicit < STPOW >;
-            using Slc   = Implicit < SLC   >;
-            using Cat   = Implicit < CAT   >;
-            using Rsh   = Implicit < RSH   >;
             using NdCfg = Implicit < NDCFG >;
             using BkCfg = Implicit < BKCFG >;
             using InCfg = Implicit < INCFG >;
@@ -469,23 +437,6 @@ namespace nn
 * tfty         Gets the fty of a tensor
 * eshp         Gets the shape of an edge
 * efty         Gets the fty of an edge
-* 
-* ttadd        Adds two tensors
-* tsadd        Adds a tensor and a float
-* ttsub        Subtracts two tensors
-* tssub        Subtracts a scalar from a tensor
-* stsub        Subtracts a tensor from a float
-* ttmul        Multiplies two tensors pointwise
-* tsmul        Multiplies a tensor and a float
-* ttdiv        Divides two tensors
-* tsdiv        Divides tensor by a float
-* stdiv        Divides a float by a tensor
-* ttpow        Exponentiates two tensors
-* tspow        Exponentiates tensor by a float
-* stpow        Exponentiates a float by a tensor
-* slc          Slices a tensor
-* cat          Concatenates two tensors
-* rsh          Reshapes a tensor
 * 
 * ndcfg        Adds a named configuration to a node
 * bkcfg        Adds a named configuration to a block

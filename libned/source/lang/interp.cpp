@@ -161,6 +161,18 @@ namespace nn
                 return error::runtime("Attempted to reference a non-existant tensor");
             if (!edge_exists(edge))
                 return error::runtime("Attempted to reference a non-existant edge");
+            if (tensors[tensor]->bwd_edge)
+            {
+                // Make sure the shape and fty match
+                uint64_t bwd_edge = tensors[tensor]->bwd_edge;
+                if (edges[bwd_edge]->info.dims.size() != edges[edge]->info.dims.size())
+                    return error::runtime("Tensor rank mismatch found while binding a forward edge");
+                for (size_t i = 0; i < edges[edge]->info.dims.size(); i++)
+                    if (edges[bwd_edge]->info.dims[i] != edges[edge]->info.dims[i])
+                        return error::runtime("Tensor shape mismatch found while binding a forward edge");
+                if (edges[bwd_edge]->info.fty != edges[edge]->info.fty)
+                    return error::runtime("Tensor fty mismatch found while binding a forward edge");
+            }
             tensors[tensor]->fwd_edge = edge;
             return false;
         }
@@ -173,6 +185,18 @@ namespace nn
                 return error::runtime("Attempted to reference a non-existant tensor");
             if (!edge_exists(edge))
                 return error::runtime("Attempted to reference a non-existant edge");
+            if (tensors[tensor]->fwd_edge)
+            {
+                // Make sure the shape and fty match
+                uint64_t fwd_edge = tensors[tensor]->bwd_edge;
+                if (edges[fwd_edge]->info.dims.size() != edges[edge]->info.dims.size())
+                    return error::runtime("Tensor rank mismatch found while binding a backward edge");
+                for (size_t i = 0; i < edges[edge]->info.dims.size(); i++)
+                    if (edges[fwd_edge]->info.dims[i] != edges[edge]->info.dims[i])
+                        return error::runtime("Tensor shape mismatch found while binding a backward edge");
+                if (edges[fwd_edge]->info.fty != edges[edge]->info.fty)
+                    return error::runtime("Tensor fty mismatch found while binding a backward edge");
+            }
             tensors[tensor]->bwd_edge = edge;
             return false;
         }
@@ -224,6 +248,78 @@ namespace nn
                     edges[i] = edges[lhs_edge];
             delete old_edge;
             return false;
+        }
+
+        bool GraphBuilder::get_tshp(Obj& obj, ProgramHeap& heap, uint64_t tensor)
+        {
+            assert(!is_exported);
+
+            if (!tensor_exists(tensor))
+                return error::runtime("Attempted toreference a non-existant tensor object");
+
+            // No need to check if the forward and backward edges agree on shape
+            // Its guarenteed that they will by the checks done in set_fwd and set_bwd
+            size_t edge;
+            if (tensors[tensor]->fwd_edge)
+                edge = tensors[tensor]->fwd_edge;
+            else if (tensors[tensor]->bwd_edge)
+                edge = tensors[tensor]->bwd_edge;
+            else
+                return error::runtime("Unable to retrieve the shape from a fully uninitialized tensor");
+
+            std::vector<Obj> agg_obj;
+            for (size_t dim : edges[edge]->info.dims)
+            {
+                Obj elem_obj;
+                if (heap.create_obj_int(elem_obj, dim))
+                    return true;
+                agg_obj.push_back(elem_obj);
+            }
+            return heap.create_obj_agg(obj, agg_obj);
+        }
+
+        bool GraphBuilder::get_tfty(Obj& obj, ProgramHeap& heap, uint64_t tensor)
+        {
+            assert(!is_exported);
+
+            if (!tensor_exists(tensor))
+                return error::runtime("Attempted toreference a non-existant tensor object");
+
+            // No need to check if the forward and backward edges agree on shape
+            // Its guarenteed that they will by the checks done in set_fwd and set_bwd
+            if (tensors[tensor]->fwd_edge)
+                return heap.create_obj_fty(obj, edges[tensors[tensor]->fwd_edge]->info.fty);
+            if (tensors[tensor]->bwd_edge)
+                return heap.create_obj_fty(obj, edges[tensors[tensor]->bwd_edge]->info.fty);
+            return error::runtime("Unable to retrieve the fty from a fully uninitialized tensor");
+        }
+
+        bool GraphBuilder::get_eshp(Obj& obj, ProgramHeap& heap, uint64_t edge)
+        {
+            assert(!is_exported);
+
+            if (!edge_exists(edge))
+                return error::runtime("Attempted toreference a non-existant edge object");
+
+            std::vector<Obj> agg_obj;
+            for (size_t dim : edges[edge]->info.dims)
+            {
+                Obj elem_obj;
+                if (heap.create_obj_int(elem_obj, dim))
+                    return true;
+                agg_obj.push_back(elem_obj);
+            }
+            return heap.create_obj_agg(obj, agg_obj);
+        }
+
+        bool GraphBuilder::get_efty(Obj& obj, ProgramHeap& heap, uint64_t edge)
+        {
+            assert(!is_exported);
+
+            if (!edge_exists(edge))
+                return error::runtime("Attempted toreference a non-existant edge object");
+            
+            return heap.create_obj_fty(obj, edges[edge]->info.fty);
         }
 
         bool GraphBuilder::add_ndcfg(const std::string& name, uint64_t node, core::Config* pconfig)
@@ -507,7 +603,7 @@ namespace nn
             // Exporting the feeding nodes and binding the inputs
             for (const auto& [name, conn] : edges[i]->md_inps)
             {
-                core::Arg* node;
+                core::Node* node;
                 if (export_node(node, conn.node))
                 {
                     delete edge;
@@ -519,7 +615,7 @@ namespace nn
             return false;
         }
 
-        bool GraphBuilder::export_node(core::Arg*& node, uint64_t i)
+        bool GraphBuilder::export_node(core::Node*& node, uint64_t i)
         {
             if (!node_exists(i))
                 return error::graph("Found an invalid node during graph exporting");
@@ -529,7 +625,7 @@ namespace nn
                 node = nodes[i]->node;
                 return false;
             }
-            node = new core::Arg();
+            node = new core::Node();
             nodes[i]->node = node;
 
             // Binding the outputs
@@ -1280,6 +1376,42 @@ namespace nn
                 pbuilder->mrg(lhs.ptr, rhs.ptr);
         }
 
+        inline bool exec_tshp(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj tensor, shape;
+            return
+                stack.pop(tensor) ||
+                pbuilder->get_tshp(shape, heap, tensor.ptr) ||
+                stack.push(shape);
+        }
+
+        inline bool exec_tfty(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj tensor, fty;
+            return
+                stack.pop(tensor) ||
+                pbuilder->get_tfty(fty, heap, tensor.ptr) ||
+                stack.push(fty);
+        }
+
+        inline bool exec_eshp(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj edge, shape;
+            return
+                stack.pop(edge) ||
+                pbuilder->get_eshp(shape, heap, edge.ptr) ||
+                stack.push(shape);
+        }
+
+        inline bool exec_efty(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj edge, fty;
+            return
+                stack.pop(edge) ||
+                pbuilder->get_efty(fty, heap, edge.ptr) ||
+                stack.push(fty);
+        }
+
         inline bool exec_ndcfg(CallStack& stack)
         {
             Obj node, name, type, obj;
@@ -1637,6 +1769,22 @@ namespace nn
                     break;
                 case InstructionType::MRG:
                     if (exec_mrg(stack))
+                        goto runtime_error;
+                    break;
+                case InstructionType::TSHP:
+                    if (exec_tshp(stack, heap))
+                        goto runtime_error;
+                    break;
+                case InstructionType::TFTY:
+                    if (exec_tfty(stack, heap))
+                        goto runtime_error;
+                    break;
+                case InstructionType::ESHP:
+                    if (exec_eshp(stack, heap))
+                        goto runtime_error;
+                    break;
+                case InstructionType::EFTY:
+                    if (exec_efty(stack, heap))
                         goto runtime_error;
                     break;
                 case InstructionType::NDCFG:

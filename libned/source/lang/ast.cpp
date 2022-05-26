@@ -124,7 +124,7 @@ namespace nn
         }
 
         template<>
-        bool parse_signature<AstStructSig>(const TokenArray& tarr, AstCargSig& ast_struct_sig)
+        bool parse_signature<AstCargSig>(const TokenArray& tarr, AstCargSig& ast_struct_sig)
         {
             assert(tarr.size() > 0);
 
@@ -292,13 +292,90 @@ namespace nn
 
         // Eventually this can become constexpr, but it seems my current c++ compiler doesn't have that yet...
         const std::vector<std::tuple<OpAssoc, std::vector<TokenType>>> prec_ops = {
+            { OpAssoc::RTOL, { TokenType::ASSIGN, TokenType::IADD, TokenType::ISUB, TokenType::IMUL, TokenType::IDIV, TokenType::IMOD, TokenType::IPOW }},
             { OpAssoc::LTOR, { TokenType::COMMA }},
-            { OpAssoc::RTOL, { TokenType::ASSIGN, TokenType::IADD, TokenType::ISUB, TokenType::IMUL, TokenType::IDIV, TokenType::IMOD }},
             { OpAssoc::LTOR, { TokenType::KW_AND, TokenType::KW_OR }},
             { OpAssoc::LTOR, { TokenType::CMP_EQ, TokenType::CMP_NE, TokenType::CMP_GT, TokenType::CMP_LT, TokenType::CMP_GE, TokenType::CMP_LE }},
             { OpAssoc::LTOR, { TokenType::ADD, TokenType::SUB }},
-            { OpAssoc::LTOR, { TokenType::STAR, TokenType::DIV, TokenType::MOD }}
+            { OpAssoc::LTOR, { TokenType::STAR, TokenType::DIV, TokenType::MOD }},
+            { OpAssoc::LTOR, { TokenType::POW } },
+            { OpAssoc::RTOL, { TokenType::CAST } }
         };
+
+        bool parse_index(const TokenArray& tarr, std::vector<AstExprIndex::Elem>& elems)
+        {
+            assert(tarr.size() > 0);
+            int start = 0, end;
+            while (true)
+            {
+                for (; start < tarr.size() && tarr[start]->is_whitespace(); start++);
+                if (start == tarr.size())
+                    break;
+                if (tarr[start]->ty == TokenType::ELLIPSES)
+                {
+                    // tarr[start] should be the only white space character between start and
+                    // the next comma up to end
+                    for (end = start + 1; end < tarr.size() && tarr[end]->is_whitespace(); end++);
+                    if (end == tarr.size())
+                    {
+                        // The index expression ends in "..."
+                        elems.push_back({ AstExprIndex::Elem::Type::ELLIPSES });
+                        return false;
+                    }
+                    if (tarr[end]->expect<TokenType::COMMA>())
+                        return true;
+                    start = end + 1;  // one token past the comma
+                    continue;
+                }
+
+                // non-ellipses elems
+                end = tarr.search(IsSameCriteria(TokenType::COMMA), start);
+                if (end == -1)
+                    end = tarr.size();
+                else if (end == start)
+                    return error::syntax(tarr[start], "Found empty index element expression");
+                
+                int mid = tarr.search(IsSameCriteria(TokenType::COLON), start);
+                AstExprIndex::Elem elem;
+                if (mid == -1)
+                {
+                    // Non-sliced index
+                    elem.ty = AstExprIndex::Elem::Type::DIRECT;
+                    elem.lhs = std::make_unique<AstExpr>();
+                    if (parse_expr({ tarr, start, end }, *elem.lhs))
+                        return true;
+                }
+                else
+                {
+                    // Sliced index
+                    elem.ty = AstExprIndex::Elem::Type::SLICE;
+                    if (start != mid)
+                    {
+                        // A lower index was found.  If start was equal to mid, it means that the first
+                        // whitespace token in the index element was a colon, which is valid syntax
+                        elem.lhs = std::make_unique<AstExpr>();
+                        if (parse_expr({ tarr, start, mid }, *elem.lhs))
+                            return true;
+                    }
+                    for (mid++; mid < end && tarr[mid]->is_whitespace(); mid++);
+                    if (mid != end)
+                    {
+                        // Similar logic to the if (start != mid) thing.  Even in the case where
+                        // both the lhs and rhs are null, its still valid syntax
+                        elem.rhs = std::make_unique<AstExpr>();
+                        if (parse_expr({ tarr, mid, end }, *elem.rhs))
+                            return true;
+                    }
+                }
+
+                end = start + 1;
+                elems.push_back(elem);
+            }
+
+            if (elems.size() == 0)
+                return error::syntax(tarr[0], "Found empty index expression");
+            return false;
+        }
 
         bool parse_leaf_mods(const TokenArray& tarr, AstExpr& ast_expr, std::unique_ptr<AstExpr> lhs)
         {
@@ -361,11 +438,11 @@ namespace nn
             switch (tarr[0]->ty)
             {
             case TokenType::SQUARE_O:
-                new (&pexpr->expr_binary) AstExprBinaryOp();
-                pexpr->ty = ExprType::BINARY_IDX;
-                pexpr->expr_binary.left = std::move(lhs);
-                pexpr->expr_binary.right = std::make_unique<AstExpr>();
-                if (parse_expr({ tarr, start, end }, *pexpr->expr_binary.right))
+                // TODO: implement index with slicing
+                new (&pexpr->expr_binary) AstExprIndex();
+                pexpr->ty = ExprType::INDEX;
+                pexpr->expr_index.expr = std::move(lhs);
+                if (parse_index({ tarr, start, end }, pexpr->expr_index.args))
                     return true;
                 break;
             case TokenType::DOT:
@@ -491,7 +568,7 @@ namespace nn
         inline ExprType get_expr_type(TokenType ty);
 
         template<>
-        inline ExprType get_expr_type<1>(TokenType ty)
+        inline ExprType get_expr_type<0>(TokenType ty)
         {
             switch (ty)
             {
@@ -507,6 +584,8 @@ namespace nn
                 return ExprType::BINARY_IDIV;
             case TokenType::IMOD:
                 return ExprType::BINARY_IMOD;
+            case TokenType::IPOW:
+                return ExprType::BINARY_IPOW;
             }
             assert(false);
             return ExprType::INVALID;
@@ -578,13 +657,37 @@ namespace nn
             return ExprType::INVALID;
         }
 
+        template<>
+        inline ExprType get_expr_type<6>(TokenType ty)
+        {
+            switch (ty)
+            {
+            case TokenType::POW:
+                return ExprType::BINARY_POW;
+            }
+            assert(false);
+            return ExprType::INVALID;
+        }
+
+        template<>
+        inline ExprType get_expr_type<7>(TokenType ty)
+        {
+            switch (ty)
+            {
+            case TokenType::POW:
+                return ExprType::BINARY_CAST;
+            }
+            assert(false);
+            return ExprType::INVALID;
+        }
+
         template<int prec>
         bool parse_expr_prec(const TokenArray& tarr, AstExpr& ast_expr);
 
         // specializations
-        template<> bool parse_expr_prec<7>(const TokenArray& tarr, AstExpr& ast_expr);
-        template<> bool parse_expr_prec<6>(const TokenArray& tarr, AstExpr& ast_expr);
-        template<> bool parse_expr_prec<0>(const TokenArray& tarr, AstExpr& ast_expr);
+        template<> bool parse_expr_prec<9>(const TokenArray& tarr, AstExpr& ast_expr);
+        template<> bool parse_expr_prec<8>(const TokenArray& tarr, AstExpr& ast_expr);
+        template<> bool parse_expr_prec<1>(const TokenArray& tarr, AstExpr& ast_expr);
 
         template<int prec>
         bool parse_expr_prec(const TokenArray& tarr, AstExpr& ast_expr)
@@ -615,7 +718,7 @@ namespace nn
         }
 
         template<>
-        bool parse_expr_prec<7>(const TokenArray& tarr, AstExpr& ast_expr)
+        bool parse_expr_prec<9>(const TokenArray& tarr, AstExpr& ast_expr)
         {
             assert(tarr.size() > 0);
 
@@ -744,10 +847,10 @@ namespace nn
         }
 
         template<>
-        bool parse_expr_prec<6>(const TokenArray& tarr, AstExpr& ast_expr)
+        bool parse_expr_prec<8>(const TokenArray& tarr, AstExpr& ast_expr)
         {
             assert(tarr.size() > 0);
-            constexpr int prec = 6;
+            constexpr int prec = 8;
 
             // Handling unary operators
             std::unique_ptr<AstExpr> pexpr = nullptr;
@@ -821,9 +924,10 @@ namespace nn
         }
 
         template<>
-        bool parse_expr_prec<0>(const TokenArray& tarr, AstExpr& ast_expr)
+        bool parse_expr_prec<1>(const TokenArray& tarr, AstExpr& ast_expr)
         {
             assert(tarr.size() > 0);
+            constexpr int prec = 1;
 
             // Handling the comma operator
             IsSameCriteria sc{ TokenType::COMMA };
@@ -833,14 +937,14 @@ namespace nn
             while ((end = tarr.search(sc, i)) > 0)
             {
                 AstExpr elem_expr;
-                if (parse_expr_prec<1>({ tarr, i, end }, elem_expr))
+                if (parse_expr_prec<prec + 1>({ tarr, i, end }, elem_expr))
                     return true;
                 elem_exprs.push_back(std::move(elem_expr));
                 i = end + 1;
             }
 
             if (i == 0)  // No commas were found
-                return parse_expr_prec<1>(tarr, ast_expr);
+                return parse_expr_prec<prec + 1>(tarr, ast_expr);
 
             new (&ast_expr.expr_agg) AstExprAggLit();
             ast_expr.ty = ExprType::LIT_TUPLE;
@@ -848,7 +952,7 @@ namespace nn
             if (i == tarr.size())
                 return false;  // In case the tuple was ended with a comma
             AstExpr last_expr;
-            if (parse_expr_prec<1>({ tarr, i }, last_expr))
+            if (parse_expr_prec<prec + 1>({ tarr, i }, last_expr))
                 return true;
             ast_expr.expr_agg.elems.push_back(std::move(last_expr));
             return false;
@@ -1553,8 +1657,11 @@ namespace nn
             case ExprType::BINARY_CMP_LT:
             case ExprType::BINARY_CMP_GE:
             case ExprType::BINARY_CMP_LE:
-            case ExprType::BINARY_IDX:
+            case ExprType::BINARY_CAST:
                 expr_binary.~AstExprBinaryOp();
+                break;
+            case ExprType::INDEX:
+                expr_index.~AstExprIndex();
                 break;
             case ExprType::DOT:
             case ExprType::VAR_DECL:
@@ -1624,8 +1731,11 @@ namespace nn
             case ExprType::BINARY_CMP_LT:
             case ExprType::BINARY_CMP_GE:
             case ExprType::BINARY_CMP_LE:
-            case ExprType::BINARY_IDX:
+            case ExprType::BINARY_CAST:
                 new (&expr_binary) decltype(expr_binary)(std::move(expr.expr_binary));
+                break;
+            case ExprType::INDEX:
+                new (&expr_index) decltype(expr_index)(std::move(expr.expr_index));
                 break;
             case ExprType::DOT:
             case ExprType::VAR_DECL:

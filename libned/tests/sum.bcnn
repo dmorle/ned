@@ -12,6 +12,8 @@
 #     rhs.backward = out.backward
 #     return out
 
+# a[, , :e, ...]
+
 .proc sum
     # Setting up the node
     new    str "sum"

@@ -357,19 +357,6 @@ namespace nn
             template<> std::string ins_str<InstructionType::TFTY >() { return "tfty" ; }
             template<> std::string ins_str<InstructionType::ESHP >() { return "eshp" ; }
             template<> std::string ins_str<InstructionType::EFTY >() { return "efty" ; }
-            template<> std::string ins_str<InstructionType::TTADD>() { return "ttadd"; }
-            template<> std::string ins_str<InstructionType::TSADD>() { return "tsadd"; }
-            template<> std::string ins_str<InstructionType::TTSUB>() { return "ttsub"; }
-            template<> std::string ins_str<InstructionType::TSSUB>() { return "tssub"; }
-            template<> std::string ins_str<InstructionType::STSUB>() { return "stsub"; }
-            template<> std::string ins_str<InstructionType::TTMUL>() { return "ttmul"; }
-            template<> std::string ins_str<InstructionType::TSMUL>() { return "tsmul"; }
-            template<> std::string ins_str<InstructionType::TTDIV>() { return "ttdiv"; }
-            template<> std::string ins_str<InstructionType::TSDIV>() { return "tsdiv"; }
-            template<> std::string ins_str<InstructionType::STDIV>() { return "stdiv"; }
-            template<> std::string ins_str<InstructionType::SLC  >() { return "slc"  ; }
-            template<> std::string ins_str<InstructionType::CAT  >() { return "cat"  ; }
-            template<> std::string ins_str<InstructionType::RSH  >() { return "rsh"  ; }
             template<> std::string ins_str<InstructionType::NDCFG>() { return "ndcfg"; }
             template<> std::string ins_str<InstructionType::BKCFG>() { return "bkcfg"; }
             template<> std::string ins_str<InstructionType::INCFG>() { return "incfg"; }
@@ -714,70 +701,6 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(Efty(tarr[0]));
-            case hash("ttadd"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(TTAdd(tarr[0]));
-            case hash("tsadd"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(TSAdd(tarr[0]));
-            case hash("ttsub"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(TTSub(tarr[0]));
-            case hash("tssub"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(TSSub(tarr[0]));
-            case hash("stsub"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(STSub(tarr[0]));
-            case hash("ttmul"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(TTMul(tarr[0]));
-            case hash("tsmul"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(TSMul(tarr[0]));
-            case hash("ttdiv"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(TTDiv(tarr[0]));
-            case hash("tsdiv"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(TSDiv(tarr[0]));
-            case hash("stdiv"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(STDiv(tarr[0]));
-            case hash("ttpow"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(TTPow(tarr[0]));
-            case hash("tspow"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(TSPow(tarr[0]));
-            case hash("stpow"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(STPow(tarr[0]));
-            case hash("slc"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(Slc(tarr[0]));
-            case hash("cat"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(Cat(tarr[0]));
-            case hash("rsh"):
-                if (tarr.size() != 1)
-                    return error::syntax(tarr[0], "Invalid instruction");
-                return body.add_instruction(Rsh(tarr[0]));
             case hash("ndcfg"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");

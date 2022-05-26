@@ -66,6 +66,7 @@ namespace nn
                 std::map<std::string, std::unique_ptr<core::Config>> configs;
                 uint64_t parent = 0;
                 
+                // used only for exporting
                 core::Node* node;
             };
 
@@ -86,6 +87,7 @@ namespace nn
                 std::map<std::string, uint64_t> sub_blocks;
                 std::map<std::string, std::unique_ptr<core::Config>> configs;
                 
+                // used only for exporting
                 core::Block* block;
             };
 
@@ -129,6 +131,11 @@ namespace nn
             bool set_bwd(uint64_t tensor, uint64_t edge);
             bool set_ini(uint64_t tensor, uint64_t init);
             bool mrg(uint64_t lhs_edge, uint64_t rhs_edge);
+
+            bool get_tshp(Obj& obj, ProgramHeap& heap, uint64_t tensor);
+            bool get_tfty(Obj& obj, ProgramHeap& heap, uint64_t tensor);
+            bool get_eshp(Obj& obj, ProgramHeap& heap, uint64_t edge);
+            bool get_efty(Obj& obj, ProgramHeap& heap, uint64_t edge);
 
             bool add_ndcfg(const std::string& name, uint64_t node, core::Config* pconfig);
             bool add_bkcfg(const std::string& name, uint64_t block, core::Config* pconfig);

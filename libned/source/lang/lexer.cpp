@@ -65,8 +65,6 @@ namespace nn
                 return "opened square bracket '['";
             case TokenType::SQUARE_C:
                 return "closed square bracket ']'";
-            case TokenType::VBAR:
-                return "vertical var '|'";
             case TokenType::DOT:
                 return "dot operator '.'";
             case TokenType::ELLIPSES:
@@ -224,8 +222,6 @@ namespace nn
                 return "[";
             case TokenType::SQUARE_C:
                 return "]";
-            case TokenType::VBAR:
-                return "|";
             case TokenType::DOT:
                 return ".";
             case TokenType::ELLIPSES:
@@ -564,10 +560,6 @@ namespace nn
                     use_indents = false;
                     tarr.push_back(TokenImp<TokenType::SQUARE_C>(fname, line_num, i - line_start));
                     break;
-                case '|':
-                    use_indents = false;
-                    tarr.push_back(TokenImp<TokenType::VBAR>(fname, line_num, i - line_start));
-                    break;
                 case '.':
                     use_indents = false;
                     tarr.push_back(TokenImp<TokenType::DOT>(fname, line_num, i - line_start));
@@ -582,6 +574,13 @@ namespace nn
                     break;
                 case ':':
                     use_indents = false;
+
+                    if (bufsz - i >= 2 && buf[i + 1] == ':')
+                    {
+                        tarr.push_back(TokenImp<TokenType::CAST>(fname, line_num, i - line_start));
+                        i += 2;
+                        continue;
+                    }
                     tarr.push_back(TokenImp<TokenType::COLON>(fname, line_num, i - line_start));
                     break;
                 case ',':
