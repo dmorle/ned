@@ -88,6 +88,8 @@ namespace nn
             KW_RAISE,
             KW_EXPORT,
             KW_EXTERN,
+            KW_FORWARD,
+            KW_BACKWARD,
             KW_F16,
             KW_F32,
             KW_F64,

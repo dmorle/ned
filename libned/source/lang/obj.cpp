@@ -177,6 +177,11 @@ namespace nn
             return true;
         }
 
+        bool TypeObj::ipow(ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            return true;
+        }
+
         bool TypeObj::add(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
@@ -198,6 +203,11 @@ namespace nn
         }
 
         bool TypeObj::mod(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return true;
+        }
+
+        bool TypeObj::pow(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return true;
         }
@@ -248,6 +258,11 @@ namespace nn
         }
 
         bool TypeObj::len(ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return true;
+        }
+
+        bool TypeObj::neg(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return true;
         }
@@ -400,6 +415,12 @@ namespace nn
             return false;
         }
 
+        bool IntType::ipow(ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            // TODO: implement integer power
+            return true;
+        }
+
         bool IntType::add(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_int(dst, *lhs.int_obj + *rhs.int_obj);
@@ -423,6 +444,12 @@ namespace nn
         bool IntType::mod(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_int(dst, *lhs.int_obj % *rhs.int_obj);
+        }
+
+        bool IntType::pow(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            // TODO: implement integer power
+            return true;
         }
 
         bool IntType::eq(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
@@ -453,6 +480,11 @@ namespace nn
         bool IntType::lt(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(dst, *lhs.int_obj < *rhs.int_obj);
+        }
+
+        bool IntType::neg(ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_int(dst, -*src.int_obj);
         }
 
         bool IntType::xstr(ProgramHeap& heap, Obj& dst, const Obj src)
@@ -517,6 +549,12 @@ namespace nn
             return false;
         }
 
+        bool FloatType::ipow(ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            *lhs.float_obj = std::pow(*lhs.float_obj, *rhs.float_obj);
+            return false;
+        }
+
         bool FloatType::add(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_float(dst, *lhs.float_obj + *rhs.float_obj);
@@ -535,6 +573,11 @@ namespace nn
         bool FloatType::div(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_float(dst, *lhs.float_obj / *rhs.float_obj);
+        }
+
+        bool FloatType::pow(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
+        {
+            return heap.create_obj_float(dst, std::pow(*lhs.float_obj, *rhs.float_obj));
         }
 
         bool FloatType::eq(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
@@ -565,6 +608,11 @@ namespace nn
         bool FloatType::lt(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             return heap.create_obj_bool(dst, *lhs.float_obj < *rhs.float_obj);
+        }
+
+        bool FloatType::neg(ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_float(dst, -*src.float_obj);
         }
 
         bool FloatType::xstr(ProgramHeap& heap, Obj& dst, const Obj src)
@@ -883,7 +931,7 @@ namespace nn
             return false;
         }
 
-        bool ArrType::len(ProgramHeap& heap, Obj& dst, const Obj src)
+        bool AggType::len(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_int(dst, src.agg_obj->size());
         }

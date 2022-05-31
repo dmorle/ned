@@ -137,6 +137,7 @@ namespace nn
             AGG,
             ARR,
             ATY,
+            NUL,
             POP,
             DUP,
             CPY,
@@ -149,11 +150,17 @@ namespace nn
             IMUL,
             IDIV,
             IMOD,
+            IPOW,
             ADD,
             SUB,
             MUL,
             DIV,
             MOD,
+            POW,
+            NEG,
+            LNOT,
+            LAND,
+            LOR,
             EQ,
             NE,
             GT,
@@ -292,6 +299,7 @@ namespace nn
             using Agg   = Valued   < AGG   >;
             using Arr   = Implicit < ARR   >;
             using Aty   = Valued   < ATY   >;
+            using Nul   = Implicit < NUL   >;
             using Pop   = Valued   < POP   >;
             using Dup   = Valued   < DUP   >;
             using Cpy   = Implicit < CPY   >;
@@ -304,11 +312,17 @@ namespace nn
             using IMul  = Implicit < IMUL  >;
             using IDiv  = Implicit < IDIV  >;
             using IMod  = Implicit < IMOD  >;
+            using IPow  = Implicit < IPOW  >;
             using Add   = Implicit < ADD   >;
             using Sub   = Implicit < SUB   >;
             using Mul   = Implicit < MUL   >;
             using Div   = Implicit < DIV   >;
             using Mod   = Implicit < MOD   >;
+            using Pow   = Implicit < POW   >;
+            using Neg   = Implicit < NEG   >;
+            using LNot  = Implicit < LNOT  >;
+            using LAnd  = Implicit < LAND  >;
+            using LOr   = Implicit < LOR   >;
             using Eq    = Implicit < EQ    >;
             using Ne    = Implicit < NE    >;
             using Ge    = Implicit < GE    >;
@@ -372,6 +386,7 @@ namespace nn
 * agg <uint>   Creates a new aggregate object from the top <uint> elements on the stack
 * arr          Creates a new array type with element type specified by the tos (used for generics)
 * aty <uint>   Creates a new struct type from the top <uint> elements on the stack (used for generics)
+* nul          Pushes a null value onto the stack
 * 
 * pop <uint>   Pops element <uint> off the stack
 * dup <uint>   Duplicates an object on the stack
@@ -395,11 +410,13 @@ namespace nn
 * imul         Multiply and assign
 * idiv         Divide and assign
 * imod         Modulus and assign
+* ipow         Exponentiate and assign
 * add          Adds two objects
 * sub          Subtracts two objects
 * mul          Multiplies two objects
 * div          Divides two objects
 * mod          Calculates the modulus between two objects
+* pow          Expoentiates two objects
 * 
 * eq           Checks if two objects are equal
 * ne           Checks if two objects are not equal
@@ -450,7 +467,7 @@ namespace nn
 * bkinp        Binds a name and tensor to a block input
 * bkout        Binds a name and tensor to a block output
 * bkext        Adds a named tensor and initializer to a block as a parameter
-* bkexp        Exports a named forward:backward edge pair
+* bkexp        Exports a named tensor
 * 
 * pshmd        Pushes a new evaluation mode name onto the mode stack
 * popmd        Pops the top most evalutation mode name off the mode stack

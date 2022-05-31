@@ -16,3 +16,7 @@ def test() -> fp<*shape> out, fp<> loss:
 
 def main<fty fp, int* shape>(fp<*shape> lhs, fp<1, *shape> rhs) -> out:
 	return lhs + fp<*shape>::rhs
+
+intr add<fty fp, int *head, int *tail>(fp<*head> lhs, fp<*head, *tail> rhs) -> out:
+	fp<*head, *tail> out
+	return out

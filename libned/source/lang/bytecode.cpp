@@ -311,6 +311,7 @@ namespace nn
             template<> std::string ins_str<InstructionType::AGG  >() { return "agg"  ; }
             template<> std::string ins_str<InstructionType::ARR  >() { return "arr"  ; }
             template<> std::string ins_str<InstructionType::ATY  >() { return "aty"  ; }
+            template<> std::string ins_str<InstructionType::NUL  >() { return "nul"  ; }
             template<> std::string ins_str<InstructionType::POP  >() { return "pop"  ; }
             template<> std::string ins_str<InstructionType::DUP  >() { return "dup"  ; }
             template<> std::string ins_str<InstructionType::CPY  >() { return "cpy"  ; }
@@ -323,11 +324,17 @@ namespace nn
             template<> std::string ins_str<InstructionType::IMUL >() { return "imul" ; }
             template<> std::string ins_str<InstructionType::IDIV >() { return "idiv" ; }
             template<> std::string ins_str<InstructionType::IMOD >() { return "imod" ; }
+            template<> std::string ins_str<InstructionType::IPOW >() { return "ipow" ; }
             template<> std::string ins_str<InstructionType::ADD  >() { return "add"  ; }
             template<> std::string ins_str<InstructionType::SUB  >() { return "sub"  ; }
             template<> std::string ins_str<InstructionType::MUL  >() { return "mul"  ; }
             template<> std::string ins_str<InstructionType::DIV  >() { return "div"  ; }
             template<> std::string ins_str<InstructionType::MOD  >() { return "mod"  ; }
+            template<> std::string ins_str<InstructionType::POW  >() { return "pow"  ; }
+            template<> std::string ins_str<InstructionType::NEG  >() { return "neg"  ; }
+            template<> std::string ins_str<InstructionType::LNOT >() { return "lnot" ; }
+            template<> std::string ins_str<InstructionType::LAND >() { return "land" ; }
+            template<> std::string ins_str<InstructionType::LOR  >() { return "lor"  ; }
             template<> std::string ins_str<InstructionType::EQ   >() { return "eq"   ; }
             template<> std::string ins_str<InstructionType::NE   >() { return "ne"   ; }
             template<> std::string ins_str<InstructionType::GT   >() { return "gt"   ; }
@@ -508,6 +515,10 @@ namespace nn
                 if (tarr[1]->get<TokenType::LIT_INT>().val < 0)
                     return error::syntax(tarr[1], "Value type instructions require a strictly positive integer");
                 return body.add_instruction(Aty(tarr[0], tarr[1]->get<TokenType::LIT_INT>().val));
+            case hash("nul"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Nul(tarr[0]));
             case hash("pop"):
                 if (tarr.size() != 2)
                     return error::syntax(tarr[0], "Invalid instruction");
@@ -564,6 +575,10 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(IMod(tarr[0]));
+            case hash("ipow"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(IPow(tarr[0]));
             case hash("add"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
@@ -584,6 +599,26 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(Mod(tarr[0]));
+            case hash("pow"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Pow(tarr[0]));
+            case hash("neg"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Neg(tarr[0]));
+            case hash("lnot"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(LNot(tarr[0]));
+            case hash("land"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(LAnd(tarr[0]));
+            case hash("lor"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(LOr(tarr[0]));
             case hash("eq"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");

@@ -36,6 +36,8 @@ namespace nn
             UNARY_UNPACK,
             UNARY_REF,
             UNARY_CONST,
+            UNARY_FORWARD,
+            UNARY_BACKWARD,
             BINARY_ADD,
             BINARY_SUB,
             BINARY_MUL,
@@ -183,19 +185,19 @@ namespace nn
             ExprType ty = ExprType::INVALID;
             union
             {
-                bool expr_bool;
-                ExprKW expr_kw;
-                int64_t expr_int;
-                double expr_float;
-                std::string expr_string;
-                AstExprAggLit expr_agg;
-                AstExprUnaryOp expr_unary;
-                AstExprBinaryOp expr_binary;
-                AstExprIndex expr_index;
-                AstExprName expr_name;
-                AstExprCall expr_call;
-                AstFnSig expr_fn_decl;
-                AstBlockSig expr_blk_decl;
+                bool             expr_bool;
+                ExprKW           expr_kw;
+                int64_t          expr_int;
+                double           expr_float;
+                std::string      expr_string;
+                AstExprAggLit    expr_agg;
+                AstExprUnaryOp   expr_unary;
+                AstExprBinaryOp  expr_binary;
+                AstExprIndex     expr_index;
+                AstExprName      expr_name;
+                AstExprCall      expr_call;
+                AstFnSig         expr_fn_decl;
+                AstBlockSig      expr_blk_decl;
             };
 
             AstExpr();

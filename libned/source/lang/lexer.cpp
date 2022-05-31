@@ -181,6 +181,10 @@ namespace nn
                 return "keyword export";
             case TokenType::KW_EXTERN:
                 return "keyword extern";
+            case TokenType::KW_FORWARD:
+                return "keyword forward";
+            case TokenType::KW_BACKWARD:
+                return "keyword backward";
             case TokenType::KW_F16:
                 return "keyword f16";
             case TokenType::KW_F32:
@@ -338,6 +342,10 @@ namespace nn
                 return "export ";
             case TokenType::KW_EXTERN:
                 return "extern ";
+            case TokenType::KW_FORWARD:
+                return "forward";
+            case TokenType::KW_BACKWARD:
+                return "backward";
             case TokenType::KW_F16:
                 return "f16 ";
             case TokenType::KW_F32:
@@ -896,6 +904,12 @@ namespace nn
                         continue;
                     case hash("extern"):
                         tarr.push_back(TokenImp<TokenType::KW_EXTERN>(fname, line_num, col_num));
+                        continue;
+                    case hash("forward"):
+                        tarr.push_back(TokenImp<TokenType::KW_FORWARD>(fname, line_num, col_num));
+                        continue;
+                    case hash("backward"):
+                        tarr.push_back(TokenImp<TokenType::KW_BACKWARD>(fname, line_num, col_num));
                         continue;
                     case hash("f16"):
                         tarr.push_back(TokenImp<TokenType::KW_F16>(fname, line_num, col_num));

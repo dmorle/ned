@@ -952,6 +952,11 @@ namespace nn
                 set_pc(pc + sizeof(size_t));
         }
 
+        inline bool exec_nul(CallStack& stack)
+        {
+            return stack.push({ .ptr = 0 });
+        }
+
         inline bool exec_pop(CallStack& stack)
         {
             return
@@ -1065,6 +1070,16 @@ namespace nn
                 type.type_obj->imod(heap, lhs, rhs);
         }
 
+        inline bool exec_ipow(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj type, rhs, lhs;
+            return
+                stack.pop(type) ||
+                stack.pop(rhs) ||
+                stack.pop(lhs) ||
+                type.type_obj->ipow(heap, lhs, rhs);
+        }
+
         inline bool exec_add(CallStack& stack, ProgramHeap& heap)
         {
             Obj type, rhs, lhs, dst;
@@ -1117,6 +1132,56 @@ namespace nn
                 stack.pop(rhs) ||
                 stack.pop(lhs) ||
                 type.type_obj->mod(heap, dst, lhs, rhs) ||
+                stack.push(dst);
+        }
+
+        inline bool exec_pow(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj type, rhs, lhs, dst;
+            return
+                stack.pop(type) ||
+                stack.pop(rhs) ||
+                stack.pop(lhs) ||
+                type.type_obj->pow(heap, dst, lhs, rhs) ||
+                stack.push(dst);
+        }
+
+        inline bool exec_neg(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj type, src, dst;
+            return
+                stack.pop(type) ||
+                stack.pop(src) ||
+                type.type_obj->neg(heap, dst, src) ||
+                stack.push(dst);
+        }
+
+        inline bool exec_lnot(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj src, dst;
+            return
+                stack.pop(src) ||
+                heap.create_obj_bool(dst, !src.bool_obj) ||
+                stack.push(dst);
+        }
+
+        inline bool exec_land(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj rhs, lhs, dst;
+            return
+                stack.pop(rhs) ||
+                stack.pop(lhs) ||
+                heap.create_obj_bool(dst, lhs.bool_obj && rhs.bool_obj) ||
+                stack.push(dst);
+        }
+
+        inline bool exec_lor(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj rhs, lhs, dst;
+            return
+                stack.pop(rhs) ||
+                stack.pop(lhs) ||
+                heap.create_obj_bool(dst, lhs.bool_obj || rhs.bool_obj) ||
                 stack.push(dst);
         }
 
@@ -1602,6 +1667,10 @@ namespace nn
                     if (exec_aty(stack, heap))
                         goto runtime_error;
                     break;
+                case InstructionType::NUL:
+                    if (exec_nul(stack))
+                        goto runtime_error;
+                    break;
                 case InstructionType::POP:
                     if (exec_pop(stack))
                         goto runtime_error;
@@ -1650,6 +1719,10 @@ namespace nn
                     if (exec_imod(stack, heap))
                         goto runtime_error;
                     break;
+                case InstructionType::IPOW:
+                    if (exec_ipow(stack, heap))
+                        goto runtime_error;
+                    break;
                 case InstructionType::ADD:
                     if (exec_add(stack, heap))
                         goto runtime_error;
@@ -1668,6 +1741,10 @@ namespace nn
                     break;
                 case InstructionType::MOD:
                     if (exec_mod(stack, heap))
+                        goto runtime_error;
+                    break;
+                case InstructionType::POW:
+                    if (exec_pow(stack, heap))
                         goto runtime_error;
                     break;
                 case InstructionType::EQ:

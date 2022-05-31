@@ -334,7 +334,7 @@ namespace nn
                     end = tarr.size();
                 else if (end == start)
                     return error::syntax(tarr[start], "Found empty index element expression");
-                
+
                 int mid = tarr.search(IsSameCriteria(TokenType::COLON), start);
                 AstExprIndex::Elem elem;
                 if (mid == -1)
@@ -369,7 +369,7 @@ namespace nn
                 }
 
                 end = start + 1;
-                elems.push_back(elem);
+                elems.push_back(std::move(elem));
             }
 
             if (elems.size() == 0)
@@ -446,10 +446,27 @@ namespace nn
                     return true;
                 break;
             case TokenType::DOT:
-                new (&pexpr->expr_name) AstExprName();
-                pexpr->ty = ExprType::DOT;
-                pexpr->expr_name.expr = std::move(lhs);
-                pexpr->expr_name.val = tarr[start]->get<TokenType::IDN>().val;
+                switch (tarr[start]->ty)
+                {
+                case TokenType::IDN:
+                    new (&pexpr->expr_name) AstExprName();
+                    pexpr->ty = ExprType::DOT;
+                    pexpr->expr_name.expr = std::move(lhs);
+                    pexpr->expr_name.val = tarr[start]->get<TokenType::IDN>().val;
+                    break;
+                case TokenType::KW_FORWARD:
+                    new (&pexpr->expr_unary) AstExprUnaryOp();
+                    pexpr->ty = ExprType::UNARY_FORWARD;
+                    pexpr->expr_unary.expr = std::move(lhs);
+                    break;
+                case TokenType::KW_BACKWARD:
+                    new (&pexpr->expr_unary) AstExprUnaryOp();
+                    pexpr->ty = ExprType::UNARY_BACKWARD;
+                    pexpr->expr_unary.expr = std::move(lhs);
+                    break;
+                default:
+                    return error::syntax(tarr[start], "Unexpected token after '.'");
+                }
                 break;
             case TokenType::ANGLE_O:
                 new (&pexpr->expr_call) AstExprCall();

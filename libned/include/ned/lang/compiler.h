@@ -34,7 +34,8 @@ namespace nn
 
             struct LookupResult
             {
-                std::vector<const Node&>      nodes;
+                std::vector<std::string> ns;  // the signature's namespace
+                std::vector<const Node*>      nodes;
                 std::vector<const AstStruct*> structs;
                 std::vector<const AstFn*>     fns;
                 std::vector<const AstBlock*>  defs;
@@ -63,7 +64,7 @@ namespace nn
             static bool lookup(const LookupCtx& ctx, const std::string& idn, LookupResult& result);
         };
 
-        struct TypeInfo;
+        class TypeInfo;
         class Scope;
 
         class TypeRef
@@ -85,6 +86,7 @@ namespace nn
             const TypeInfo* operator->() const;
             TypeInfo& operator*();
             const TypeInfo& operator*() const;
+
         };
 
         using CodegenCallback = std::function<bool(Scope&)>;
@@ -128,6 +130,14 @@ namespace nn
             std::map<std::string, std::pair<TypeRef, CodegenCallback>> kwcargs;
         };
 
+        struct TypeInfoDlType
+        {
+            TypeRef tensor;
+            TypeRef edge;
+            TypeRef shape;
+            TypeRef fp;
+        };
+
         struct TypeInfoGeneric
         {
             std::string name;
@@ -141,12 +151,6 @@ namespace nn
         struct TypeInfoAggPack
         {
             std::vector<TypeRef> elems;
-        };
-
-        struct TypeInfoTensor
-        {
-            TypeRef fp;
-            TypeRef shape;
         };
 
         class TypeInfo
@@ -175,6 +179,7 @@ namespace nn
                 BLOCK,       // Block object
                 EDGE,        // Edge object
                 TENSOR,      // Both a forward and backward edge
+                DLTYPE,      // edge or tensor type (depends on the context)
                 GENERIC,     // Compile time generic type
                 UNPACK       // Unpacked array
             } ty = TypeInfo::Type::INVALID;
@@ -221,7 +226,7 @@ namespace nn
                 TypeInfoLookup    type_lookup;
                 TypeInfoCargBind  type_cargbind;
                 TypeInfoStruct    type_struct;
-                TypeInfoTensor    type_tensor;
+                TypeInfoDlType    type_dltype;
                 TypeInfoGeneric   type_generic;
             };
 
@@ -240,6 +245,7 @@ namespace nn
             bool check_mul() const;
             bool check_div() const;
             bool check_mod() const;
+            bool check_pow() const;
 
             bool check_eq() const;
             bool check_ne() const;
@@ -255,7 +261,6 @@ namespace nn
 
             std::string encode() const;
             std::string to_string() const;
-            bool runtime_obj() const;
             bool to_obj(const AstNodeInfo& node_info, TypeRef& type) const;  // converts the type into a runtime object
             template<class allowed>
             bool in_category() const
@@ -290,6 +295,7 @@ namespace nn
             TypeManager& operator=(TypeManager&&) = delete;
             ~TypeManager();
 
+            TypeRef duplicate          (TypeRef src);
             TypeRef duplicate          (TypeInfo::Category cat, CodegenCallback codegen, TypeRef src);
 
             TypeRef create_type        (TypeInfo::Category cat, CodegenCallback codegen, TypeRef base);
@@ -309,13 +315,16 @@ namespace nn
             TypeRef create_struct      (TypeInfo::Category cat, CodegenCallback codegen);
             TypeRef create_init        (TypeInfo::Category cat, CodegenCallback codegen);
             
-            TypeRef create_node        (TypeInfo::Category cat);
-            TypeRef create_block       (TypeInfo::Category cat);
-            TypeRef create_edge        (TypeInfo::Category cat, CodegenCallback codegen, TypeRef fp, TypeRef shape);
-            TypeRef create_tensor      (TypeInfo::Category cat, CodegenCallback codegen, TypeRef fp, TypeRef shape);
+            TypeRef create_node        (TypeInfo::Category cat, CodegenCallback codegen);
+            TypeRef create_block       (TypeInfo::Category cat, CodegenCallback codegen);
+            TypeRef create_edge        (TypeInfo::Category cat, CodegenCallback codegen);
+            TypeRef create_tensor      (TypeInfo::Category cat, CodegenCallback codegen);
+
+            TypeRef create_dltype      (TypeRef tensor, TypeRef edge, TypeRef shape, TypeRef fp);
         };
 
         bool operator==(const TypeRef& lhs, const TypeRef& rhs);
+        bool operator!=(const TypeRef& lhs, const TypeRef& rhs);
 
         class Scope
         {
@@ -398,7 +407,7 @@ namespace nn
                 std::vector<TypeNode> cargs;
             };
 
-            struct TensorType
+            struct DlType
             {
                 ValNode* fp = nullptr;
                 std::vector<ValNode> shape;
@@ -427,7 +436,7 @@ namespace nn
                 };
 
                 ValNode() {}
-                ValNode(ValNode&& node);
+                ValNode(ValNode&& node) noexcept;
                 ValNode& operator=(ValNode&& node) noexcept;
                 ~ValNode();
 
@@ -460,19 +469,19 @@ namespace nn
                     UNPACK,  // Unpacked types
                     ARRAY,
                     TUPLE,
-                    TENSOR
+                    DLTYPE  // either a tensor or an edge depending on the context
                 } ty = Type::INVALID;
 
                 union
                 {
                     ArrayType   type_array;
                     TupleType   type_tuple;
-                    TensorType  type_tensor;
+                    DlType      type_dl;
                     ValType     type_val;
                 };
 
                 TypeNode() {}
-                TypeNode(TypeNode&& node);
+                TypeNode(TypeNode&& node) noexcept;
                 TypeNode& operator=(TypeNode&& node) noexcept;
                 ~TypeNode();
 
@@ -510,24 +519,49 @@ namespace nn
             bool codegen_type_generic (Scope& scope, TypeNode& node, TypeRef& type);
             bool codegen_type_array   (Scope& scope, TypeNode& node, TypeRef& type);
             bool codegen_type_tuple   (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_tensor  (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_dltype  (Scope& scope, TypeNode& node, TypeRef& type);
 
             bool codegen_type(Scope& scope, TypeNode& node, TypeRef& type);
+
+            virtual TypeRef get_fp(const AstNodeInfo& node_info, TypeRef type) = 0;
+            virtual TypeRef get_shape(const AstNodeInfo& node_info, TypeRef type) = 0;
 
             std::vector<std::string> sig_ns;
             std::map<std::string, ValNode> carg_nodes;
             std::vector<std::string> carg_stack;
             // EDGE for intr, otherwise its TENSOR
             // Initializing the the call-specific init function
-            TypeInfo::Type tensor_type;
+            TypeInfo::Type dltype;
             const AstNodeInfo* node_info;
         };
 
-        class InitCall :
+        class TensorCall :
             public ProcCall
         {
         public:
-            using ProcCall::ProcCall;
+            TensorCall(const std::vector<std::string>& sig_ns);
+
+        protected:
+            virtual TypeRef get_fp(const AstNodeInfo& node_info, TypeRef type);
+            virtual TypeRef get_shape(const AstNodeInfo& node_info, TypeRef type);
+        };
+
+        class EdgeCall :
+            public ProcCall
+        {
+        public:
+            EdgeCall(const std::vector<std::string>& sig_ns);
+
+        protected:
+            virtual TypeRef get_fp(const AstNodeInfo& node_info, TypeRef type);
+            virtual TypeRef get_shape(const AstNodeInfo& node_info, TypeRef type);
+        };
+
+        class InitCall :
+            public TensorCall
+        {
+        public:
+            using TensorCall::TensorCall;
 
             bool init(const AstInit& sig);
             bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs);
@@ -539,10 +573,10 @@ namespace nn
         };
 
         class StructCall :
-            public ProcCall
+            public TensorCall
         {
         public:
-            using ProcCall::ProcCall;
+            using TensorCall::TensorCall;
 
             bool init(const AstStruct& sig);
             bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs);
@@ -550,23 +584,10 @@ namespace nn
         };
 
         class IntrCall :
-            public ProcCall
+            public EdgeCall
         {
         public:
-            using ProcCall::ProcCall;
-
-            bool init(const AstBlock& sig);
-
-        private:
-            std::map<std::string, ValNode> varg_nodes;
-            std::vector<std::string> varg_stack;
-        };
-
-        class DefCall :
-            public ProcCall
-        {
-        public:
-            using ProcCall::ProcCall;
+            using EdgeCall::EdgeCall;
 
             bool init(const AstBlock& sig);
             bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs, const std::vector<TypeRef>& vargs);
@@ -575,15 +596,32 @@ namespace nn
         private:
             std::map<std::string, ValNode> varg_nodes;
             std::vector<std::string> varg_stack;
-            std::map<std::string, TypeNode> ret_nodes;
             std::vector<std::string> ret_stack;
+            const AstBlock* ast_intr;
+        };
+
+        class DefCall :
+            public TensorCall
+        {
+        public:
+            using TensorCall::TensorCall;
+
+            bool init(const AstBlock& sig);
+            bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs, const std::vector<TypeRef>& vargs);
+            bool codegen(Scope& scope, std::vector<TypeRef>& rets);
+
+        private:
+            std::map<std::string, ValNode> varg_nodes;
+            std::vector<std::string> varg_stack;
+            std::vector<std::string> ret_stack;
+            const AstBlock* ast_def;
         };
 
         class FnCall :
-            public ProcCall
+            public TensorCall
         {
         public:
-            using ProcCall::ProcCall;
+            using TensorCall::TensorCall;
 
             bool init(const AstFn& sig);
             bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs, const std::vector<TypeRef>& vargs);
@@ -592,6 +630,8 @@ namespace nn
         private:
             std::map<std::string, ValNode> varg_nodes;
             std::vector<std::string> varg_stack;
+            std::vector<TypeRef> rets;
+            const AstFn* ast_fn;
         };
 
         class ModuleInfo
@@ -613,21 +653,23 @@ namespace nn
         };
 
         std::string label_prefix(const AstNodeInfo& info);
-        std::string generate_var_name();
 
         bool parse_cargs(const std::vector<AstExpr>& args, std::map<std::string, const AstExpr*>& cargs);
         bool arg_type(TypeRef& type, const Scope& scope, const AstArgDecl& arg);
         bool match_elems(const std::vector<AstExpr>& lhs, const std::vector<TypeRef>& rhs, CodegenCallback& setup_fn, std::vector<CodegenCallback>& elem_fns);
         bool match_carg_sig(Scope& scope, Scope& sig_scope, const std::vector<AstArgDecl>& sig, const std::vector<AstExpr>& args, std::map<std::string, TypeRef>& cargs);
-        bool match_def_sig(Scope& scope, Scope& sig_scope, const AstBlockSig& def,
+        bool match_def_sig(Scope& scope, Scope& sig_scope, const AstBlock& def,
             const std::vector<AstExpr>& param_cargs, const std::vector<TypeRef>& param_vargs,
             std::map<std::string, TypeRef>& cargs, std::vector<TypeRef>& vargs);
-        bool match_intr_sig(Scope& scope, Scope& sig_scope, const AstBlockSig& intr,
+        bool match_intr_sig(Scope& scope, Scope& sig_scope, const AstBlock& intr,
             const std::vector<AstExpr>& param_cargs, const std::vector<TypeRef>& param_vargs,
             std::map<std::string, TypeRef>& cargs, std::vector<TypeRef>& vargs);
-        bool match_fn_sig(Scope& scope, Scope& sig_scope, const AstFnSig& fn,
+        bool match_fn_sig(Scope& scope, Scope& sig_scope, const AstFn& fn,
             const std::vector<AstExpr>& param_cargs, const std::vector<TypeRef>& param_vargs,
             std::map<std::string, TypeRef>& cargs, std::vector<TypeRef>& vargs);
+
+        template<class allowed> bool codegen_expr_single_ret(Scope& scope, const AstExpr& expr, TypeRef& ret);
+        template<class allowed> bool codegen_expr_multi_ret(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
 
         bool codegen_expr_callee_var   (Scope& scope, const AstExpr& expr, TypeRef& ret);
         bool codegen_expr_callee_dot   (Scope& scope, const AstExpr& expr, TypeRef& ret);
@@ -646,25 +688,11 @@ namespace nn
         bool codegen_expr_neg      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
         bool codegen_expr_not      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
         bool codegen_expr_unpack   (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_add      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_sub      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_mul      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_div      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_mod      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_iadd     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_isub     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_imul     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_idiv     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_imod     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_fwd      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_bwd      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
         bool codegen_expr_assign   (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
         bool codegen_expr_and      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
         bool codegen_expr_or       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_eq       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_ne       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_gt       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_lt       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_ge       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-        bool codegen_expr_le       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
         bool codegen_expr_idx      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
         bool codegen_expr_dot      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
         bool codegen_expr_decl     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
@@ -693,6 +721,11 @@ namespace nn
 
         bool codegen_line(Scope& scope, const AstLine& line);  // generates code for independent lines.  Can't handle if, elif, else, forward.
         bool codegen_lines(Scope& scope, const std::vector<AstLine>& lines);
+
+        bool proc_name_struct (std::string& name, const std::vector<std::string>& ns, const AstStruct& ast_struct);
+        bool proc_name_fn     (std::string& name, const std::vector<std::string>& ns, const AstFn&     ast_fn    );
+        bool proc_name_def    (std::string& name, const std::vector<std::string>& ns, const AstBlock&  ast_def   );
+        bool proc_name_intr   (std::string& name, const std::vector<std::string>& ns, const AstBlock&  ast_intr  );
 
         bool codegen_struct(const std::string& name, const AstStruct& ast_struct, const std::vector<std::string>& ns);
         bool codegen_func(const std::string& name, const AstFn& ast_fn, const std::vector<std::string>& ns);
