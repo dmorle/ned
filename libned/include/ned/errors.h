@@ -46,6 +46,8 @@ namespace nn
 
         template<typename... Args>
         std::string format(const std::string& fmt, Args... args) { return _Format<Args...>::format(fmt, args...); }
+        template<typename... Args>
+        std::string format(const char* fmt, Args... args) { return format<Args...>(std::string(fmt), args...); }
 
         bool no_memory();
         void pop_last();

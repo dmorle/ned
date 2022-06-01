@@ -1,0 +1,32 @@
+
+.proc def_0_2_w_ai_2_main
+    new str "main"
+    blk
+    bkprt
+    dup 4
+    new type fty
+    new str "fp"
+    bkcfg
+    dup 3
+    new type int
+    arr
+    new str "shape"
+    bkcfg
+    dup 2
+    new str "lhs"
+    bkinp
+    dup 1
+    new str "rhs"
+    bkinp
+    new str "Hello world"
+    dsp
+    new str "Reached the end of the procedure without returning"
+    err
+:l1c4__return
+    dup 1
+    dup 1
+    new str "out"
+    bkout
+    pop 0
+    ret
+

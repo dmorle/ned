@@ -52,7 +52,7 @@ namespace nn
         public:
             Node root;
             bool merge_ast(AstModule& ast);
-            static bool create(CodeModule& mod, const AstModule& ast, const std::vector<std::string>& imp_dirs, std::vector<std::string> visited);
+            static bool create(CodeModule& mod, AstModule& ast, const std::vector<std::string>& imp_dirs, std::vector<std::string> visited);
 
             struct LookupCtx
             {
@@ -70,6 +70,7 @@ namespace nn
         class TypeRef
         {
             friend class TypeManager;
+            friend class TypeInfo;
 
             size_t ptr;
             TypeRef(size_t ptr);
@@ -273,7 +274,7 @@ namespace nn
             }
 
             // puts the object that the type references onto the top of the stack if possible
-            CodegenCallback codegen;
+            CodegenCallback codegen = nullptr;
         };
 
         class TypeManager
@@ -282,7 +283,7 @@ namespace nn
 
             uint8_t* buf = nullptr;
             size_t bufsz = 0;
-            size_t len = 0;
+            size_t len = 1;
 
             inline TypeInfo* get(size_t ptr);
             inline TypeRef next();
@@ -655,7 +656,7 @@ namespace nn
         std::string label_prefix(const AstNodeInfo& info);
 
         bool parse_cargs(const std::vector<AstExpr>& args, std::map<std::string, const AstExpr*>& cargs);
-        bool arg_type(TypeRef& type, const Scope& scope, const AstArgDecl& arg);
+        bool arg_type(TypeRef& type, Scope& scope, const AstArgDecl& arg);
         bool match_elems(const std::vector<AstExpr>& lhs, const std::vector<TypeRef>& rhs, CodegenCallback& setup_fn, std::vector<CodegenCallback>& elem_fns);
         bool match_carg_sig(Scope& scope, Scope& sig_scope, const std::vector<AstArgDecl>& sig, const std::vector<AstExpr>& args, std::map<std::string, TypeRef>& cargs);
         bool match_def_sig(Scope& scope, Scope& sig_scope, const AstBlock& def,
@@ -733,7 +734,7 @@ namespace nn
         bool codegen_intr(const std::string& name, const AstBlock& ast_intr, const std::vector<std::string&> ns);
         bool codegen_attr(const std::string& name, const CodeModule::Attr& attr, std::vector<std::string>& ns);
 
-        bool codegen_module(ByteCodeModule& bc, ModuleInfo& info, const AstModule& ast, const std::vector<std::string>& imp_dirs);
+        bool codegen_module(ByteCodeModule& bc, ModuleInfo& info, AstModule& ast, const std::vector<std::string>& imp_dirs);
     }
 }
 

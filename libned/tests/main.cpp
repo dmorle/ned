@@ -1,6 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <iostream>
+#include <fstream>
 
 #include <ned/errors.h>
 #include <ned/lang/bytecode.h>
@@ -14,7 +15,7 @@ using namespace core;
 // too big to fit on the actual stack
 CallStack stack;
 
-int main()
+int main(void)
 {
     if (false) {
         TokenArray tarr;
@@ -77,7 +78,7 @@ int main()
     
     if (true) {
         TokenArray tarr;
-        if (lex_file(TESTS_DIR"test.nn", tarr))
+        if (lex_file(TESTS_DIR"hello.nn", tarr))
         {
             error::print();
             return 1;
@@ -100,7 +101,8 @@ int main()
         }
         else
         {
-            std::cout << mod.to_string() << std::endl;
+            std::ofstream ofs{ TESTS_DIR"hello.bcnn" };
+            ofs << mod.to_string() << std::endl;
         }
     }
 

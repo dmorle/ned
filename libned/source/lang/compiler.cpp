@@ -11,6 +11,8 @@
 
 namespace fs = std::filesystem;
 
+#include <iostream>
+
 namespace nn
 {
     namespace lang
@@ -79,7 +81,7 @@ namespace nn
             return merge_node(root, ast);
         }
 
-        bool CodeModule::create(CodeModule& mod, const AstModule& ast, const std::vector<std::string>& imp_dirs, std::vector<std::string> visited)
+        bool CodeModule::create(CodeModule& mod, AstModule& ast, const std::vector<std::string>& imp_dirs, std::vector<std::string> visited)
         {
             auto build_fname = [](const std::vector<std::string>& imp) -> std::string
             {
@@ -101,6 +103,7 @@ namespace nn
                     mod.merge_ast(ast);
             };
 
+            mod.merge_ast(ast);
             std::string curr_dir = fs::path(ast.fname).parent_path().string();
 
             for (const auto& imp : ast.imports)
@@ -248,6 +251,7 @@ namespace nn
                 break;
             case TypeInfo::Type::DLTYPE:
                 type_dltype.~TypeInfoDlType();
+                break;
             case TypeInfo::Type::GENERIC:
                 type_generic.~TypeInfoGeneric();
                 break;
@@ -479,18 +483,127 @@ namespace nn
  
         std::string TypeInfo::encode() const
         {
-            return "";
+            switch (ty)
+            {
+            case TypeInfo::Type::INVALID:
+                return "-";
+            case TypeInfo::Type::TYPE:
+                return std::string("y") + type_type.base->encode();
+            case TypeInfo::Type::PLACEHOLDER:
+                return "-";
+            case TypeInfo::Type::FTY:
+                return "w";
+            case TypeInfo::Type::BOOL:
+                return "b";
+            case TypeInfo::Type::INT:
+                return "i";
+            case TypeInfo::Type::FLOAT:
+                return "f";
+            case TypeInfo::Type::STR:
+                return "s";
+            case TypeInfo::Type::ARRAY:
+                return std::string("a") + type_array.elem->encode();
+            case TypeInfo::Type::TUPLE:
+            {
+                std::stringstream ss;
+                ss << "t";
+                for (TypeRef elem : type_tuple.elems)
+                    ss << elem->encode();
+                ss << "0";
+                return ss.str();
+            }
+            case TypeInfo::Type::LOOKUP:
+                return "-";
+            case TypeInfo::Type::CARGBIND:
+                return "-";
+            case TypeInfo::Type::STRUCT:
+                return "0";  // TODO: implement structs
+            case TypeInfo::Type::INIT:
+                return "I";
+            case TypeInfo::Type::NODE:
+                return "N";
+            case TypeInfo::Type::BLOCK:
+                return "B";
+            case TypeInfo::Type::EDGE:
+                return "E";
+            case TypeInfo::Type::TENSOR:
+                return "T";
+            case TypeInfo::Type::DLTYPE:
+                return "-";
+            case TypeInfo::Type::GENERIC:
+                return "g";
+            case TypeInfo::Type::UNPACK:
+                return "-";
+            }
+            return "-";
         }
 
         std::string TypeInfo::to_string() const
         {
-            return "";
+            // Leveraging the error formating code for this
+            // these aren't actually errors
+            using namespace nn::error;
+            switch (ty)
+            {
+            case TypeInfo::Type::INVALID:
+                return "INVALID";
+            case TypeInfo::Type::TYPE:
+                return format("type<%>", type_type.base->to_string());
+            case TypeInfo::Type::PLACEHOLDER:
+                return "placeholder";
+            case TypeInfo::Type::FTY:
+                return "fty";
+            case TypeInfo::Type::BOOL:
+                return "bool";
+            case TypeInfo::Type::INT:
+                return "int";
+            case TypeInfo::Type::FLOAT:
+                return "float";
+            case TypeInfo::Type::STR:
+                return "str";
+            case TypeInfo::Type::ARRAY:
+                return format("array<%>", type_array.elem->to_string());
+            case TypeInfo::Type::TUPLE:
+            {
+                if (type_tuple.elems.size() == 0)
+                    return "tuple<>";
+                std::stringstream ss;
+                ss << "tuple<" << type_tuple.elems.front()->to_string();
+                for (size_t i = 1; i < type_tuple.elems.size(); i++)
+                    ss << ", " << type_tuple.elems[i]->to_string();
+                ss << ">";
+                return ss.str();
+            }
+            case TypeInfo::Type::LOOKUP:
+                return format("lookup(\"%\")", type_lookup.name);
+            case TypeInfo::Type::CARGBIND:
+                return "cargbind";
+            case TypeInfo::Type::STRUCT:
+                return "TODO: implement structs";
+            case TypeInfo::Type::INIT:
+                return "init";
+            case TypeInfo::Type::NODE:
+                return "node";
+            case TypeInfo::Type::BLOCK:
+                return "block";
+            case TypeInfo::Type::EDGE:
+                return "edge";
+            case TypeInfo::Type::TENSOR:
+                return "tensor";
+            case TypeInfo::Type::DLTYPE:
+                return "dltype";
+            case TypeInfo::Type::GENERIC:
+                return format("generic(\"%\")", type_generic.name);
+            case TypeInfo::Type::UNPACK:
+                return format("unpack<%>", type_array.elem->to_string());
+            }
+            return "ERROR TYPE";
         }
 
         bool TypeInfo::to_obj(const AstNodeInfo& node_info, TypeRef& type) const
         {
             TypeRef tmp;
-            switch (type->ty)
+            switch (ty)
             {
             case TypeInfo::Type::FTY:
                 tmp = type_manager->create_fty(TypeInfo::Category::VIRTUAL, nullptr);
@@ -519,33 +632,33 @@ namespace nn
                     }, tmp);
                 break;
             case TypeInfo::Type::INT:
-                tmp = type_manager->create_bool(TypeInfo::Category::VIRTUAL, nullptr);
+                tmp = type_manager->create_int(TypeInfo::Category::VIRTUAL, nullptr);
                 if (!tmp) return true;
                 type = type_manager->create_type(
                     TypeInfo::Category::CONST,
                     [&node_info](Scope& scope) -> bool {
                         size_t addr;
                         return
-                            bc->add_type_bool(addr) ||
+                            bc->add_type_int(addr) ||
                             body->add_instruction(instruction::New(node_info, addr)) ||
                             scope.push();
                     }, tmp);
                 break;
             case TypeInfo::Type::FLOAT:
-                tmp = type_manager->create_bool(TypeInfo::Category::VIRTUAL, nullptr);
+                tmp = type_manager->create_float(TypeInfo::Category::VIRTUAL, nullptr);
                 if (!tmp) return true;
                 type = type_manager->create_type(
                     TypeInfo::Category::CONST,
                     [&node_info](Scope& scope) -> bool {
                         size_t addr;
                         return
-                            bc->add_type_bool(addr) ||
+                            bc->add_type_float(addr) ||
                             body->add_instruction(instruction::New(node_info, addr)) ||
                             scope.push();
                     }, tmp);
                 break;
             case TypeInfo::Type::STR:
-                tmp = type_manager->create_bool(TypeInfo::Category::VIRTUAL, nullptr);
+                tmp = type_manager->create_string(TypeInfo::Category::VIRTUAL, nullptr);
                 if (!tmp) return true;
                 type = type_manager->create_type(
                     TypeInfo::Category::CONST,
@@ -558,29 +671,32 @@ namespace nn
                     }, tmp);
                 break;
             case TypeInfo::Type::ARRAY:
-                if (type->type_array.elem->to_obj(node_info, tmp))
+            {
+                TypeRef elem;
+                if (type_array.elem->to_obj(node_info, elem))
                     return true;
-                tmp = type_manager->create_array(TypeInfo::Category::VIRTUAL, nullptr, tmp);
+                tmp = type_manager->create_array(TypeInfo::Category::VIRTUAL, nullptr, type_array.elem);
                 if (!tmp) return true;
                 type = type_manager->create_type(
                     TypeInfo::Category::CONST,
-                    [&node_info, tmp](Scope& scope) -> bool {
+                    [&node_info, elem](Scope& scope) -> bool {
                         return
-                            tmp->codegen(scope) ||
+                            elem->codegen(scope) ||
                             body->add_instruction(instruction::Arr(node_info));
                     }, tmp);
                 break;
+            }
             case TypeInfo::Type::TUPLE:
             {
                 std::vector<TypeRef> elem_types;
-                for (TypeRef& elem : type->type_tuple.elems)
+                for (TypeRef elem : type_tuple.elems)
                 {
                     TypeRef elem_type;
                     if (elem->to_obj(node_info, elem_type))
                         return true;
                     elem_types.push_back(elem_type);
                 }
-                tmp = type_manager->create_tuple(TypeInfo::Category::VIRTUAL, nullptr, elem_types);
+                tmp = type_manager->create_tuple(TypeInfo::Category::VIRTUAL, nullptr, type_tuple.elems);
                 if (!tmp) return true;
                 type = type_manager->create_type(
                     TypeInfo::Category::CONST,
@@ -651,42 +767,32 @@ namespace nn
         {
             if (len == bufsz)
             {
-                if (bufsz)
-                {
-                    size_t nsz = 2 * bufsz;
-                    void* tmp = realloc(buf, nsz);
-                    if (!tmp)
-                        return TypeRef(0);
-                    buf = (uint8_t*)tmp;
-                    bufsz = nsz;
-                }
-                else
-                {
-                    size_t nsz = 256 * bufsz;
-                    buf = (uint8_t*)malloc(nsz);
-                    if (buf)
-                        return TypeRef(0);
-                    bufsz = nsz;
-                    len = sizeof(TypeInfo);  // reserving 0
-                }
+                size_t nsz = 2 * bufsz;
+                void* tmp = realloc(buf, nsz);
+                if (!tmp)
+                    return TypeInfo::null;
+                buf = (uint8_t*)tmp;
+                bufsz = nsz;
             }
 
             TypeRef ret = TypeRef(len);
+            new (buf + len) TypeInfo();
             len += sizeof(TypeInfo);
             return ret;
         }
 
         TypeManager::TypeManager()
         {
-            buf = (uint8_t*)malloc(1024 * sizeof(uint8_t));
+            constexpr size_t initial_size = 65536;
+            buf = (uint8_t*)malloc(initial_size * sizeof(uint8_t));
             if (!buf)
                 throw std::bad_alloc();
-            bufsz = 1024;
+            bufsz = initial_size;
         }
 
         TypeManager::~TypeManager()
         {
-            for (size_t i = 0; i < len; i += sizeof(TypeInfo))
+            for (size_t i = 1; i < len; i += sizeof(TypeInfo))
                 get(i)->~TypeInfo();
             free(buf);
         }
@@ -1043,13 +1149,18 @@ namespace nn
 
         bool Scope::pop(size_t n)
         {
+            std::vector<std::string> popped_vars{ stack_vars.size() };
             for (auto& [name, var] : stack_vars)
             {
-                assert(var.ptr <= n);
-                var.ptr -= n;
+                if (var.ptr <= n)
+                    popped_vars.push_back(name);
+                else
+                    var.ptr -= n;
             }
             if (parent)
                 parent->pop(n);
+            for (const auto& name : popped_vars)
+                stack_vars.erase(name);
             return false;
         }
 
@@ -2542,31 +2653,98 @@ namespace nn
             return buf;
         }
 
-        bool arg_type(TypeRef& type, const Scope& scope, const AstArgDecl& arg)
+        template<class allowed>
+        bool codegen_expr_single_ret(Scope& scope, const AstExpr& expr, TypeRef& ret)
+        {
+            std::vector<TypeRef> rets;
+            if (codegen_expr(scope, expr, rets))
+                return true;
+            if (rets.size() != 1)
+                return error::compiler(expr.node_info, "Expected a single value, recieved % values", rets.size());
+            if (!allowed::has_default && rets[0]->cat == TypeInfo::Category::DEFAULT)
+                return error::compiler(expr.node_info, "Expected a non-default value");
+            if (!allowed::has_const && rets[0]->cat == TypeInfo::Category::CONST)
+                return error::compiler(expr.node_info, "Expected a non-constant value");
+            if (!allowed::has_ref && rets[0]->cat == TypeInfo::Category::REF)
+                return error::compiler(expr.node_info, "Expected a non-reference value");
+            if (!allowed::has_virtual && rets[0]->cat == TypeInfo::Category::VIRTUAL)
+            {
+                // See if the ret can be disambiguated to a 
+                return error::compiler(expr.node_info, "Expected a non-virtual value");
+            }
+            ret = rets[0];
+            return false;
+        }
+
+        template<class allowed>
+        bool codegen_expr_multi_ret(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
+        {
+            if (codegen_expr(scope, expr, rets))
+                return true;
+            if (!allowed::has_default)
+                for (const auto& ret : rets)
+                    if (ret->cat == TypeInfo::Category::DEFAULT)
+                        return error::compiler(expr.node_info, "Expected a non-default value");
+            if (!allowed::has_const)
+                for (const auto& ret : rets)
+                    if (ret->cat == TypeInfo::Category::CONST)
+                        return error::compiler(expr.node_info, "Expected a non-constant value");
+            if (!allowed::has_ref)
+                for (const auto& ret : rets)
+                    if (ret->cat == TypeInfo::Category::REF)
+                        return error::compiler(expr.node_info, "Expected a non-reference value");
+            if (!allowed::has_virtual)
+                for (const auto& ret : rets)
+                    if (ret->cat == TypeInfo::Category::VIRTUAL)
+                        return error::compiler(expr.node_info, "Expected a non-virtual value");
+            return false;
+        }
+
+        bool arg_type(TypeRef& type, Scope& scope, const AstArgDecl& arg)
         {
             TypeRef explicit_type;
             if (arg.type_expr)
             {
-                // TODO: determine the type from arg_type.type_expr
-                return error::compiler(arg.node_info, "Internal error: not implemented");
+                if (codegen_expr_single_ret<TypeInfo::AllowAll>(scope, *arg.type_expr, explicit_type))
+                    return true;
+                if (explicit_type->ty == TypeInfo::Type::DLTYPE)
+                {
+                    if (body_type == BodyType::INTR)
+                        explicit_type = type_manager->create_edge(TypeInfo::Category::CONST, nullptr);
+                    else
+                        explicit_type = type_manager->create_tensor(TypeInfo::Category::CONST, nullptr);
+                    if (!explicit_type)
+                        return true;
+                }
+                else if (explicit_type->ty == TypeInfo::Type::TYPE)
+                    explicit_type = type_manager->duplicate(TypeInfo::Category::CONST, nullptr, explicit_type->type_type.base);
+                else
+                    return error::compiler(arg.type_expr->node_info, "Type expression for parameter % did not resolve to a type.", arg.var_name);
+                
+                if (arg.is_packed)
+                {
+                    explicit_type = type_manager->create_array(TypeInfo::Category::CONST, nullptr, explicit_type);
+                    if (!explicit_type)
+                        return true;
+                }
             }
-
+            
             TypeRef default_type;
             if (arg.default_expr)
             {
-                // TODO: determine the type of arg_type.default_expr
-                return error::compiler(arg.node_info, "Internal error: not implemented");
+                if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, *arg.default_expr, default_type))
+                    return true;
             }
 
-            if (explicit_type->ty == TypeInfo::Type::INVALID)
+            if (!explicit_type)
             {
-                if (default_type->ty == TypeInfo::Type::INVALID)
+                if (!default_type)
                     return error::compiler(arg.node_info, "Missing both the type expression and the default expression");
                 // only the default type was specified
                 type = default_type;
                 return false;
             }
-            if (default_type->ty == TypeInfo::Type::INVALID)
+            if (!default_type)
             {
                 // only the explicit type was specified
                 type = explicit_type;
@@ -2981,15 +3159,15 @@ namespace nn
 
         bool codegen_expr_bool(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
         {
-            CodegenCallback cb = [&expr](Scope& scope)
-            {
-                size_t addr;
-                return
-                    bc->add_obj_bool(addr, expr.expr_bool) ||
-                    body->add_instruction(instruction::New(expr.node_info, addr)) ||
-                    scope.push();
-            };
-            TypeRef ret = type_manager->create_bool(TypeInfo::Category::CONST, std::move(cb));
+            TypeRef ret = type_manager->create_bool(
+                TypeInfo::Category::CONST,
+                [&expr](Scope& scope) {
+                    size_t addr;
+                    return
+                        bc->add_obj_bool(addr, expr.expr_bool) ||
+                        body->add_instruction(instruction::New(expr.node_info, addr)) ||
+                        scope.push();
+                });
             if (!ret)
                 return true;
             rets.push_back(ret);
@@ -2998,15 +3176,15 @@ namespace nn
 
         bool codegen_expr_int(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
         {
-            CodegenCallback cb = [&expr](Scope& scope)
-            {
-                size_t addr;
-                return
-                    bc->add_obj_int(addr, expr.expr_int) ||
-                    body->add_instruction(instruction::New(expr.node_info, addr)) ||
-                    scope.push();
-            };
-            TypeRef ret = type_manager->create_int(TypeInfo::Category::CONST, std::move(cb));
+            TypeRef ret = type_manager->create_int(
+                TypeInfo::Category::CONST,
+                [&expr](Scope& scope) {
+                    size_t addr;
+                    return
+                        bc->add_obj_int(addr, expr.expr_int) ||
+                        body->add_instruction(instruction::New(expr.node_info, addr)) ||
+                        scope.push();
+                });
             if (!ret)
                 return true;
             rets.push_back(ret);
@@ -3015,15 +3193,15 @@ namespace nn
 
         bool codegen_expr_float(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
         {
-            CodegenCallback cb = [&expr](Scope& scope)
-            {
-                size_t addr;
-                return
-                    bc->add_obj_float(addr, expr.expr_float) ||
-                    body->add_instruction(instruction::New(expr.node_info, addr)) ||
-                    scope.push();
-            };
-            TypeRef ret = type_manager->create_float(TypeInfo::Category::CONST, std::move(cb));
+            TypeRef ret = type_manager->create_float(
+                TypeInfo::Category::CONST,
+                [&expr](Scope& scope) {
+                    size_t addr;
+                    return
+                        bc->add_obj_float(addr, expr.expr_float) ||
+                        body->add_instruction(instruction::New(expr.node_info, addr)) ||
+                        scope.push();
+                });
             if (!ret)
                 return true;
             rets.push_back(ret);
@@ -3032,15 +3210,16 @@ namespace nn
 
         bool codegen_expr_string(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
         {
-            CodegenCallback cb = [&expr](Scope& scope)
-            {
-                size_t addr;
-                return
-                    bc->add_obj_str(addr, expr.expr_string) ||
-                    body->add_instruction(instruction::New(expr.node_info, addr)) ||
-                    scope.push();
-            };
-            TypeRef ret = type_manager->create_string(TypeInfo::Category::CONST, std::move(cb));
+            size_t addr;
+            if (bc->add_obj_str(addr, expr.expr_string))
+                return true;
+            TypeRef ret = type_manager->create_string(
+                TypeInfo::Category::CONST,
+                [&expr, addr](Scope& scope) {
+                    return
+                        body->add_instruction(instruction::New(expr.node_info, addr)) ||
+                        scope.push();
+                });
             if (!ret)
                 return true;
             rets.push_back(ret);
@@ -3051,13 +3230,16 @@ namespace nn
         {
             if (expr.expr_agg.elems.size() == 0)
             {
-                CodegenCallback cb = [&expr](Scope& scope)
-                {
-                    return
-                        body->add_instruction(instruction::Agg(expr.node_info, 0)) ||
-                        scope.push();
-                };
-                TypeRef ret = type_manager->create_array(TypeInfo::Category::CONST, cb, type_manager->create_placeholder());
+                TypeRef tmp = type_manager->create_placeholder();
+                if (!tmp)
+                    return true;
+                TypeRef ret = type_manager->create_array(
+                    TypeInfo::Category::CONST,
+                    [&expr](Scope& scope) {
+                        return
+                            body->add_instruction(instruction::Agg(expr.node_info, 0)) ||
+                            scope.push();
+                    }, tmp);
                 if (!ret)
                     return true;
                 rets.push_back(ret);
@@ -3085,15 +3267,15 @@ namespace nn
             for (const auto& elem_expr : expr.expr_agg.elems)
                 if (codegen_expr(scope, elem_expr, elem_types))
                     return true;
-            CodegenCallback cb = [&expr, elem_types](Scope& scope)
-            {
-                for (const auto& type : elem_types)
-                    type->codegen(scope);
-                return
-                    body->add_instruction(instruction::Agg(expr.node_info, elem_types.size())) ||
-                    scope.pop(elem_types.size() - 1);  // -1 for the added tuple
-            };
-            TypeRef ret = type_manager->create_tuple(TypeInfo::Category::CONST, std::move(cb), elem_types);
+            TypeRef ret = type_manager->create_tuple(
+                TypeInfo::Category::CONST,
+                [&expr, elem_types](Scope& scope) {
+                    for (const auto& type : elem_types)
+                        type->codegen(scope);
+                    return
+                        body->add_instruction(instruction::Agg(expr.node_info, elem_types.size())) ||
+                        scope.pop(elem_types.size() - 1);  // -1 for the added tuple
+                }, elem_types);
             if (!ret)
                 return true;
             rets.push_back(ret);
@@ -3139,59 +3321,12 @@ namespace nn
             return error::compiler(expr.node_info, "Internal error: I forgot to implement a not instruction");
         }
         
-        template<class allowed>
-        bool codegen_expr_single_ret(Scope& scope, const AstExpr& expr, TypeRef& ret)
-        {
-            std::vector<TypeRef> rets;
-            if (codegen_expr(scope, expr, rets))
-                return true;
-            if (rets.size() != 1)
-                return error::compiler(expr.node_info, "Expected a single value, recieved % values", rets.size());
-            if (!allowed::has_default && rets[0]->cat == TypeInfo::Category::DEFAULT)
-                return error::compiler(expr.node_info, "Expected a non-default value");
-            if (!allowed::has_const && rets[0]->cat == TypeInfo::Category::CONST)
-                return error::compiler(expr.node_info, "Expected a non-constant value");
-            if (!allowed::has_ref && rets[0]->cat == TypeInfo::Category::REF)
-                return error::compiler(expr.node_info, "Expected a non-reference value");
-            if (!allowed::has_virtual && rets[0]->cat == TypeInfo::Category::VIRTUAL)
-            {
-                // See if the ret can be disambiguated to a 
-                return error::compiler(expr.node_info, "Expected a non-virtual value");
-            }
-            ret = rets[0];
-            return false;
-        }
-
-        template<class allowed>
-        bool codegen_expr_multi_ret(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
-        {
-            if (codegen_expr(scope, expr, rets))
-                return true;
-            if (!allowed::has_default)
-                for (const auto& ret : rets)
-                    if (ret->cat == TypeInfo::Category::DEFAULT)
-                        return error::compiler(expr.node_info, "Expected a non-default value");
-            if (!allowed::has_const)
-                for (const auto& ret : rets)
-                    if (ret->cat == TypeInfo::Category::CONST)
-                        return error::compiler(expr.node_info, "Expected a non-constant value");
-            if (!allowed::has_ref)
-                for (const auto& ret : rets)
-                    if (ret->cat == TypeInfo::Category::REF)
-                        return error::compiler(expr.node_info, "Expected a non-reference value");
-            if (!allowed::has_virtual)
-                for (const auto& ret : rets)
-                    if (ret->cat == TypeInfo::Category::VIRTUAL)
-                        return error::compiler(expr.node_info, "Expected a non-virtual value");
-            return false;
-        }
-
         bool codegen_expr_unpack(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
         {
             std::vector<TypeRef> args;
             if (codegen_expr_multi_ret<TypeInfo::NonVirtual>(scope, *expr.expr_unary.expr, args))
                 return true;
-            if (args.size() >= 2 == args.size() == 0)
+            if (args.size() >= 2 || args.size() == 0)
             {
                 // For multiple return values and no return values, unpacking is a noop
                 for (auto arg : args)
@@ -4892,18 +5027,15 @@ namespace nn
 
         bool codegen_line_print(Scope& scope, const AstLine& line)
         {
-            std::vector<TypeRef> rets;
-            if (codegen_expr(scope, line.line_func.expr, rets))
+            TypeRef ret;
+            if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, line.line_func.expr, ret))
                 return true;
-            if (rets.size() != 1)
-                return error::compiler(line.node_info, "A print expression must resolve to a single string value");
-            if (rets[0]->ty != TypeInfo::Type::STR)
-                return body->add_instruction(instruction::Dsp(line.node_info));
-            else if (!rets[0]->check_xstr())
+            if (ret->ty != TypeInfo::Type::STR)
                 return error::compiler(line.node_info, "A print expression must resolve to a single string value");
             return
-                body->add_instruction(instruction::XStr(line.node_info)) ||
-                body->add_instruction(instruction::Dsp(line.node_info));
+                ret->codegen(scope) ||
+                body->add_instruction(instruction::Dsp(line.node_info)) ||
+                scope.pop();
         }
 
         bool codegen_line_return(Scope& scope, const AstLine& line)
@@ -5110,6 +5242,7 @@ namespace nn
 
         bool codegen_lines(Scope& scope, const std::vector<AstLine>& lines)
         {
+            // TODO: add a check into the parser for this
             assert(lines.size() > 0);
 
             size_t i = 0;
@@ -5135,7 +5268,7 @@ namespace nn
                     i++;
                 }
                 else
-                    codegen_line(scope, lines[i]);
+                    codegen_line(scope, lines[i++]);
             }
 
             // During proper code execution, this point should be unreachable.
@@ -5181,6 +5314,8 @@ namespace nn
             }
             fn_name << ast_fn.signature.name;
             name = fn_name.str();
+            if (name.find('-') != std::string::npos)
+                return error::compiler(ast_fn.node_info, "Found invalid argument while encoding fn: %", name);
             return false;
         }
 
@@ -5192,15 +5327,19 @@ namespace nn
                 def_name << ns_name << "_";
             Scope scope{ nullptr };
             def_name << ast_def.signature.cargs.size() << "_";
-            for (const auto& arg : ast_def.signature.cargs)
+            for (const AstArgDecl& arg : ast_def.signature.cargs)
             {
                 TypeRef type;
-                if (arg_type(type, scope, arg))
-                    return true;
+                if (arg_type(type, scope, arg) ||
+                    scope.add(arg.var_name, type, arg.node_info) ||
+                    scope.push()
+                    ) return true;
                 def_name << type->encode() << "_";
             }
             def_name << ast_def.signature.vargs.size() << "_" << ast_def.signature.name;
             name = def_name.str();
+            if (name.find('-') != std::string::npos)
+                return error::compiler(ast_def.node_info, "Found invalid argument while encoding def: %", name);
             return false;
         }
 
@@ -5221,6 +5360,8 @@ namespace nn
             }
             intr_name << ast_intr.signature.vargs.size() << "_" << ast_intr.signature.name;
             name = intr_name.str();
+            if (name.find('-') != std::string::npos)
+                return error::compiler(ast_intr.node_info, "Found invalid argument while encoding intr: %", name);
             return false;
         }
 
@@ -5355,11 +5496,14 @@ namespace nn
                 size_t addr;
                 TypeRef ty;
                 if (body->add_instruction(instruction::Dup(arg.node_info, var.ptr)) ||
-                    var.type->to_obj(arg.node_info, ty) ||
+                    var.type->to_obj(arg.node_info, ty))
+                    return true;
+                if (
                     ty->codegen(scope) ||
                     bc->add_obj_str(addr, arg.var_name) ||
                     body->add_instruction(instruction::New(arg.node_info, addr)) ||
-                    body->add_instruction(instruction::BkCfg(arg.node_info))
+                    body->add_instruction(instruction::BkCfg(arg.node_info)) ||
+                    scope.pop()
                     ) return true;
             }
 
@@ -5442,7 +5586,7 @@ namespace nn
             return true;
         }
 
-        bool codegen_module(ByteCodeModule& inp_bc, ModuleInfo& info, const AstModule& ast, const std::vector<std::string>& imp_dirs)
+        bool codegen_module(ByteCodeModule& inp_bc, ModuleInfo& info, AstModule& ast, const std::vector<std::string>& imp_dirs)
         {
             bc = &inp_bc;
             // Resolving imports to build a CodeModule object

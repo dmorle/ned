@@ -6,6 +6,8 @@
 #include <functional>
 #include <cassert>
 
+#include <iostream>
+
 namespace nn
 {
     namespace lang
@@ -81,6 +83,7 @@ namespace nn
                 args.clear();
                 return -1;
             }
+            i = end + 1;
             do
             {
                 end = tarr.search(ArgEndCriteria(CLOSE), i);
@@ -407,20 +410,20 @@ namespace nn
                     if (!tk.is_whitespace())
                         return error::syntax(tk, "Unexpected token after variable declaration");
                 new (&ast_expr.expr_name) AstExprName();
-                ast_expr.ty = ExprType::VAR;
+                ast_expr.ty = ExprType::VAR_DECL;
                 ast_expr.expr_name.expr = std::move(lhs);
                 ast_expr.expr_name.val = tarr[0]->get<TokenType::IDN>().val;
                 return false;
             case TokenType::ANGLE_O:
                 for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
-                end = tarr.search(IsSameCriteria(TokenType::ANGLE_C), start);
+                end = tarr.search(IsSameCriteria(TokenType::ANGLE_C));
                 if (end == -1)
                     return error::syntax(tarr[0], "Missing closing '>' in carg expression");
                 i = end + 1;
                 break;
             case TokenType::ROUND_O:
                 for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
-                end = tarr.search(IsSameCriteria(TokenType::ROUND_C), start);
+                end = tarr.search(IsSameCriteria(TokenType::ROUND_C));
                 if (end == -1)
                     return error::syntax(tarr[0], "Missing closing ')' in varg expression");
                 i = end + 1;
@@ -432,7 +435,20 @@ namespace nn
             if (end == start)
                 return error::syntax(tarr[start], "Empty expression");
             std::unique_ptr<AstExpr> nlhs;
-            AstExpr* pexpr = i == tarr.size() ? &ast_expr : (nlhs = std::make_unique<AstExpr>()).get();
+            AstExpr* pexpr;
+            if (i == tarr.size())
+                pexpr = &ast_expr;
+            else
+            {
+                pexpr = (nlhs = std::make_unique<AstExpr>()).get();
+                pexpr->node_info = {
+                    .fname = tarr[0]->fname,
+                    .line_start = tarr[0]->line_num,
+                    .line_end = tarr[tarr.size() - 1]->line_num,
+                    .col_start = tarr[0]->col_num,
+                    .col_end = tarr[tarr.size() - 1]->col_num
+                };
+            }
 
             AstExpr ret_expr;  // helper for calls so that I leverge the tuple parsing code for this
             switch (tarr[0]->ty)
@@ -691,7 +707,7 @@ namespace nn
         {
             switch (ty)
             {
-            case TokenType::POW:
+            case TokenType::CAST:
                 return ExprType::BINARY_CAST;
             }
             assert(false);
@@ -721,12 +737,36 @@ namespace nn
                 return parse_expr_prec<prec + 1>(tarr, ast_expr);
             if (pos < 1 || tarr.size() - pos < 2)
                 return error::syntax(tarr[pos], "Dangling operator");
+            // I need to explicitly initialize the node_info for pleft and pright
+            // since they don't go into parse_expr, they won't get initialized automatically.
             std::unique_ptr<AstExpr> pleft = std::make_unique<AstExpr>();
-            if (parse_expr_prec<prec + 1>({ tarr, 0, pos }, *pleft))
-                return true;
+            pleft->node_info = {
+                .fname = tarr[0]->fname,
+                .line_start = tarr[0]->line_num,
+                .line_end = tarr[pos]->line_num,
+                .col_start = tarr[0]->col_num,
+                .col_end = tarr[pos]->col_num
+            };
             std::unique_ptr<AstExpr> pright = std::make_unique<AstExpr>();
-            if (parse_expr_prec<prec + 1>({ tarr, pos + 1 }, *pright))
-                return true;
+            pright->node_info = {
+                .fname = tarr[0]->fname,
+                .line_start = tarr[pos + 1]->line_num,
+                .line_end = tarr[tarr.size() - 1]->line_num,
+                .col_start = tarr[pos + 1]->col_num,
+                .col_end = tarr[tarr.size() - 1]->col_num
+            };
+            if (op_assoc == OpAssoc::LTOR)
+            {
+                if (parse_expr_prec<prec + 1>({ tarr, 0, pos }, *pleft) ||
+                    parse_expr_prec<prec>({ tarr, pos + 1 }, *pright)
+                    ) return true;
+            }
+            else
+            {
+                if (parse_expr_prec<prec>({ tarr, 0, pos }, *pleft) ||
+                    parse_expr_prec<prec + 1>({ tarr, pos + 1 }, *pright)
+                    ) return true;
+            }
             new (&ast_expr.expr_binary) AstExprBinaryOp();
             ast_expr.ty = get_expr_type<prec>(tarr[pos]->ty);
             ast_expr.expr_binary.left = std::move(pleft);
@@ -784,6 +824,13 @@ namespace nn
                     {
                         // has mods => initialize lhs and continue execution
                         lhs = std::make_unique<AstExpr>();
+                        lhs->node_info = {
+                            .fname = tarr[0]->fname,
+                            .line_start = tarr[0]->line_num,
+                            .line_end = tarr[tarr.size() - 1]->line_num,
+                            .col_start = tarr[0]->col_num,
+                            .col_end = tarr[tarr.size() - 1]->col_num
+                        };
                         new (&lhs->expr_agg) AstExprAggLit();
                         lhs->ty = ExprType::LIT_ARRAY;
                         i = end;
@@ -806,6 +853,13 @@ namespace nn
                     {
                         // has mods => initialize lhs and continue execution
                         lhs = std::make_unique<AstExpr>();
+                        lhs->node_info = {
+                            .fname = tarr[0]->fname,
+                            .line_start = tarr[0]->line_num,
+                            .line_end = tarr[tarr.size() - 1]->line_num,
+                            .col_start = tarr[0]->col_num,
+                            .col_end = tarr[tarr.size() - 1]->col_num
+                        };
                         new (&lhs->expr_agg) AstExprAggLit();
                         lhs->ty = ExprType::LIT_ARRAY;
                         if (arr_expr.ty == ExprType::LIT_TUPLE)
@@ -852,6 +906,13 @@ namespace nn
             {
                 // single token followed by modifiers
                 lhs = std::make_unique<AstExpr>();
+                lhs->node_info = {
+                    .fname = tarr[0]->fname,
+                    .line_start = tarr[0]->line_num,
+                    .line_end = tarr[0]->line_num,
+                    .col_start = tarr[0]->col_num,
+                    .col_end = tarr[0]->col_num
+                };
                 if (parse_leaf_token(tarr[0], *lhs))
                     return true;
                 i = 1;
@@ -879,6 +940,7 @@ namespace nn
                 if (tarr.size() < 2)
                     return error::syntax(tarr[0], "Dangling operator");
                 pexpr = std::make_unique<AstExpr>();
+
                 if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
                     return true;
                 new (&ast_expr.expr_unary) AstExprUnaryOp();
@@ -889,6 +951,13 @@ namespace nn
                 if (tarr.size() < 2)
                     return error::syntax(tarr[0], "Dangling operator");
                 pexpr = std::make_unique<AstExpr>();
+                pexpr->node_info = {
+                    .fname = tarr[0]->fname,
+                    .line_start = tarr[1]->line_num,
+                    .line_end = tarr[tarr.size() - 1]->line_num,
+                    .col_start = tarr[1]->col_num,
+                    .col_end = tarr[tarr.size() - 1]->col_num
+                };
                 if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
                     return true;
                 new (&ast_expr.expr_unary) AstExprUnaryOp();
@@ -899,6 +968,13 @@ namespace nn
                 if (tarr.size() < 2)
                     return error::syntax(tarr[0], "Dangling operator");
                 pexpr = std::make_unique<AstExpr>();
+                pexpr->node_info = {
+                    .fname = tarr[0]->fname,
+                    .line_start = tarr[1]->line_num,
+                    .line_end = tarr[tarr.size() - 1]->line_num,
+                    .col_start = tarr[1]->col_num,
+                    .col_end = tarr[tarr.size() - 1]->col_num
+                };
                 if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
                     return true;
                 new (&ast_expr.expr_unary) AstExprUnaryOp();
@@ -909,6 +985,13 @@ namespace nn
                 if (tarr.size() < 2)
                     return error::syntax(tarr[0], "Dangling operator");
                 pexpr = std::make_unique<AstExpr>();
+                pexpr->node_info = {
+                    .fname = tarr[0]->fname,
+                    .line_start = tarr[1]->line_num,
+                    .line_end = tarr[tarr.size() - 1]->line_num,
+                    .col_start = tarr[1]->col_num,
+                    .col_end = tarr[tarr.size() - 1]->col_num
+                };
                 if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
                     return true;
                 new (&ast_expr.expr_unary) AstExprUnaryOp();
@@ -919,6 +1002,13 @@ namespace nn
                 if (tarr.size() < 2)
                     return error::syntax(tarr[0], "Dangling operator");
                 pexpr = std::make_unique<AstExpr>();
+                pexpr->node_info = {
+                    .fname = tarr[0]->fname,
+                    .line_start = tarr[1]->line_num,
+                    .line_end = tarr[tarr.size() - 1]->line_num,
+                    .col_start = tarr[1]->col_num,
+                    .col_end = tarr[tarr.size() - 1]->col_num
+                };
                 if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
                     return true;
                 new (&ast_expr.expr_unary) AstExprUnaryOp();
@@ -929,6 +1019,13 @@ namespace nn
                 if (tarr.size() < 2)
                     return error::syntax(tarr[0], "Dangling operator");
                 pexpr = std::make_unique<AstExpr>();
+                pexpr->node_info = {
+                    .fname = tarr[0]->fname,
+                    .line_start = tarr[1]->line_num,
+                    .line_end = tarr[tarr.size() - 1]->line_num,
+                    .col_start = tarr[1]->col_num,
+                    .col_end = tarr[tarr.size() - 1]->col_num
+                };
                 if (parse_expr_prec<prec + 1>({ tarr, 1 }, *pexpr))
                     return true;
                 new (&ast_expr.expr_unary) AstExprUnaryOp();
@@ -937,7 +1034,7 @@ namespace nn
                 return false;
             }
 
-            return parse_expr_prec<7>(tarr, ast_expr);
+            return parse_expr_prec<prec + 1>(tarr, ast_expr);
         }
 
         template<>
@@ -956,6 +1053,13 @@ namespace nn
                 AstExpr elem_expr;
                 if (parse_expr_prec<prec + 1>({ tarr, i, end }, elem_expr))
                     return true;
+                elem_expr.node_info = {
+                    .fname = tarr[0]->fname,
+                    .line_start = tarr[i]->line_num,
+                    .line_end = tarr[end]->line_num,
+                    .col_start = tarr[i]->col_num,
+                    .col_end = tarr[end]->col_num
+                };
                 elem_exprs.push_back(std::move(elem_expr));
                 i = end + 1;
             }
@@ -971,6 +1075,13 @@ namespace nn
             AstExpr last_expr;
             if (parse_expr_prec<prec + 1>({ tarr, i }, last_expr))
                 return true;
+            last_expr.node_info = {
+                .fname = tarr[0]->fname,
+                .line_start = tarr[i]->line_num,
+                .line_end = tarr[tarr.size() - 1]->line_num,
+                .col_start = tarr[i]->col_num,
+                .col_end = tarr[tarr.size() - 1]->col_num
+            };
             ast_expr.expr_agg.elems.push_back(std::move(last_expr));
             return false;
         }
@@ -1653,6 +1764,8 @@ namespace nn
             case ExprType::UNARY_UNPACK:
             case ExprType::UNARY_REF:
             case ExprType::UNARY_CONST:
+            case ExprType::UNARY_FORWARD:
+            case ExprType::UNARY_BACKWARD:
                 expr_unary.~AstExprUnaryOp();
                 break;
             case ExprType::BINARY_ADD:
@@ -1727,6 +1840,8 @@ namespace nn
             case ExprType::UNARY_UNPACK:
             case ExprType::UNARY_REF:
             case ExprType::UNARY_CONST:
+            case ExprType::UNARY_FORWARD:
+            case ExprType::UNARY_BACKWARD:
                 new (&expr_unary) decltype(expr_unary)(std::move(expr.expr_unary));
                 break;
             case ExprType::BINARY_ADD:

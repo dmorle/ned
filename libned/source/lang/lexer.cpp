@@ -243,7 +243,7 @@ namespace nn
             case TokenType::SUB:
                 return " - ";
             case TokenType::STAR:
-                return " * ";
+                return "*";
             case TokenType::DIV:
                 return " / ";
             case TokenType::MOD:
@@ -279,7 +279,7 @@ namespace nn
             case TokenType::LIT_STR:
                 return std::string("\"") + static_cast<const TokenImp<TokenType::LIT_STR>*>(ptk)->val + "\"";
             case TokenType::IDN:
-                return std::string(static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val) + " ";
+                return std::string(static_cast<const TokenImp<TokenType::IDN>*>(ptk)->val);
             case TokenType::KW_NAMESPACE:
                 return "namespace ";
             case TokenType::KW_STRUCT:
@@ -460,6 +460,32 @@ namespace nn
 
             tarr.pbuf = nullptr;
             return *this;
+        }
+
+        TokenArrayIterator TokenArray::begin()
+        {
+            return TokenArrayIterator((Token*)pbuf);
+        }
+
+        TokenArrayIterator TokenArray::end()
+        {
+            if (size() == 0)
+                return reinterpret_cast<Token*>(pbuf);
+            uint8_t* last = pbuf + offsets[off_len - 1];
+            return TokenArrayIterator(reinterpret_cast<Token*>(last + reinterpret_cast<Token*>(last)->sz));
+        }
+
+        TokenArrayConstIterator TokenArray::begin() const
+        {
+            return TokenArrayConstIterator((Token*)pbuf);
+        }
+
+        TokenArrayConstIterator TokenArray::end() const
+        {
+            if (size() == 0)
+                return reinterpret_cast<Token*>(pbuf);
+            uint8_t* last = pbuf + offsets[off_len - 1];
+            return TokenArrayConstIterator(reinterpret_cast<Token*>(last + reinterpret_cast<Token*>(last)->sz));
         }
 
         const Token* TokenArray::operator[](size_t idx) const noexcept

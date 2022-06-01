@@ -1,0 +1,2 @@
+def main<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+	print "Hello world"

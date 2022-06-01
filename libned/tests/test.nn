@@ -1,22 +1,13 @@
-# struct T<int n>:
-# 	int i = n
-# 
-# fn f<int n, int m, T<n> tca>(T<n + m> tva) -> T<n - m>:
-# 	T<n - m> t
-# 	return t
-# 
-# def test():
-# 	T<3> tca
-# 	T<5> tva
-# 	f<tca=tca>(tva)
-
-def test() -> fp<*shape> out, fp<> loss:
-	print("hello world")
-
-
-def main<fty fp, int* shape>(fp<*shape> lhs, fp<1, *shape> rhs) -> out:
-	return lhs + fp<*shape>::rhs
-
-intr add<fty fp, int *head, int *tail>(fp<*head> lhs, fp<*head, *tail> rhs) -> out:
-	fp<*head, *tail> out
+intr __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+	fp<*shape> out
 	return out
+
+def __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> sum:
+	fp<*shape> out
+	out.forward = lhs.forward + rhs.forward
+	lhs.backward = out.backward
+	rhs.backward = out.backward
+	return out
+
+def model<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+	return lhs + rhs

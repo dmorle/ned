@@ -263,12 +263,10 @@ namespace nn
             TokenArray& operator=(TokenArray&&) noexcept;
             TokenArray& operator=(const TokenArray&) = delete;
             
-            TokenArrayIterator begin() { return TokenArrayIterator((Token*)pbuf); }
-            TokenArrayIterator end() { uint8_t* last = pbuf + offsets[off_len - 1];
-                return TokenArrayIterator(reinterpret_cast<Token*>(last + reinterpret_cast<Token*>(last)->sz)); }
-            TokenArrayConstIterator begin() const { return TokenArrayConstIterator((Token*)pbuf); }
-            TokenArrayConstIterator end() const { const uint8_t* last = pbuf + offsets[off_len - 1];
-                return TokenArrayConstIterator(reinterpret_cast<const Token*>(last + reinterpret_cast<const Token*>(last)->sz)); }
+            TokenArrayIterator begin();
+            TokenArrayIterator end();
+            TokenArrayConstIterator begin() const;
+            TokenArrayConstIterator end() const;
             const Token* operator[](size_t idx) const noexcept;
             size_t size() const;
 
@@ -329,7 +327,8 @@ namespace nn
             template<class SearchCriteria>
             int search(SearchCriteria&& sc, int start, int end) const
             {
-                end %= size();
+                if (end < 0)
+                    end += size();
                 int idx = start;
                 const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
                 while (idx < end)
@@ -350,7 +349,9 @@ namespace nn
             template<class SearchCriteria>
             int rsearch(SearchCriteria&& sc, int start = -1, int end = 0) const
             {
-                for (int i = start % this->off_len; i >= end; i--)
+                if (start < 0)
+                    start += size();
+                for (int i = start; i >= end; i--)
                 {
                     int ret = sc.accept(reinterpret_cast<const Token*>(this->pbuf + this->offsets[i]), i);
                     if (ret >= 0)
