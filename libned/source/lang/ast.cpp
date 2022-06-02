@@ -1156,7 +1156,7 @@ namespace nn
                 new (&ast_line.line_extern) AstLineExtern();
                 ast_line.ty = LineType::EXTERN;
                 ast_line.line_extern.var_name = tarr[end]->get<TokenType::IDN>().val;
-                if (parse_expr({ tarr, i, end }, ast_line.line_extern.init_expr))
+                if (parse_expr({ tarr, i + 1, end }, ast_line.line_extern.init_expr))
                     return error::syntax(tarr[1], "Invalid syntax in weight init expression");
                 break;
 
@@ -1816,6 +1816,7 @@ namespace nn
         void AstExpr::do_move(AstExpr&& expr) noexcept
         {
             ty = expr.ty;
+            node_info = std::move(expr.node_info);
             expr.ty = ExprType::INVALID;
 
             switch (ty)
@@ -1916,6 +1917,9 @@ namespace nn
             case LineType::EXPORT:
                 line_export.~AstLineExport();
                 break;
+            case LineType::EXTERN:
+                line_extern.~AstLineExtern();
+                break;
             case LineType::RAISE:
             case LineType::PRINT:
             case LineType::RETURN:
@@ -1946,6 +1950,7 @@ namespace nn
         void AstLine::do_move(AstLine&& line) noexcept
         {
             ty = line.ty;
+            node_info = std::move(line.node_info);
             line.ty = LineType::INVALID;
 
             switch (ty)

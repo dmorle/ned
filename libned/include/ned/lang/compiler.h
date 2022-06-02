@@ -365,6 +365,7 @@ namespace nn
         {
         public:
             ProcCall(const std::vector<std::string>& sig_ns);
+            ~ProcCall();
 
         protected:
             struct TypeNode;
@@ -405,13 +406,13 @@ namespace nn
 
             struct TupleType
             {
-                std::vector<TypeNode> cargs;
+                std::vector<TypeNode*> cargs;
             };
 
             struct DlType
             {
                 ValNode* fp = nullptr;
-                std::vector<ValNode> shape;
+                std::vector<ValNode*> shape;
             };
 
             struct ValNode
@@ -443,9 +444,8 @@ namespace nn
 
                 bool get_type(const AstNodeInfo& node_info, std::vector<TypeRef>& rets) const;
 
-                // Start by assuming all nodes are root nodes,
-                // then during SigDeduction::create_op calls, if the node name pops up
-                // it means that the Node wasn't a root node
+                // Start by assuming all nodes are root nodes then during ProcCall::create_* calls,
+                // if the node name comes up it means that the Node wasn't a root node
                 bool is_root = true;
                 const AstNodeInfo* node_info;
                 TypeRef val = TypeInfo::null;  // This field gets initialized during codegen
@@ -494,9 +494,9 @@ namespace nn
                 void do_move(TypeNode&& node) noexcept;
             };
 
-            bool create_arg(Scope& scope, const AstArgDecl& decl, ValNode& node);
-            bool create_type(const AstExpr& expr, TypeNode& node);
-            bool create_value(const AstExpr& expr, ValNode& node);
+            bool create_arg   (Scope& scope, const AstArgDecl& decl, ValNode*& node);
+            bool create_type  (Scope& scope, const AstExpr& expr, TypeNode*& node);
+            bool create_value (Scope& scope, const AstExpr& expr, ValNode*& node);
 
             bool codegen_root_arg(Scope& scope, ValNode& node);
 
@@ -528,12 +528,22 @@ namespace nn
             virtual TypeRef get_shape(const AstNodeInfo& node_info, TypeRef type) = 0;
 
             std::vector<std::string> sig_ns;
-            std::map<std::string, ValNode> carg_nodes;
+            std::map<std::string, ValNode*> carg_nodes;
             std::vector<std::string> carg_stack;
             // EDGE for intr, otherwise its TENSOR
             // Initializing the the call-specific init function
-            TypeInfo::Type dltype;
-            const AstNodeInfo* node_info;
+            TypeInfo::Type dltype = TypeInfo::Type::INVALID;
+            const AstNodeInfo* node_info = nullptr;
+
+            ValNode*  next_val();
+            TypeNode* next_type();
+
+        private:
+            uint8_t val_buf[1024 * sizeof(ValNode)];
+            size_t val_buflen = 0;
+
+            uint8_t type_buf[1024 * sizeof(TypeNode)];
+            size_t type_buflen = 0;
         };
 
         class TensorCall :
@@ -595,7 +605,7 @@ namespace nn
             bool codegen(Scope& scope, std::vector<TypeRef>& rets);
 
         private:
-            std::map<std::string, ValNode> varg_nodes;
+            std::map<std::string, ValNode*> varg_nodes;
             std::vector<std::string> varg_stack;
             std::vector<std::string> ret_stack;
             const AstBlock* ast_intr;
@@ -612,7 +622,7 @@ namespace nn
             bool codegen(Scope& scope, std::vector<TypeRef>& rets);
 
         private:
-            std::map<std::string, ValNode> varg_nodes;
+            std::map<std::string, ValNode*> varg_nodes;
             std::vector<std::string> varg_stack;
             std::vector<std::string> ret_stack;
             const AstBlock* ast_def;
@@ -629,7 +639,7 @@ namespace nn
             bool codegen(Scope& scope, std::vector<TypeRef>& rets);
 
         private:
-            std::map<std::string, ValNode> varg_nodes;
+            std::map<std::string, ValNode*> varg_nodes;
             std::vector<std::string> varg_stack;
             std::vector<TypeRef> rets;
             const AstFn* ast_fn;
@@ -731,7 +741,7 @@ namespace nn
         bool codegen_struct(const std::string& name, const AstStruct& ast_struct, const std::vector<std::string>& ns);
         bool codegen_func(const std::string& name, const AstFn& ast_fn, const std::vector<std::string>& ns);
         bool codegen_def(const std::string& name, const AstBlock& ast_def, const std::vector<std::string>& ns);
-        bool codegen_intr(const std::string& name, const AstBlock& ast_intr, const std::vector<std::string&> ns);
+        bool codegen_intr(const std::string& name, const AstBlock& ast_intr, const std::vector<std::string>& ns);
         bool codegen_attr(const std::string& name, const CodeModule::Attr& attr, std::vector<std::string>& ns);
 
         bool codegen_module(ByteCodeModule& bc, ModuleInfo& info, AstModule& ast, const std::vector<std::string>& imp_dirs);

@@ -856,6 +856,9 @@ namespace nn
                     case hash("fn"):
                         tarr.push_back(TokenImp<TokenType::KW_FN>(fname, line_num, col_num));
                         continue;
+                    case hash("init"):
+                        tarr.push_back(TokenImp<TokenType::KW_INIT>(fname, line_num, col_num));
+                        continue;
                     case hash("return"):
                         tarr.push_back(TokenImp<TokenType::KW_RETURN>(fname, line_num, col_num));
                         continue;

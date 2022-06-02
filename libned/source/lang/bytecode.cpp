@@ -84,7 +84,7 @@ namespace nn
         bool ByteCodeBody::add_label(const TokenImp<TokenType::IDN>* lbl)
         {
             if (label_map.contains(lbl->val))
-                return error::syntax(lbl, "Label % redefinition", lbl->val);
+                return error::syntax(lbl, "label redefinition: %", lbl->val);
             label_map[lbl->val] = size();
             return false;
         }
@@ -92,7 +92,7 @@ namespace nn
         bool ByteCodeBody::add_label(const AstNodeInfo& type, const std::string& lbl)
         {
             if (label_map.contains(lbl))
-                return error::compiler(type, "Internal error: label % redefinition", lbl);
+                return error::compiler(type, "Internal error: label redefinition: %", lbl);
             label_map[lbl] = size();
             return false;
         }

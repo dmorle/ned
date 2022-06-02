@@ -1,0 +1,17 @@
+init gaussian<float mean, float stddev>
+
+intr __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+	fp<*shape> out
+	return out
+
+def __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> sum:
+	fp<*shape> out
+	out.forward = lhs.forward + rhs.forward
+	lhs.backward = out.backward
+	rhs.backward = out.backward
+	return out
+
+def model<fty fp, int *shape>(fp<*shape> lhs) -> out:
+	fp<*shape> rhs
+	extern gaussian<0.0, 1.0> rhs
+	return lhs + rhs

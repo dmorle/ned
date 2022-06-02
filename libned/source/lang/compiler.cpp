@@ -765,7 +765,7 @@ namespace nn
 
         TypeRef TypeManager::next()
         {
-            if (len == bufsz)
+            if (len + sizeof(TypeInfo) > bufsz)
             {
                 size_t nsz = 2 * bufsz;
                 void* tmp = realloc(buf, nsz);
@@ -1152,7 +1152,7 @@ namespace nn
             std::vector<std::string> popped_vars{ stack_vars.size() };
             for (auto& [name, var] : stack_vars)
             {
-                if (var.ptr <= n)
+                if (var.ptr < n)
                     popped_vars.push_back(name);
                 else
                     var.ptr -= n;
@@ -1166,22 +1166,17 @@ namespace nn
 
         bool Scope::local_size(size_t& sz, const Scope* scope) const
         {
+            sz += stack_vars.size();
             if (scope == parent)
-            {
-                sz = 0;
                 return false;
-            }
             if (!parent)
                 return error::general("Internal error: invalid scope pointer");
-            if (parent->local_size(sz, scope))
-                return true;
-            sz += stack_vars.size();
-            return false;
+            return parent->local_size(sz, scope);
         }
 
         bool Scope::list_local_vars(std::vector<StackVar>& vars, const Scope* scope)
         {
-            size_t sz;
+            size_t sz = 0;
             if (local_size(sz, scope))
                 return true;
             vars.reserve(sz);
@@ -1201,6 +1196,14 @@ namespace nn
         }
 
         ProcCall::ProcCall(const std::vector<std::string>& sig_ns) : sig_ns(sig_ns) {}
+
+        ProcCall::~ProcCall()
+        {
+            for (size_t i = 0; i < val_buflen; i += sizeof(ValNode))
+                reinterpret_cast<ValNode*>(val_buf + i)->~ValNode();
+            for (size_t i = 0; i < type_buflen; i += sizeof(TypeNode))
+                reinterpret_cast<TypeNode*>(type_buf + i)->~TypeNode();
+        }
 
         ProcCall::ValNode::ValNode(ProcCall::ValNode&& node) noexcept
         {
@@ -1449,7 +1452,7 @@ namespace nn
                 std::vector<TypeRef> cargs;
                 for (auto& e : type_tuple.cargs)
                 {
-                    cargs.push_back(e.as_type(node_info));
+                    cargs.push_back(e->as_type(node_info));
                     if (!cargs.back())
                         return TypeRef();
                 }
@@ -1464,34 +1467,39 @@ namespace nn
             }
         }
 
-        bool ProcCall::create_arg(Scope& scope, const AstArgDecl& decl, ValNode& node)
+        bool ProcCall::create_arg(Scope& scope, const AstArgDecl& decl, ValNode*& node)
         {
-            new (&node.val_arg) Arg();
-            node.ty = ValNode::Type::ARG_VAL;
-            node.node_info = &decl.node_info;
-            node.val_arg.name = decl.var_name;
-            node.val_arg.type = new TypeNode();
+            node = next_val();
+            new (&node->val_arg) Arg();
+            node->ty = ValNode::Type::ARG_VAL;
+            node->node_info = &decl.node_info;
+            node->val_arg.name = decl.var_name;
             if (!decl.is_packed)
             {
                 // Non-packed arguments can have default values
-                if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, *decl.default_expr, node.val_arg.default_type))
-                    return true;
-                return create_type(*decl.type_expr, *node.val_arg.type);
+                if (decl.default_expr)
+                {
+                    if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, *decl.default_expr, node->val_arg.default_type))
+                        return true;
+                }
+                return create_type(scope, *decl.type_expr, node->val_arg.type);
             }
             // The argument is packed, wrap the type in an array and make sure theres no defaults
             if (decl.default_expr)
                 return error::compiler(decl.node_info, "Packed arguments cannot have default values");
-            new (&node.val_arg.type->type_array) ArrayType();
-            node.val_arg.type->ty = TypeNode::Type::ARRAY;
-            node.val_arg.type->node_info = &decl.node_info;
-            node.val_arg.type->type_array.carg = new TypeNode{};
-            return create_type(*decl.type_expr, *node.val_arg.type->type_array.carg);
+            node->val_arg.type = next_type();
+            if (!node->val_arg.type)
+                return true;
+            new (&node->val_arg.type->type_array) ArrayType();
+            node->val_arg.type->ty = TypeNode::Type::ARRAY;
+            node->val_arg.type->node_info = &decl.node_info;
+            return create_type(scope, *decl.type_expr, node->val_arg.type->type_array.carg);
         }
 
-        bool ProcCall::create_type(const AstExpr& expr, TypeNode& node)
+        bool ProcCall::create_type(Scope& scope, const AstExpr& expr, TypeNode*& node)
         {
-            Scope scope(nullptr);
-            node.node_info = &expr.node_info;
+            node = next_type();
+            node->node_info = &expr.node_info;
             switch (expr.ty)
             {
             case ExprType::CARGS_CALL:
@@ -1502,10 +1510,9 @@ namespace nn
                     case ExprKW::ARRAY:
                         if (expr.expr_call.args.size() != 1)
                             return error::compiler(expr.node_info, "Array types require exactly one carg");
-                        new (&node.type_array) ArrayType();
-                        node.ty = TypeNode::Type::ARRAY;
-                        node.type_array.carg = new TypeNode();
-                        return create_type(expr.expr_call.args[0], *node.type_array.carg);
+                        new (&node->type_array) ArrayType();
+                        node->ty = TypeNode::Type::ARRAY;
+                        return create_type(scope, expr.expr_call.args[0], node->type_array.carg);
                     case ExprKW::TUPLE:
                         return error::compiler(expr.node_info, "Internal error: not implemented");
                     case ExprKW::F16:
@@ -1517,12 +1524,9 @@ namespace nn
                     }
                 {
                     // Attempt a create_value on the callee and see what we end up with
-                    ValNode* pnode = new ValNode{};
-                    if (create_value(*expr.expr_call.callee, *pnode))
-                    {
-                        delete pnode;
+                    ValNode* pnode;
+                    if (create_value(scope, *expr.expr_call.callee, pnode))
                         return true;
-                    }
 
                     std::vector<TypeRef> callee_types;
                     if (pnode->get_type(expr.expr_call.callee->node_info, callee_types))
@@ -1533,27 +1537,27 @@ namespace nn
                     if (callee_types.front()->ty == TypeInfo::Type::FTY)
                     {
                         // Its a tensor type, this places constraints on the cargs
-                        new (&node.type_dl) DlType();
-                        node.ty = TypeNode::Type::DLTYPE;
-                        node.type_dl.fp = pnode;
+                        new (&node->type_dl) DlType();
+                        node->ty = TypeNode::Type::DLTYPE;
+                        node->type_dl.fp = pnode;
                         bool has_unpack = false;
                         for (const AstExpr& arg : expr.expr_call.args)
                         {
-                            ValNode val_node = ValNode{};
-                            if (create_value(arg, val_node))
+                            ValNode* val_node;
+                            if (create_value(scope, arg, val_node))
                                 return true;
                             std::vector<TypeRef> val_types;
-                            if (val_node.get_type(expr.node_info, val_types))
+                            if (val_node->get_type(expr.node_info, val_types))
                                 return true;
                             for (TypeRef val_type : val_types)
                                 if (val_type->ty != TypeInfo::Type::INT)
                                     return error::compiler(expr.node_info, "Invalid type given as tensor carg, expected int");
                             // Checking for unpacked behaviour
-                            if (val_node.ty == ValNode::Type::UNARY_UNPACK)
+                            if (val_node->ty == ValNode::Type::UNARY_UNPACK)
                             {
                                 // Not nessisarilly an array unpack, need to check the type of the value it unpacks
                                 std::vector<TypeRef> unpack_rets;
-                                if (val_node.val_unary.inp->get_type(expr.node_info, unpack_rets))
+                                if (val_node->val_unary.inp->get_type(expr.node_info, unpack_rets))
                                     return true;
                                 assert(unpack_rets.size() == 1);
                                 if (unpack_rets[0]->ty == TypeInfo::Type::ARRAY)
@@ -1564,8 +1568,9 @@ namespace nn
                                     has_unpack = true;
                                 }
                             }
-                            node.type_dl.shape.push_back(std::move(val_node));
+                            node->type_dl.shape.push_back(val_node);
                         }
+                        return false;
                     }
 
                     // Its either a struct or an error.  Since structs aren't implemented yet, generate an error regardless
@@ -1575,25 +1580,25 @@ namespace nn
                 switch (expr.expr_kw)
                 {
                 case ExprKW::TYPE:
-                    node.ty = TypeNode::Type::TYPE;
+                    node->ty = TypeNode::Type::TYPE;
                     return false;
                 case ExprKW::INIT:
-                    node.ty = TypeNode::Type::INIT;
+                    node->ty = TypeNode::Type::INIT;
                     return false;
                 case ExprKW::FTY:
-                    node.ty = TypeNode::Type::FTY;
+                    node->ty = TypeNode::Type::FTY;
                     return false;
                 case ExprKW::BOOL:
-                    node.ty = TypeNode::Type::BOOL;
+                    node->ty = TypeNode::Type::BOOL;
                     return false;
                 case ExprKW::INT:
-                    node.ty = TypeNode::Type::INT;
+                    node->ty = TypeNode::Type::INT;
                     return false;
                 case ExprKW::FLOAT:
-                    node.ty = TypeNode::Type::FLOAT;
+                    node->ty = TypeNode::Type::FLOAT;
                     return false;
                 case ExprKW::STR:
-                    node.ty = TypeNode::Type::STRING;
+                    node->ty = TypeNode::Type::STRING;
                     return false;
                 default:
                     return error::compiler(expr.node_info, "Invalid use of keyword '%'", to_string(expr.expr_kw));
@@ -1602,16 +1607,17 @@ namespace nn
                 if (carg_nodes.contains(expr.expr_string))
                 {
                     std::vector<TypeRef> rets;
-                    ValNode& val_node = carg_nodes.at(expr.expr_string);
-                    if (val_node.get_type(expr.node_info, rets))
+                    ValNode* val_node = carg_nodes.at(expr.expr_string);
+                    val_node->is_root = false;
+                    if (val_node->get_type(expr.node_info, rets))
                         return true;
                     if (rets.size() != 1)
                         return error::compiler(expr.node_info, "To use a carg as a type, the carg must be exactly one value");
                     if (rets.front()->ty != TypeInfo::Type::TYPE)
                         return error::compiler(expr.node_info, "Only generic type cargs can be used as a type");
-                    new (&node.type_val) ValType();
-                    node.ty = TypeNode::Type::GENERIC;
-                    node.type_val.val = &val_node;
+                    new (&node->type_val) ValType();
+                    node->ty = TypeNode::Type::GENERIC;
+                    node->type_val.val = val_node;
                     return false;
                 }
                 // TODO: Implement structs in siguratures
@@ -1622,48 +1628,62 @@ namespace nn
             }
         }
 
-        bool ProcCall::create_value(const AstExpr& expr, ValNode& node)
+        bool ProcCall::create_value(Scope& scope, const AstExpr& expr, ValNode*& node)
         {
-            Scope scope(nullptr);  // dummy scope for stateless codegen
-            node.node_info = &expr.node_info;
+            if (expr.ty == ExprType::VAR && carg_nodes.contains(expr.expr_string))
+            {
+                // Its a reference to a carg
+                node = carg_nodes.at(expr.expr_string);
+                node->is_root = false;
+                return false;
+            }
+
+            node = next_val();
+            node->node_info = &expr.node_info;
+            node->is_root = false;
             switch (expr.ty)
             {
             case ExprType::UNARY_POS:
-                new (&node.val_unary) UnaryOp();
-                node.ty = ValNode::Type::UNARY_POS;
-                node.val_unary.inp = new ValNode{};
-                return create_value(*expr.expr_unary.expr, *node.val_unary.inp);
+                new (&node->val_unary) UnaryOp();
+                node->ty = ValNode::Type::UNARY_POS;
+                node->val_unary.inp = new ValNode{};
+                return create_value(scope, *expr.expr_unary.expr, node->val_unary.inp);
             case ExprType::UNARY_NEG:
-                new (&node.val_unary) UnaryOp();
-                node.ty = ValNode::Type::UNARY_NEG;
-                node.val_unary.inp = new ValNode{};
-                return create_value(*expr.expr_unary.expr, *node.val_unary.inp);
+                new (&node->val_unary) UnaryOp();
+                node->ty = ValNode::Type::UNARY_NEG;
+                node->val_unary.inp = new ValNode{};
+                return create_value(scope, *expr.expr_unary.expr, node->val_unary.inp);
             case ExprType::UNARY_NOT:
-                new (&node.val_unary) UnaryOp();
-                node.ty = ValNode::Type::UNARY_NOT;
-                node.val_unary.inp = new ValNode{};
-                return create_value(*expr.expr_unary.expr, *node.val_unary.inp);
+                new (&node->val_unary) UnaryOp();
+                node->ty = ValNode::Type::UNARY_NOT;
+                node->val_unary.inp = new ValNode{};
+                return create_value(scope, *expr.expr_unary.expr, node->val_unary.inp);
+            case ExprType::UNARY_UNPACK:
+                new (&node->val_unary) UnaryOp();
+                node->ty = ValNode::Type::UNARY_UNPACK;
+                node->val_unary.inp = new ValNode{};
+                return create_value(scope, *expr.expr_unary.expr, node->val_unary.inp);
             case ExprType::BINARY_ADD:
-                new (&node.val_binary) BinaryOp();
-                node.ty = ValNode::Type::BINARY_ADD;
-                node.val_binary.lhs = new ValNode{};
-                node.val_binary.rhs = new ValNode{};
+                new (&node->val_binary) BinaryOp();
+                node->ty = ValNode::Type::BINARY_ADD;
+                node->val_binary.lhs = new ValNode{};
+                node->val_binary.rhs = new ValNode{};
                 return
-                    create_value(*expr.expr_binary.left, *node.val_binary.lhs) ||
-                    create_value(*expr.expr_binary.right, *node.val_binary.rhs);
+                    create_value(scope, *expr.expr_binary.left, node->val_binary.lhs) ||
+                    create_value(scope, *expr.expr_binary.right, node->val_binary.rhs);
             case ExprType::BINARY_SUB:
-                new (&node.val_binary) BinaryOp();
-                node.ty = ValNode::Type::BINARY_SUB;
-                node.val_binary.lhs = new ValNode{};
-                node.val_binary.rhs = new ValNode{};
+                new (&node->val_binary) BinaryOp();
+                node->ty = ValNode::Type::BINARY_SUB;
+                node->val_binary.lhs = new ValNode{};
+                node->val_binary.rhs = new ValNode{};
                 return
-                    create_value(*expr.expr_binary.left, *node.val_binary.lhs) ||
-                    create_value(*expr.expr_binary.right, *node.val_binary.rhs);
+                    create_value(scope, *expr.expr_binary.left, node->val_binary.lhs) ||
+                    create_value(scope, *expr.expr_binary.right, node->val_binary.rhs);
             }
 
             // if all else fails, try codegening the expr and getting a constant value from it
-            node.ty = ValNode::Type::CONST_VAL;
-            return codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, expr, node.val);
+            node->ty = ValNode::Type::CONST_VAL;
+            return codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, expr, node->val);
         }
 
         bool ProcCall::codegen_root_arg(Scope& scope, ValNode& node)
@@ -1672,10 +1692,9 @@ namespace nn
             if (node.val_arg.visited)  // Checking if the nodes was already generated and on the stack
                 return false;
 
-            TypeRef value_type = node.val;
-            if (!value_type)
-                value_type = node.val_arg.default_type;
-            if (!value_type)
+            if (!node.val)
+                node.val = node.val_arg.default_type;
+            if (!node.val)
             {
                 // I never need to bubble up codegen calls since in ProcCall::codegen_root_arg
                 // since its only called on root nodes.  And by definition, root nodes aren't
@@ -1683,13 +1702,6 @@ namespace nn
                 // any root node a value (it can be deduced from the remaining signature)
                 return error::compiler(*node.node_info, "Unable to determine a value for arg % in signature", node.val_arg.name);
             }
-            node.val = type_manager->duplicate(
-                TypeInfo::Category::CONST,
-                [value_type, name{ node.val_arg.name }, &node_info{ *node.node_info }](Scope& scope) {
-                    return
-                        value_type->codegen(scope) ||
-                        scope.add(name, value_type, node_info);
-                }, value_type);
             // At this point, the types should be guarenteed to match.  This is only for deducing args
             return codegen_type(scope, *node.val_arg.type, node.val);
         }
@@ -1859,7 +1871,7 @@ namespace nn
 
         bool ProcCall::codegen_type_dltype(Scope& scope, TypeNode& node, TypeRef& type)
         {
-            // TODO: figure out how to deal with the a bit better
+            // TODO: figure out how to deal with this a bit better
             if (type->ty != dltype)
                 return error::compiler(*node.node_info, "Type conflict found during signature deduction");
             TypeRef fptype = get_fp(*node.node_info, type);
@@ -1869,10 +1881,10 @@ namespace nn
                 return true;
             int unpack_idx = -1;
             for (int i = 0; i < node.type_dl.shape.size(); i++)
-                if (node.type_dl.shape[i].ty == ValNode::Type::UNARY_UNPACK)
+                if (node.type_dl.shape[i]->ty == ValNode::Type::UNARY_UNPACK)
                 {
                     if (unpack_idx != -1)
-                        return error::compiler(*node.type_dl.shape[i].node_info, "Found multiple unpacks in tensor's shape");
+                        return error::compiler(*node.type_dl.shape[i]->node_info, "Found multiple unpacks in tensor's shape");
                     unpack_idx = i;
                 }
             if (unpack_idx == -1)
@@ -1901,7 +1913,7 @@ namespace nn
                     scope.pop()
                     ) return true;
                 // Confirmed that at runtime the shape matches
-                for (int i = 0; i < node.type_dl.shape.size(); i++)
+                for (size_t i = 0; i < node.type_dl.shape.size(); i++)
                 {
                     size_t addr;
                     if (bc->add_obj_int(addr, i))
@@ -1909,14 +1921,14 @@ namespace nn
                     TypeRef elem_ty = type_manager->create_int(
                         TypeInfo::Category::CONST,
                         [node_info{ node.node_info }, &type, addr, int_addr, shape_type](Scope& scope) {
-                            return
-                                shape_type->codegen(scope) ||
-                                body->add_instruction(instruction::New(*node_info, addr)) ||
-                                body->add_instruction(instruction::New(*node_info, int_addr)) ||
-                                body->add_instruction(instruction::Arr(*node_info)) ||
-                                body->add_instruction(instruction::Idx(*node_info));
-                        });
-                    if (!elem_ty || codegen_value(scope, node.type_dl.shape[i], elem_ty))
+                        return
+                            shape_type->codegen(scope) ||
+                            body->add_instruction(instruction::New(*node_info, addr)) ||
+                            body->add_instruction(instruction::New(*node_info, int_addr)) ||
+                            body->add_instruction(instruction::Arr(*node_info)) ||
+                            body->add_instruction(instruction::Idx(*node_info));
+                    });
+                    if (!elem_ty || codegen_value(scope, *node.type_dl.shape[i], elem_ty))
                         return true;
                 }
                 return false;
@@ -1924,7 +1936,136 @@ namespace nn
 
             // There was an unpack, so theres just a minimum size constraint placed on the tensor's shape,
             // and the nodes peel elements off both the front and back of the shape
-            return error::compiler(*node.node_info, "Internal error: not implemented");
+
+            // Initializing static objects for later use
+            std::string end_lbl = label_prefix(*node.node_info) + "_shape_end";
+            size_t sz_addr, int_addr, err_addr;
+            if (bc->add_obj_int(sz_addr, node.type_dl.shape.size() - 1) ||
+                bc->add_type_int(int_addr) ||
+                bc->add_obj_str(err_addr, "Tensor rank mismatch found during signature deduction")
+                ) return true;
+            // Retrieving the shape of the given dltype to compare and check against
+            TypeRef shape_type = get_shape(*node.node_info, type);
+            if (!shape_type)
+                return true;
+            // Check to make sure the rank is large enough
+            if (shape_type->codegen(scope) ||
+                body->add_instruction(instruction::Dup(*node.node_info, 0)) ||
+                body->add_instruction(instruction::Len(*node.node_info)) ||
+                body->add_instruction(instruction::New(*node.node_info, sz_addr)) ||
+                body->add_instruction(instruction::New(*node.node_info, int_addr)) ||
+                // If the rank of the tensor is less than the number of explicit parameters
+                // It's impossible to find a mapping, so generate a runtime error instead
+                body->add_instruction(instruction::Lt(*node.node_info)) ||
+                body->add_instruction(instruction::Brf(*node.node_info, end_lbl)) ||
+                body->add_instruction(instruction::New(*node.node_info, err_addr)) ||
+                body->add_instruction(instruction::Err(*node.node_info)) ||
+                body->add_label(*node.node_info, end_lbl) ||
+                scope.pop()
+                ) return true;
+
+            // Building the explicit parameters prior to the packed argument
+            for (size_t i = 0; i < unpack_idx; i++)
+            {
+                size_t idx_addr;
+                if (bc->add_obj_int(idx_addr, i))
+                    return true;
+                TypeRef elem_ty = type_manager->create_int(
+                    TypeInfo::Category::CONST,
+                    [node_info{ node.node_info }, shape_type, int_addr, idx_addr](Scope& scope) -> bool {
+                    return
+                        shape_type->codegen(scope) ||
+                        body->add_instruction(instruction::New(*node_info, idx_addr)) ||
+                        body->add_instruction(instruction::New(*node_info, int_addr)) ||
+                        body->add_instruction(instruction::Arr(*node_info)) ||
+                        body->add_instruction(instruction::Idx(*node_info));
+                });
+                if (!elem_ty || codegen_value(scope, *node.type_dl.shape[i], elem_ty))
+                    return true;
+            }
+            // Building the explicit parameters after the packed argument
+            for (size_t i = unpack_idx + 1; i < node.type_dl.shape.size(); i++)
+            {
+                size_t idx_addr;
+                if (bc->add_obj_int(idx_addr, node.type_dl.shape.size() - i))
+                    return true;
+                TypeRef elem_ty = type_manager->create_int(
+                    TypeInfo::Category::CONST,
+                    [node_info{ node.node_info }, shape_type, int_addr, idx_addr](Scope& scope) -> bool {
+                    return
+                        shape_type->codegen(scope) ||
+                        body->add_instruction(instruction::New(*node_info, idx_addr)) ||
+                        body->add_instruction(instruction::Dup(*node_info, 1)) ||
+                        body->add_instruction(instruction::Len(*node_info)) ||
+                        body->add_instruction(instruction::New(*node_info, int_addr)) ||
+                        body->add_instruction(instruction::Sub(*node_info)) ||
+                        body->add_instruction(instruction::New(*node_info, int_addr)) ||
+                        body->add_instruction(instruction::Arr(*node_info)) ||
+                        body->add_instruction(instruction::Idx(*node_info));
+                });
+                if (!elem_ty || codegen_value(scope, *node.type_dl.shape[i], elem_ty))
+                    return true;
+            }
+
+            // Building the packed argument
+            size_t start_addr, end_addr, one_addr;
+            if (bc->add_obj_int(start_addr, unpack_idx) ||
+                bc->add_obj_int(end_addr, node.type_dl.shape.size() - unpack_idx) ||
+                bc->add_obj_int(one_addr, 1)
+                ) return true;
+            TypeRef tmp = type_manager->create_int(TypeInfo::Category::VIRTUAL, nullptr);
+            if (!tmp)
+                return true;
+            std::string raw_start_label = label_prefix(*node.node_info) + "_packed_loop_start_";
+            std::string raw_end_label = label_prefix(*node.node_info) + "_packed_loop_end_";
+            TypeRef elem_ty = type_manager->create_array(
+                TypeInfo::Category::CONST, [
+                    node_info{ node.node_info }, raw_start_label, raw_end_label, shape_type,
+                    int_addr, start_addr, end_addr, one_addr
+                ](Scope& scope) -> bool {
+                    static size_t i = 0;
+                    std::string start_label = raw_start_label + std::to_string(i);
+                    std::string end_label = raw_end_label + std::to_string(i);
+                    i++;
+                    return
+                        shape_type->codegen(scope) ||
+                        body->add_instruction(instruction::Dup(*node_info, 0)) ||
+                        body->add_instruction(instruction::Len(*node_info)) ||
+                        body->add_instruction(instruction::New(*node_info, end_addr)) ||
+                        body->add_instruction(instruction::New(*node_info, int_addr)) ||
+                        body->add_instruction(instruction::Sub(*node_info)) ||
+                        body->add_instruction(instruction::New(*node_info, start_addr)) ||
+                        body->add_instruction(instruction::Agg(*node_info, 0)) ||
+                        // stack is: shape, n, i, result
+                        // if i == n: break
+                        body->add_label(*node_info, start_label) ||
+                        body->add_instruction(instruction::Dup(*node_info, 2)) ||
+                        body->add_instruction(instruction::Dup(*node_info, 2)) ||
+                        body->add_instruction(instruction::Eq(*node_info)) ||
+                        body->add_instruction(instruction::Brt(*node_info, end_label)) ||
+                        // result += [shape[i]]
+                        body->add_instruction(instruction::Dup(*node_info, 0)) ||
+                        body->add_instruction(instruction::Dup(*node_info, 4)) ||
+                        body->add_instruction(instruction::Dup(*node_info, 3)) ||
+                        body->add_instruction(instruction::New(*node_info, int_addr)) ||
+                        body->add_instruction(instruction::Arr(*node_info)) ||
+                        body->add_instruction(instruction::Idx(*node_info)) ||
+                        body->add_instruction(instruction::Agg(*node_info, 1)) ||
+                        body->add_instruction(instruction::New(*node_info, int_addr)) ||
+                        body->add_instruction(instruction::Arr(*node_info)) ||
+                        body->add_instruction(instruction::IAdd(*node_info)) ||
+                        // i++
+                        body->add_instruction(instruction::Dup(*node_info, 1)) ||
+                        body->add_instruction(instruction::New(*node_info, one_addr)) ||
+                        body->add_instruction(instruction::New(*node_info, int_addr)) ||
+                        body->add_instruction(instruction::IAdd(*node_info)) ||
+                        body->add_instruction(instruction::Jmp(*node_info, start_label)) ||
+                        body->add_label(*node_info, end_label) ||
+                        body->add_instruction(instruction::Pop(*node_info, 1)) ||
+                        body->add_instruction(instruction::Pop(*node_info, 1)) ||
+                        body->add_instruction(instruction::Pop(*node_info, 1));
+                }, tmp);
+            return !elem_ty || codegen_value(scope, *node.type_dl.shape[unpack_idx], elem_ty);
         }
 
         bool ProcCall::codegen_type(Scope& scope, TypeNode& node, TypeRef& type)
@@ -1956,6 +2097,34 @@ namespace nn
             default:
                 return error::compiler(*node.node_info, "Internal error: enum out of range");
             }
+        }
+
+        ProcCall::ValNode* ProcCall::next_val()
+        {
+            if (val_buflen == 1024 * sizeof(ValNode))
+            {
+                error::general("Exceeded the maximum number of value node allowed in the signature: 1024");
+                return nullptr;
+            }
+
+            ValNode* ret = new (val_buf + val_buflen) ValNode();
+            ret->ty = ValNode::Type::INVALID;
+            val_buflen += sizeof(ValNode);
+            return ret;
+        }
+
+        ProcCall::TypeNode* ProcCall::next_type()
+        {
+            if (type_buflen == 1024 * sizeof(TypeNode))
+            {
+                error::general("Exceeded the maximum number of type node allowed in the signature: 1024");
+                return nullptr;
+            }
+
+            TypeNode* ret = new (type_buf + type_buflen) TypeNode();
+            ret->ty = TypeNode::Type::INVALID;
+            type_buflen += sizeof(TypeNode);
+            return ret;
         }
 
         TensorCall::TensorCall(const std::vector<std::string>& sig_ns) :
@@ -2042,10 +2211,14 @@ namespace nn
                 if (carg_nodes.contains(arg_decl.var_name))
                     return error::compiler(arg_decl.node_info, "Naming conflict for argument '%' in cargs", arg_decl.var_name);
                 // Constructing the ValNode for the argument
-                ValNode node;
-                if (create_arg(init_scope, arg_decl, node))
-                    return true;
-                carg_nodes[arg_decl.var_name] = std::move(node);
+                ValNode* node;
+                TypeRef type;
+                if (create_arg(init_scope, arg_decl, node) ||
+                    arg_type(type, init_scope, arg_decl) ||
+                    init_scope.add(arg_decl.var_name, type, arg_decl.node_info) ||
+                    init_scope.push()
+                    ) return true;
+                carg_nodes[arg_decl.var_name] = node;
                 carg_stack.push_back(arg_decl.var_name);
             }
 
@@ -2062,7 +2235,7 @@ namespace nn
 
             // Putting the carg exprs into the nodes
             for (const auto& [name, expr] : cargs)
-                carg_nodes[name].val = expr;
+                carg_nodes[name]->val = expr;
 
             return false;
         }
@@ -2071,7 +2244,7 @@ namespace nn
         {
             // codegening all the nodes
             for (auto& [name, node] : carg_nodes)
-                if (node.is_root && codegen_root_arg(scope, node))
+                if (node->is_root && codegen_root_arg(scope, *node))
                     return true;
 
             // Creating the init object
@@ -2087,21 +2260,21 @@ namespace nn
             {
                 // Determining where to get the value of the arg from
                 TypeRef val;
-                if (node.val)
-                    val = node.val;
-                else if (node.val_arg.default_type)
-                    val = node.val_arg.default_type;
+                if (node->val)
+                    val = node->val;
+                else if (node->val_arg.default_type)
+                    val = node->val_arg.default_type;
                 else
-                    return error::compiler(*node.node_info, "Unable to deduce a value for carg '%'", name);
+                    return error::compiler(*node->node_info, "Unable to deduce a value for carg '%'", name);
                 
                 TypeRef type;
                 size_t name_addr;
-                if (val->to_obj(*node.node_info, type) ||
+                if (val->to_obj(*node->node_info, type) ||
                     bc->add_obj_str(name_addr, name) ||
                     val->codegen(scope) ||
                     type->codegen(scope) ||
-                    body->add_instruction(instruction::New(*node.node_info, name_addr)) ||
-                    body->add_instruction(instruction::InCfg(*node.node_info))
+                    body->add_instruction(instruction::New(*node->node_info, name_addr)) ||
+                    body->add_instruction(instruction::InCfg(*node->node_info))
                     ) return true;
             }
             
@@ -2136,20 +2309,24 @@ namespace nn
                 if (carg_nodes.contains(arg_decl.var_name))
                     return error::compiler(arg_decl.node_info, "Naming conflict for argument '%' in cargs", arg_decl.var_name);
 
-                ValNode node;
-                if (create_arg(init_scope, arg_decl, node))
-                    return true;
+                ValNode* node;
+                TypeRef type;
+                if (create_arg(init_scope, arg_decl, node) ||
+                    arg_type(type, init_scope, arg_decl) ||
+                    init_scope.add(arg_decl.var_name, type, arg_decl.node_info) ||
+                    init_scope.push()
+                    ) return true;
 
                 if (arg_decl.default_expr)
                 {
                     if (arg_decl.is_packed)
                         return error::compiler(arg_decl.node_info, "Packed arguments cannot have default values");
-                    if (codegen_expr_single_ret<TypeInfo::NonVirtual>(init_scope, *arg_decl.default_expr, node.val_arg.default_type))
+                    if (codegen_expr_single_ret<TypeInfo::NonVirtual>(init_scope, *arg_decl.default_expr, node->val_arg.default_type))
                         return true;
                 }
-                node.val_arg.name = arg_decl.var_name;
-                node.node_info = &arg_decl.node_info;
-                carg_nodes[arg_decl.var_name] = std::move(node);
+                node->val_arg.name = arg_decl.var_name;
+                node->node_info = &arg_decl.node_info;
+                carg_nodes[arg_decl.var_name] = node;
                 carg_stack.push_back(arg_decl.var_name);
             }
 
@@ -2162,16 +2339,16 @@ namespace nn
                 if (varg_nodes.contains(arg_decl.var_name))
                     return error::compiler(arg_decl.node_info, "Naming conflict for argument '%' in vargs", arg_decl.var_name);
 
-                ValNode node;
+                ValNode* node;
                 if (create_arg(init_scope, arg_decl, node))
                     return true;
                 if (arg_decl.default_expr)
                     return error::compiler(arg_decl.default_expr->node_info, "Default arguments are not allowed in vargs");
-                if (node.val_arg.type->ty != TypeNode::Type::DLTYPE)
-                    return error::compiler(*node.val_arg.type->node_info, "Only edge types are allowed as vargs in an intr");
-                node.val_arg.name = arg_decl.var_name;
-                node.node_info = &arg_decl.node_info;
-                varg_nodes[arg_decl.var_name] = std::move(node);
+                if (node->val_arg.type->ty != TypeNode::Type::DLTYPE)
+                    return error::compiler(*node->val_arg.type->node_info, "Only edge types are allowed as vargs in an intr");
+                node->val_arg.name = arg_decl.var_name;
+                node->node_info = &arg_decl.node_info;
+                varg_nodes[arg_decl.var_name] = node;
                 varg_stack.push_back(arg_decl.var_name);
             }
 
@@ -2202,11 +2379,11 @@ namespace nn
 
             // Putting the carg exprs into the nodes
             for (const auto& [name, expr] : cargs)
-                carg_nodes[name].val = expr;
+                carg_nodes[name]->val = expr;
 
             // Putting the varg exprs into the nodes
             for (size_t i = 0; i < vargs.size(); i++)
-                varg_nodes[varg_stack[i]].val = vargs[i];
+                varg_nodes[varg_stack[i]]->val = vargs[i];
             return false;
         }
 
@@ -2214,16 +2391,16 @@ namespace nn
         {
             // codegening all the nodes
             for (auto& [name, node] : carg_nodes)
-                if (node.is_root && codegen_root_arg(scope, node))
+                if (node->is_root && codegen_root_arg(scope, *node))
                     return true;
             for (auto& [name, node] : varg_nodes)
-                if (node.is_root && codegen_root_arg(scope, node))
+                if (node->is_root && codegen_root_arg(scope, *node))
                     return true;
 
             // codegening each of the cargs onto the stack
             for (const std::string& name : carg_stack)
             {
-                const ValNode& node = carg_nodes.at(name);
+                const ValNode& node = *carg_nodes.at(name);
                 TypeRef val;
                 if (node.val)
                     val = node.val;
@@ -2239,7 +2416,7 @@ namespace nn
             // codegening each of the vargs onto the stack
             for (const std::string& name : varg_stack)
             {
-                const ValNode& node = carg_nodes.at(name);
+                const ValNode& node = *varg_nodes.at(name);
                 if (!node.val)
                     return error::compiler(*node.node_info, "Missing required varg '%'", name);
 
@@ -2268,7 +2445,7 @@ namespace nn
             for (const std::string& ret_name : ret_stack)
             {
                 std::string var_name = scope.generate_var_name();
-                TypeRef ret = type_manager->create_tensor(
+                TypeRef ret = type_manager->create_edge(
                     TypeInfo::Category::DEFAULT,
                     [this, var_name](Scope& scope) -> bool {
                         Scope::StackVar var;
@@ -2299,20 +2476,24 @@ namespace nn
                 if (carg_nodes.contains(arg_decl.var_name))
                     return error::compiler(arg_decl.node_info, "Naming conflict for argument '%' in cargs", arg_decl.var_name);
 
-                ValNode node;
-                if (create_arg(init_scope, arg_decl, node))
-                    return true;
+                ValNode* node;
+                TypeRef type;
+                if (create_arg(init_scope, arg_decl, node) ||
+                    arg_type(type, init_scope, arg_decl) ||
+                    init_scope.add(arg_decl.var_name, type, arg_decl.node_info) ||
+                    init_scope.push()
+                    ) return true;
 
                 if (arg_decl.default_expr)
                 {
                     if (arg_decl.is_packed)
                         return error::compiler(arg_decl.node_info, "Packed arguments cannot have default values");
-                    if (codegen_expr_single_ret<TypeInfo::NonVirtual>(init_scope, *arg_decl.default_expr, node.val_arg.default_type))
+                    if (codegen_expr_single_ret<TypeInfo::NonVirtual>(init_scope, *arg_decl.default_expr, node->val_arg.default_type))
                         return true;
                 }
-                node.val_arg.name = arg_decl.var_name;
-                node.node_info = &arg_decl.node_info;
-                carg_nodes[arg_decl.var_name] = std::move(node);
+                node->val_arg.name = arg_decl.var_name;
+                node->node_info = &arg_decl.node_info;
+                carg_nodes[arg_decl.var_name] = node;
                 carg_stack.push_back(arg_decl.var_name);
             }
 
@@ -2325,16 +2506,16 @@ namespace nn
                 if (varg_nodes.contains(arg_decl.var_name))
                     return error::compiler(arg_decl.node_info, "Naming conflict for argument '%' in vargs", arg_decl.var_name);
 
-                ValNode node;
+                ValNode* node;
                 if (create_arg(init_scope, arg_decl, node))
                     return true;
                 if (arg_decl.default_expr)
                     return error::compiler(arg_decl.default_expr->node_info, "Default arguments are not allowed in vargs");
-                if (node.val_arg.type->ty != TypeNode::Type::DLTYPE)
-                    return error::compiler(*node.val_arg.type->node_info, "Only tensor types are allowed as vargs in a def");
-                node.val_arg.name = arg_decl.var_name;
-                node.node_info = &arg_decl.node_info;
-                varg_nodes[arg_decl.var_name] = std::move(node);
+                if (node->val_arg.type->ty != TypeNode::Type::DLTYPE)
+                    return error::compiler(*node->val_arg.type->node_info, "Only tensor types are allowed as vargs in a def");
+                node->val_arg.name = arg_decl.var_name;
+                node->node_info = &arg_decl.node_info;
+                varg_nodes[arg_decl.var_name] = node;
                 varg_stack.push_back(arg_decl.var_name);
             }
 
@@ -2365,11 +2546,11 @@ namespace nn
 
             // Putting the carg exprs into the nodes
             for (const auto& [name, expr] : cargs)
-                carg_nodes[name].val = expr;
+                carg_nodes[name]->val = expr;
 
             // Putting the varg exprs into the nodes
             for (size_t i = 0; i < vargs.size(); i++)
-                varg_nodes[varg_stack[i]].val = vargs[i];
+                varg_nodes[varg_stack[i]]->val = vargs[i];
             return false;
         }
 
@@ -2377,16 +2558,16 @@ namespace nn
         {
             // codegening all the nodes
             for (auto& [name, node] : carg_nodes)
-                if (node.is_root && codegen_root_arg(scope, node))
+                if (node->is_root && codegen_root_arg(scope, *node))
                     return true;
             for (auto& [name, node] : varg_nodes)
-                if (node.is_root && codegen_root_arg(scope, node))
+                if (node->is_root && codegen_root_arg(scope, *node))
                     return true;
             
             // codegening each of the cargs onto the stack
             for (const std::string& name : carg_stack)
             {
-                const ValNode& node = carg_nodes.at(name);
+                const ValNode& node = *carg_nodes.at(name);
                 TypeRef val;
                 if (node.val)
                     val = node.val;
@@ -2402,7 +2583,7 @@ namespace nn
             // codegening each of the vargs onto the stack
             for (const std::string& name : varg_stack)
             {
-                const ValNode& node = carg_nodes.at(name);
+                const ValNode& node = *varg_nodes.at(name);
                 if (!node.val)
                     return error::compiler(*node.node_info, "Missing required varg '%'", name);
                 
@@ -2462,7 +2643,7 @@ namespace nn
                 if (carg_nodes.contains(arg_decl.var_name))
                     return error::compiler(arg_decl.node_info, "Naming conflict for argument '%' in cargs", arg_decl.var_name);
 
-                ValNode node;
+                ValNode* node;
                 if (create_arg(init_scope, arg_decl, node))
                     return true;
 
@@ -2470,12 +2651,12 @@ namespace nn
                 {
                     if (arg_decl.is_packed)
                         return error::compiler(arg_decl.node_info, "Packed arguments cannot have default values");
-                    if (codegen_expr_single_ret<TypeInfo::NonVirtual>(init_scope, *arg_decl.default_expr, node.val_arg.default_type))
+                    if (codegen_expr_single_ret<TypeInfo::NonVirtual>(init_scope, *arg_decl.default_expr, node->val_arg.default_type))
                         return true;
                 }
-                node.val_arg.name = arg_decl.var_name;
-                node.node_info = &arg_decl.node_info;
-                carg_nodes[arg_decl.var_name] = std::move(node);
+                node->val_arg.name = arg_decl.var_name;
+                node->node_info = &arg_decl.node_info;
+                carg_nodes[arg_decl.var_name] = node;
                 carg_stack.push_back(arg_decl.var_name);
             }
 
@@ -2488,14 +2669,14 @@ namespace nn
                 if (varg_nodes.contains(arg_decl.var_name))
                     return error::compiler(arg_decl.node_info, "Naming conflict for argument '%' in vargs", arg_decl.var_name);
 
-                ValNode node;
+                ValNode* node;
                 if (create_arg(init_scope, arg_decl, node))
                     return true;
                 if (arg_decl.default_expr)
                     return error::compiler(arg_decl.default_expr->node_info, "Default arguments are not allowed in vargs");
-                node.val_arg.name = arg_decl.var_name;
-                node.node_info = &arg_decl.node_info;
-                varg_nodes[arg_decl.var_name] = std::move(node);
+                node->val_arg.name = arg_decl.var_name;
+                node->node_info = &arg_decl.node_info;
+                varg_nodes[arg_decl.var_name] = node;
                 varg_stack.push_back(arg_decl.var_name);
             }
 
@@ -2543,11 +2724,11 @@ namespace nn
 
             // Putting the carg exprs into the nodes
             for (const auto& [name, expr] : cargs)
-                carg_nodes[name].val = expr;
+                carg_nodes[name]->val = expr;
 
             // Putting the varg exprs into the nodes
             for (size_t i = 0; i < vargs.size(); i++)
-                varg_nodes[varg_stack[i]].val = vargs[i];
+                varg_nodes[varg_stack[i]]->val = vargs[i];
             return false;
         }
 
@@ -2555,16 +2736,16 @@ namespace nn
         {
             // codegening all the nodes
             for (auto& [name, node] : carg_nodes)
-                if (node.is_root && codegen_root_arg(scope, node))
+                if (node->is_root && codegen_root_arg(scope, *node))
                     return true;
             for (auto& [name, node] : varg_nodes)
-                if (node.is_root && codegen_root_arg(scope, node))
+                if (node->is_root && codegen_root_arg(scope, *node))
                     return true;
 
             // codegening each of the cargs onto the stack
             for (const std::string& name : carg_stack)
             {
-                const ValNode& node = carg_nodes.at(name);
+                const ValNode& node = *carg_nodes.at(name);
                 TypeRef val;
                 if (node.val)
                     val = node.val;
@@ -2580,7 +2761,7 @@ namespace nn
             // codegening each of the vargs onto the stack
             for (const std::string& name : varg_stack)
             {
-                const ValNode& node = carg_nodes.at(name);
+                const ValNode& node = *varg_nodes.at(name);
                 if (!node.val)
                     return error::compiler(*node.node_info, "Missing required varg '%'", name);
 
@@ -2705,25 +2886,32 @@ namespace nn
             TypeRef explicit_type;
             if (arg.type_expr)
             {
+                CodegenCallback codegen = [&arg](Scope& scope) -> bool {
+                    Scope::StackVar var;
+                    return
+                        scope.at(arg.var_name, var) ||
+                        body->add_instruction(instruction::Dup(arg.node_info, var.ptr)) ||
+                        scope.push();
+                };
                 if (codegen_expr_single_ret<TypeInfo::AllowAll>(scope, *arg.type_expr, explicit_type))
                     return true;
                 if (explicit_type->ty == TypeInfo::Type::DLTYPE)
                 {
                     if (body_type == BodyType::INTR)
-                        explicit_type = type_manager->create_edge(TypeInfo::Category::CONST, nullptr);
+                        explicit_type = type_manager->create_edge(TypeInfo::Category::DEFAULT, codegen);
                     else
-                        explicit_type = type_manager->create_tensor(TypeInfo::Category::CONST, nullptr);
+                        explicit_type = type_manager->create_tensor(TypeInfo::Category::CONST, codegen);
                     if (!explicit_type)
                         return true;
                 }
                 else if (explicit_type->ty == TypeInfo::Type::TYPE)
-                    explicit_type = type_manager->duplicate(TypeInfo::Category::CONST, nullptr, explicit_type->type_type.base);
+                    explicit_type = type_manager->duplicate(TypeInfo::Category::CONST, codegen, explicit_type->type_type.base);
                 else
                     return error::compiler(arg.type_expr->node_info, "Type expression for parameter % did not resolve to a type.", arg.var_name);
                 
                 if (arg.is_packed)
                 {
-                    explicit_type = type_manager->create_array(TypeInfo::Category::CONST, nullptr, explicit_type);
+                    explicit_type = type_manager->create_array(TypeInfo::Category::CONST, codegen, explicit_type);
                     if (!explicit_type)
                         return true;
                 }
@@ -2846,9 +3034,13 @@ namespace nn
                             cargs[sig_it->var_name] = *rets_it;
                             rets_it++;
                             if (rets_it == rets.end())
+                            {
                                 // Finished eating all the rets from the passed value, move onto the next one.
                                 // continue might not be right here...
+                                // Future me responding: nope it wasn't, I needed to also increment sig_it.
+                                sig_it++;
                                 continue;
+                            }
                         }
                     }
                     else
@@ -3003,7 +3195,7 @@ namespace nn
                     }
                 }
             }
-            return true;
+            return false;
         }
 
         bool match_def_sig(Scope& scope, Scope& sig_scope, const AstBlock& def,
@@ -3638,6 +3830,29 @@ namespace nn
                 {
                     if (lhs_type->ty != TypeInfo::Type::TENSOR)
                         return error::compiler(expr.node_info, "Tensor types can only be assigned to other tensors");
+                    // Independantly merge the forward edge and backward edge
+                    return
+                        lhs_type->codegen(scope) ||
+                        rhs_type->codegen(scope) ||
+                        body->add_instruction(instruction::Dup(expr.node_info, 1)) ||
+                        body->add_instruction(instruction::GFwd(expr.node_info)) ||
+                        body->add_instruction(instruction::Dup(expr.node_info, 1)) ||
+                        body->add_instruction(instruction::GFwd(expr.node_info)) ||
+                        body->add_instruction(instruction::Mrg(expr.node_info)) ||
+                        body->add_instruction(instruction::Dup(expr.node_info, 1)) ||
+                        body->add_instruction(instruction::GBwd(expr.node_info)) ||
+                        body->add_instruction(instruction::Dup(expr.node_info, 1)) ||
+                        body->add_instruction(instruction::GBwd(expr.node_info)) ||
+                        body->add_instruction(instruction::Mrg(expr.node_info)) ||
+                        body->add_instruction(instruction::Pop(expr.node_info, 0)) ||
+                        body->add_instruction(instruction::Pop(expr.node_info, 0)) ||
+                        scope.pop(2);
+                }
+
+                if (rhs_type->ty == TypeInfo::Type::EDGE)
+                {
+                    if (lhs_type->ty != TypeInfo::Type::EDGE)
+                        return error::compiler(expr.node_info, "Edge types can only be assigned to other edges");
                     return
                         lhs_type->codegen(scope) ||
                         rhs_type->codegen(scope) ||
@@ -3974,7 +4189,6 @@ namespace nn
             {
                 if (decl_type->ty == TypeInfo::Type::DLTYPE)
                 {
-                    // TODO: figure out the context and codegen based on that
                     TypeRef ret;
                     switch (body_type)
                     {
@@ -4157,7 +4371,11 @@ namespace nn
                 if (init_matches.size() == 1)
                 {
                     // Perfect match, return it
-                    return error::compiler(expr.node_info, "Interal error: not implemented");
+                    InitCall call{ callee->type_lookup.lookup.ns };
+                    return
+                        call.init(*init_matches[0].first) ||
+                        call.apply_args(expr.node_info, init_matches[0].second) ||
+                        call.codegen(scope, rets);
                 }
                 // Non of the inits matched the cargs, so see if a struct matches
                 std::vector<std::pair<const AstStruct*, std::map<std::string, TypeRef>>> struct_matches;
@@ -4263,8 +4481,8 @@ namespace nn
                                 // TypeInfo::Type::INT will get handled automatically due to the setup
                                 if (args[k]->ty == TypeInfo::Type::UNPACK)
                                 {
-                                    std::string loop_label;
-                                    std::string end_label;
+                                    std::string loop_label = label_prefix(expr.node_info) + "_loop" + std::to_string(n) + "_" + std::to_string(k);
+                                    std::string end_label = label_prefix(expr.node_info) + "_end" + std::to_string(n) + "_" + std::to_string(k);
 
                                     // Break condition for the loop over args[k]
                                     if (body->add_instruction(instruction::New(expr.node_info, int0)) ||             // new int 0  # i
@@ -4384,7 +4602,7 @@ namespace nn
                                 // Break condition for the loop over args[k]
                                 if (body->add_instruction(instruction::New(expr.node_info, zero_addr)) ||            // new int 0  # i
                                     body->add_label(expr.node_info, loop_label) ||                                   // :loop
-                                    body->add_instruction(instruction::Dup(expr.node_info, args.size() - k - 1)) ||  // dup <args[k]>
+                                    body->add_instruction(instruction::Dup(expr.node_info, args.size() - k + 1)) ||  // dup <args[k]>
                                     body->add_instruction(instruction::New(expr.node_info, addr)) ||                 // new type int
                                     body->add_instruction(instruction::Arr(expr.node_info)) ||                       // arr
                                     body->add_instruction(instruction::Len(expr.node_info)) ||                       // len
@@ -4395,7 +4613,7 @@ namespace nn
                                     ) return true;
 
                                 // Placing the next element from args[k] onto the stack
-                                if (body->add_instruction(instruction::Dup(expr.node_info, args.size() - k - 1)) ||  // dup args[k]
+                                if (body->add_instruction(instruction::Dup(expr.node_info, args.size() - k + 1)) ||  // dup args[k]
                                     body->add_instruction(instruction::Dup(expr.node_info, 1)) ||                    // dup i
                                     body->add_instruction(instruction::New(expr.node_info, addr)) ||                 // new type int
                                     body->add_instruction(instruction::Arr(expr.node_info)) ||                       // arr
@@ -5006,7 +5224,28 @@ namespace nn
 
         bool codegen_line_extern(Scope& scope, const AstLine& line)
         {
-            return error::compiler(line.node_info, "Internal error: not implemented");
+            Scope::StackVar var, base;
+            size_t name_addr;
+            TypeRef init;
+            if (scope.at(line.line_extern.var_name, var) ||
+                bc->add_obj_str(name_addr, line.line_extern.var_name) ||
+                codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, line.line_extern.init_expr, init)
+                ) return true;
+            if (init->ty != TypeInfo::Type::INIT)
+                return error::compiler(line.line_extern.init_expr.node_info, "Expected an init, recieved %", init->to_string());
+            std::string base_name;
+            if (body_type == BodyType::INTR)
+                base_name = "~block";
+            else
+                base_name = "~node";
+            return
+                scope.at(base_name, base) ||
+                body->add_instruction(instruction::Dup(line.node_info, base.ptr)) ||
+                scope.push() ||
+                init->codegen(scope) ||
+                body->add_instruction(instruction::New(line.node_info, name_addr)) ||
+                body->add_instruction(instruction::BkCfg(line.node_info)) ||
+                scope.pop(2);
         }
 
         bool codegen_line_raise(Scope& scope, const AstLine& line)
@@ -5195,8 +5434,10 @@ namespace nn
             // actually codegening and getting rid of the immediate rets, not local variables
             for (TypeRef type : rets)
             {
-                if (type->codegen(scope) || body->add_instruction(instruction::Pop(line.node_info, 0)))
-                    return true;
+                if (type->codegen(scope) ||
+                    body->add_instruction(instruction::Pop(line.node_info, 0)) ||
+                    scope.pop()
+                    ) return true;
             }
             return false;
         }
@@ -5245,8 +5486,8 @@ namespace nn
             // TODO: add a check into the parser for this
             assert(lines.size() > 0);
 
-            size_t i = 0;
-            while (i < lines.size())
+            bool ret = false;
+            for (size_t i = 0; i < lines.size(); i++)
             {
                 if (lines[i].ty == LineType::IF)
                 {
@@ -5264,11 +5505,11 @@ namespace nn
                         if (codegen_lines(scope, lines[i].line_block.body))
                             return true;
                     }
-                    body->add_label(lines[i].node_info, end_label);
-                    i++;
+                    if (body->add_label(lines[i].node_info, end_label))
+                        return true;
                 }
                 else
-                    codegen_line(scope, lines[i++]);
+                    ret = ret || codegen_line(scope, lines[i]);
             }
 
             // During proper code execution, this point should be unreachable.
@@ -5279,6 +5520,7 @@ namespace nn
             // the raise will never get run and will not have any consequences (besides moving labels around in the bytecode)
             size_t addr;
             return
+                ret ||
                 bc->add_obj_str(addr, "Reached the end of the procedure without returning") ||
                 body->add_instruction(instruction::New(lines[lines.size() - 1].node_info, addr)) ||
                 body->add_instruction(instruction::Err(lines[lines.size() - 1].node_info));
@@ -5300,8 +5542,10 @@ namespace nn
             for (const auto& arg : ast_fn.signature.cargs)
             {
                 TypeRef type;
-                if (arg_type(type, scope, arg))
-                    return true;
+                if (arg_type(type, scope, arg) ||
+                    scope.add(arg.var_name, type, arg.node_info) ||
+                    scope.push()
+                    ) return true;
                 fn_name << type->encode() << "_";
             }
             fn_name << ast_fn.signature.vargs.size() << "_";
@@ -5354,8 +5598,10 @@ namespace nn
             for (const auto& arg : ast_intr.signature.cargs)
             {
                 TypeRef type;
-                if (arg_type(type, scope, arg))
-                    return true;
+                if (arg_type(type, scope, arg) ||
+                    scope.add(arg.var_name, type, arg.node_info) ||
+                    scope.push()
+                    ) return true;
                 intr_name << type->encode() << "_";
             }
             intr_name << ast_intr.signature.vargs.size() << "_" << ast_intr.signature.name;
@@ -5457,7 +5703,7 @@ namespace nn
                 if (arg_type(type, scope, arg))
                     return true;
                 if (type->ty != TypeInfo::Type::TENSOR)
-                    return error::compiler(arg.node_info, "def arguments must be tensors");
+                    return error::compiler(arg.node_info, "def vargs must be tensors");
                 if (scope.add(arg.var_name, type, arg.node_info) ||
                     scope.push()
                     ) return true;
@@ -5496,9 +5742,7 @@ namespace nn
                 size_t addr;
                 TypeRef ty;
                 if (body->add_instruction(instruction::Dup(arg.node_info, var.ptr)) ||
-                    var.type->to_obj(arg.node_info, ty))
-                    return true;
-                if (
+                    var.type->to_obj(arg.node_info, ty) ||
                     ty->codegen(scope) ||
                     bc->add_obj_str(addr, arg.var_name) ||
                     body->add_instruction(instruction::New(arg.node_info, addr)) ||
@@ -5550,7 +5794,7 @@ namespace nn
                 // TODO: provide a better error message
                 return error::compiler(ast_def.node_info, "def block conflict found");
             return
-                body->add_instruction(instruction::Pop(ast_def.node_info, 0)) ||  // popping the block off for the type
+                body->add_instruction(instruction::Pop(ast_def.node_info, 0)) ||  // popping the block reference off
                 body->add_instruction(instruction::Ret(ast_def.node_info)) ||
                 bc->add_block(def_name, *body);
         }
@@ -5558,23 +5802,163 @@ namespace nn
         bool codegen_intr(const std::string& name, const AstBlock& ast_intr, const std::vector<std::string>& ns)
         {
             body_type = BodyType::INTR;
+            ByteCodeBody intr_body{ ast_intr.node_info };
+            TypeManager intr_type_manager{};
+            body = &intr_body;
+            type_manager = &intr_type_manager;
             cg_ns = ns;
-            return error::compiler(ast_intr.node_info, "Not implemented");
+
+            Scope scope{ nullptr };
+            std::string intr_name;
+            if (proc_name_intr(intr_name, ns, ast_intr))
+                return true;
+
+            // Constructing the scope
+            for (const auto& arg : ast_intr.signature.cargs)
+            {
+                // Adding each of the cargs onto the stack
+                // At the bytecode level, packed arguments are a single value
+                TypeRef type;
+                if (arg_type(type, scope, arg) ||
+                    scope.add(arg.var_name, type, arg.node_info) ||
+                    scope.push()
+                    ) return true;
+            }
+            for (const auto& arg : ast_intr.signature.vargs)
+            {
+                // Adding each of the vargs onto the stack
+                TypeRef type;
+                if (arg_type(type, scope, arg))
+                    return true;
+                if (type->ty != TypeInfo::Type::EDGE)
+                    return error::compiler(arg.node_info, "intr vargs must be edges");
+                if (scope.add(arg.var_name, type, arg.node_info) ||
+                    scope.push()
+                    ) return true;
+            }
+            // Adding the block reference onto the stack
+            TypeRef blk_ty = type_manager->create_block(
+                TypeInfo::Category::CONST,
+                [&ast_intr](Scope& scope) -> bool {
+                    Scope::StackVar var;
+                    return
+                        scope.at("~block", var) ||
+                        body->add_instruction(instruction::Dup(ast_intr.node_info, var.ptr)) ||
+                        scope.push();
+                });
+            if (!blk_ty || scope.add("~block", blk_ty, ast_intr.node_info))
+                return true;
+
+            // Making the node type
+            TypeRef nde_ty = type_manager->create_node(
+                TypeInfo::Category::CONST,
+                [&ast_intr](Scope& scope) -> bool {
+                    Scope::StackVar var;
+                    return
+                        scope.at("~node", var) ||
+                        body->add_instruction(instruction::Dup(ast_intr.node_info, var.ptr)) ||
+                        scope.push();
+                });
+            if (!nde_ty)
+                return true;
+
+            // Bytecode for creating the node
+            size_t intr_name_addr;
+            if (bc->add_obj_str(intr_name_addr, name) ||
+                body->add_instruction(instruction::Dup(ast_intr.node_info, 0)) ||
+                body->add_instruction(instruction::New(ast_intr.node_info, intr_name_addr)) ||
+                body->add_instruction(instruction::Nde(ast_intr.node_info)) ||
+                body->add_instruction(instruction::NdPrt(ast_intr.node_info)) ||
+                scope.push() ||
+                scope.add("~node", nde_ty, ast_intr.node_info)
+                ) return true;
+
+            // Bytecode for the node configurations
+            for (const auto& arg : ast_intr.signature.cargs)
+            {
+                Scope::StackVar var;
+                if (scope.at(arg.var_name, var))
+                    return error::compiler(arg.node_info, "Internal error: unable to retrieve intr carg '%'", arg.var_name);
+                // Assume it's type can be a runtime object.
+                // If it can't, it shouldn't have been in the cargs, so to_obj will generate an error
+                size_t addr;
+                TypeRef ty;
+                if (body->add_instruction(instruction::Dup(arg.node_info, var.ptr)) ||
+                    var.type->to_obj(arg.node_info, ty) ||
+                    ty->codegen(scope) ||
+                    bc->add_obj_str(addr, arg.var_name) ||
+                    body->add_instruction(instruction::New(arg.node_info, addr)) ||
+                    body->add_instruction(instruction::NdCfg(arg.node_info)) ||
+                    scope.pop()
+                    ) return true;
+            }
+
+            // Bytecode for adding node inputs
+            for (const auto& arg : ast_intr.signature.vargs)
+            {
+                Scope::StackVar var;
+                if (scope.at(arg.var_name, var))
+                    return error::compiler(arg.node_info, "Internal error: unable to retrieve intr varg '%'", arg.var_name);
+                assert(var.type->ty == TypeInfo::Type::EDGE);
+                size_t addr;
+                if (body->add_instruction(instruction::Dup(arg.node_info, var.ptr)) ||
+                    bc->add_obj_str(addr, arg.var_name) ||
+                    body->add_instruction(instruction::New(arg.node_info, addr)) ||
+                    body->add_instruction(instruction::NdInp(arg.node_info))
+                    ) return true;
+            }
+
+            // Determining the name for the return label
+            std::string intr_ret_label = label_prefix(ast_intr.node_info) + "_return";
+            ret_label = &intr_ret_label;
+            if (codegen_lines(scope, ast_intr.body))  // generating the code for the body
+                return true;
+            ret_label = nullptr;
+
+            // Bytecode for the return subroutine
+
+            if (body->add_label(ast_intr.node_info, intr_ret_label) ||
+                body->add_instruction(instruction::Dup(ast_intr.node_info, ast_intr.signature.rets.size()))  // grabbing a reference to the node
+                ) return true;
+
+            // Adding node outputs
+            for (size_t i = 0; i < ast_intr.signature.rets.size(); i++)
+            {
+                size_t addr;
+                if (body->add_instruction(instruction::Dup(ast_intr.node_info, ast_intr.signature.rets.size() - i)) ||  // no -1 to account for the node reference
+                    bc->add_obj_str(addr, ast_intr.signature.rets[i]) ||
+                    body->add_instruction(instruction::New(ast_intr.node_info, addr)) ||
+                    body->add_instruction(instruction::NdOut(ast_intr.node_info))
+                    ) return true;
+            }
+
+            if (bc->has_proc(intr_name))
+                // TODO: provide a better error message
+                return error::compiler(ast_intr.node_info, "intr proc conflict found");
+            return
+                body->add_instruction(instruction::Pop(ast_intr.node_info, 0)) ||  // popping the node reference off
+                body->add_instruction(instruction::Pop(ast_intr.node_info, ast_intr.signature.rets.size())) ||  // popping the node off the stack
+                body->add_instruction(instruction::Ret(ast_intr.node_info)) ||
+                bc->add_block(intr_name, *body);
         }
 
         bool codegen_attr(const std::string& name, const CodeModule::Attr& attr, std::vector<std::string>& ns)
         {
+            bool ret = false;
             switch (attr.index())
             {
             case CodeModule::AttrType::NODE:
+                for (const auto& [name, intrs] : std::get<CodeModule::Node>(attr).intrs)
+                    for (const AstBlock* intr : intrs)
+                        ret = ret || codegen_intr(name, *intr, ns);
                 for (const auto& [node_name, node_attrs] : std::get<CodeModule::Node>(attr).attrs)
                 {
                     ns.push_back(node_name);
                     for (const auto& node_attr : node_attrs)
-                        if (codegen_attr(node_name, node_attr, ns))
-                            return true;
+                        ret = ret || codegen_attr(node_name, node_attr, ns);
                     ns.pop_back();
                 }
+                return ret;
             case CodeModule::AttrType::STRUCT:
                 return codegen_struct(name, *std::get<const AstStruct*>(attr), ns);
             case CodeModule::AttrType::FUNC:
@@ -5596,12 +5980,15 @@ namespace nn
                 return true;
             mod = &inp_mod;
 
+            bool ret = false;
             std::vector<std::string> ns;
+            for (auto& [name, intrs] : mod->root.intrs)
+                for (const AstBlock* intr : intrs)
+                    ret = ret || codegen_intr(name, *intr, ns);
             for (const auto& [name, attrs] : mod->root.attrs)
                 for (const auto& attr : attrs)
-                    if (codegen_attr(name, attr, ns))
-                        return true;
-            return false;
+                    ret = ret || codegen_attr(name, attr, ns);
+            return ret;
         }
     }
 }

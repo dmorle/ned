@@ -17,6 +17,8 @@ CallStack stack;
 
 int main(void)
 {
+    std::cout << "print test" << std::endl;
+
     if (false) {
         TokenArray tarr;
         if (lex_file(TESTS_DIR"sum.bcnn", tarr))
@@ -78,7 +80,7 @@ int main(void)
     
     if (true) {
         TokenArray tarr;
-        if (lex_file(TESTS_DIR"hello.nn", tarr))
+        if (lex_file(TESTS_DIR"adding.nn", tarr))
         {
             error::print();
             return 1;
@@ -101,7 +103,7 @@ int main(void)
         }
         else
         {
-            std::ofstream ofs{ TESTS_DIR"hello.bcnn" };
+            std::ofstream ofs{ TESTS_DIR"adding.bcnn" };
             ofs << mod.to_string() << std::endl;
         }
     }
