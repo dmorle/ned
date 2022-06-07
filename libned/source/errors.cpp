@@ -1,6 +1,7 @@
 #include <ned/errors.h>
 #include <ned/lang/lexer.h>
 #include <ned/lang/bytecode.h>
+#include <ned/lang/compiler.h>
 
 #include <vector>
 #include <string>
@@ -12,6 +13,7 @@ namespace std
     std::string to_string(std::string val) { return val; }
     std::string to_string(const char* val) { return val; }
     std::string to_string(bool val) { return val ? "true" : "false"; }
+    std::string to_string(::nn::lang::TypeRef type) { return type->to_string(); }
 }
 
 namespace nn
@@ -103,7 +105,7 @@ namespace nn
             ss << "Runtime Error: " << errmsg;
             if (pdebug_info && ppc)
             {
-                const auto& rec = pdebug_info->at(*ppc);
+                const auto& rec = pdebug_info->at(*ppc - 1);  // Compensating for the automatic pc++ that happens
                 ss  << "\nline: " << rec.line_num
                     << " column: " << rec.col_num
                     << " file: " << rec.fname;

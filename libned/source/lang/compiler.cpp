@@ -25,9 +25,26 @@ namespace nn
 
         // Block context
 
+        enum class BodyType
+        {
+            INVALID,
+            STRUCT,
+            DEF,
+            FN,
+            INTR
+        };
+        union BodySig
+        {
+            const AstCargSig* carg_sig;
+            const AstBlockSig* block_sig;
+            const AstFnSig* fn_sig;
+        };
+        static BodyType body_type = BodyType::INVALID;
+        static BodySig body_sig = BodySig{ nullptr };
         static TypeManager* type_manager = nullptr;
         static ByteCodeBody* body = nullptr;
-        // Set by codegen_line_while, codegen_line_for.  Read by codegen_line_goto
+
+        // Set by codegen_line_while, codegen_line_for.  Read by codegen_line_break and codegen_line_continue
         // I don't want to pass it as an argument, because that would further pollute the signature of codegen_line_*
         struct LoopContext
         {
@@ -37,16 +54,6 @@ namespace nn
         };
         static LoopContext* loop_ctx = nullptr;
         static std::string* ret_label = nullptr;
-
-        enum class BodyType
-        {
-            INVALID,
-            STRUCT,
-            DEF,
-            FN,
-            INTR
-        };
-        static BodyType body_type = BodyType::INVALID;
 
         // Function implementations
 
@@ -205,15 +212,29 @@ namespace nn
 
         TypeRef::TypeRef(size_t ptr) : ptr(ptr) {}
 
-        TypeRef::operator bool() const { return ptr; }
-        TypeInfo* TypeRef::operator->() { return type_manager->get(ptr); }
-        const TypeInfo* TypeRef::operator->() const { return type_manager->get(ptr); }
-        TypeInfo& TypeRef::operator*() { return *type_manager->get(ptr); }
-        const TypeInfo& TypeRef::operator*() const { return *type_manager->get(ptr); }
+        TypeRef::operator bool() const noexcept { return ptr; }
+        TypeInfo* TypeRef::operator->() noexcept { return type_manager->get(ptr); }
+        const TypeInfo* TypeRef::operator->() const noexcept { return type_manager->get(ptr); }
+        TypeInfo& TypeRef::operator*() noexcept { return *type_manager->get(ptr); }
+        const TypeInfo& TypeRef::operator*() const noexcept { return *type_manager->get(ptr); }
 
         const TypeRef TypeInfo::null = TypeRef();
 
         TypeInfo::TypeInfo() {}
+
+        TypeInfo::TypeInfo(TypeInfo&& type) noexcept
+        {
+            do_move(std::move(type));
+        }
+
+        TypeInfo& TypeInfo::operator=(TypeInfo&& type) noexcept
+        {
+            if (&type == this)
+                return *this;
+            this->~TypeInfo();
+            do_move(std::move(type));
+            return *this;
+        }
 
         TypeInfo::~TypeInfo()
         {
@@ -257,6 +278,58 @@ namespace nn
                 break;
             case TypeInfo::Type::UNPACK:
                 type_array.~TypeInfoArray();
+                break;
+            default:
+                assert(false);
+            }
+        }
+
+        void TypeInfo::do_move(TypeInfo&& type) noexcept
+        {
+            ty = type.ty;
+            cat = type.cat;
+            codegen = std::move(type.codegen);
+
+            switch (ty)
+            {
+            case TypeInfo::Type::INVALID:
+            case TypeInfo::Type::TYPE:
+            case TypeInfo::Type::BOOL:
+            case TypeInfo::Type::FTY:
+            case TypeInfo::Type::INT:
+            case TypeInfo::Type::FLOAT:
+            case TypeInfo::Type::STR:
+                break;
+            case TypeInfo::Type::ARRAY:
+                new (&type_array) decltype(type_array)(std::move(type.type_array));
+                break;
+            case TypeInfo::Type::TUPLE:
+                new (&type_tuple) decltype(type_tuple)(std::move(type.type_tuple));
+                break;
+            case TypeInfo::Type::LOOKUP:
+                new (&type_lookup) decltype(type_lookup)(std::move(type.type_lookup));
+                break;
+            case TypeInfo::Type::CARGBIND:
+                new (&type_cargbind) decltype(type_cargbind)(std::move(type.type_cargbind));
+                break;
+            case TypeInfo::Type::STRUCT:
+                new (&type_struct) decltype(type_struct)(std::move(type.type_struct));
+                break;
+            case TypeInfo::Type::INIT:
+            case TypeInfo::Type::NODE:
+            case TypeInfo::Type::BLOCK:
+                break;
+            case TypeInfo::Type::EDGE:
+            case TypeInfo::Type::TENSOR:
+                break;
+            case TypeInfo::Type::DLTYPE:
+                new (&type_dltype) decltype(type_dltype)(std::move(type.type_dltype));
+                break;
+            case TypeInfo::Type::GENERIC:
+                new (&type_generic) decltype(type_generic)(std::move(type.type_generic));
+                break;
+            case TypeInfo::Type::UNPACK:
+                new (&type_array) decltype(type_array)(std::move(type.type_array));
                 break;
             default:
                 assert(false);
@@ -432,9 +505,18 @@ namespace nn
         {
             switch (ty)
             {
+            case TypeInfo::Type::FTY:
+            case TypeInfo::Type::BOOL:
             case TypeInfo::Type::INT:
             case TypeInfo::Type::FLOAT:
             case TypeInfo::Type::STR:
+                return true;
+            case TypeInfo::Type::ARRAY:
+                return type_array.elem->check_xstr();
+            case TypeInfo::Type::TUPLE:
+                for (TypeRef elem : type_tuple.elems)
+                    if (!elem->check_xstr())
+                        return false;
                 return true;
             }
             return false;
@@ -479,6 +561,16 @@ namespace nn
                 return true;
             }
             return false;
+        }
+
+        bool TypeInfo::check_idx() const
+        {
+            return false;
+        }
+
+        bool TypeInfo::check_len() const
+        {
+            return ty == TypeInfo::Type::ARRAY || ty == TypeInfo::Type::TUPLE;
         }
  
         std::string TypeInfo::encode() const
@@ -606,7 +698,18 @@ namespace nn
             switch (ty)
             {
             case TypeInfo::Type::FTY:
-                tmp = type_manager->create_fty(TypeInfo::Category::VIRTUAL, nullptr);
+                tmp = type_manager->create_fty(
+                    TypeInfo::Category::DEFAULT,
+                    [&node_info](Scope& scope) -> bool {
+                        size_t val_addr, type_addr;
+                        return
+                            bc->add_obj_fty(val_addr, core::EdgeFty::F32) ||
+                            bc->add_type_fty(type_addr) ||
+                            body->add_instruction(instruction::New(node_info, val_addr)) ||
+                            body->add_instruction(instruction::New(node_info, type_addr)) ||
+                            body->add_instruction(instruction::Cpy(node_info)) ||
+                            scope.push();
+                    });
                 if (!tmp) return true;
                 type = type_manager->create_type(
                     TypeInfo::Category::CONST,
@@ -619,7 +722,18 @@ namespace nn
                     }, tmp);
                 break;
             case TypeInfo::Type::BOOL:
-                tmp = type_manager->create_bool(TypeInfo::Category::VIRTUAL, nullptr);
+                tmp = type_manager->create_bool(
+                    TypeInfo::Category::DEFAULT,
+                    [&node_info](Scope& scope) -> bool {
+                        size_t val_addr, type_addr;
+                        return
+                            bc->add_obj_bool(val_addr, false) ||
+                            bc->add_type_bool(type_addr) ||
+                            body->add_instruction(instruction::New(node_info, val_addr)) ||
+                            body->add_instruction(instruction::New(node_info, type_addr)) ||
+                            body->add_instruction(instruction::Cpy(node_info)) ||
+                            scope.push();
+                    });
                 if (!tmp) return true;
                 type = type_manager->create_type(
                     TypeInfo::Category::CONST,
@@ -632,7 +746,18 @@ namespace nn
                     }, tmp);
                 break;
             case TypeInfo::Type::INT:
-                tmp = type_manager->create_int(TypeInfo::Category::VIRTUAL, nullptr);
+                tmp = type_manager->create_int(
+                    TypeInfo::Category::DEFAULT,
+                    [&node_info](Scope& scope) -> bool {
+                        size_t val_addr, type_addr;
+                        return
+                            bc->add_obj_int(val_addr, 0) ||
+                            bc->add_type_int(type_addr) ||
+                            body->add_instruction(instruction::New(node_info, val_addr)) ||
+                            body->add_instruction(instruction::New(node_info, type_addr)) ||
+                            body->add_instruction(instruction::Cpy(node_info)) ||
+                            scope.push();
+                    });
                 if (!tmp) return true;
                 type = type_manager->create_type(
                     TypeInfo::Category::CONST,
@@ -645,7 +770,18 @@ namespace nn
                     }, tmp);
                 break;
             case TypeInfo::Type::FLOAT:
-                tmp = type_manager->create_float(TypeInfo::Category::VIRTUAL, nullptr);
+                tmp = type_manager->create_float(
+                    TypeInfo::Category::DEFAULT,
+                    [&node_info](Scope& scope) -> bool {
+                        size_t val_addr, type_addr;
+                        return
+                            bc->add_obj_float(val_addr, 0.0) ||
+                            bc->add_type_float(type_addr) ||
+                            body->add_instruction(instruction::New(node_info, val_addr)) ||
+                            body->add_instruction(instruction::New(node_info, type_addr)) ||
+                            body->add_instruction(instruction::Cpy(node_info)) ||
+                            scope.push();
+                    });
                 if (!tmp) return true;
                 type = type_manager->create_type(
                     TypeInfo::Category::CONST,
@@ -658,7 +794,18 @@ namespace nn
                     }, tmp);
                 break;
             case TypeInfo::Type::STR:
-                tmp = type_manager->create_string(TypeInfo::Category::VIRTUAL, nullptr);
+                tmp = type_manager->create_string(
+                    TypeInfo::Category::DEFAULT,
+                    [&node_info](Scope& scope) -> bool {
+                        size_t val_addr, type_addr;
+                        return
+                            bc->add_obj_str(val_addr, "") ||
+                            bc->add_type_str(type_addr) ||
+                            body->add_instruction(instruction::New(node_info, val_addr)) ||
+                            body->add_instruction(instruction::New(node_info, type_addr)) ||
+                            body->add_instruction(instruction::Cpy(node_info)) ||
+                            scope.push();
+                    });
                 if (!tmp) return true;
                 type = type_manager->create_type(
                     TypeInfo::Category::CONST,
@@ -672,18 +819,38 @@ namespace nn
                 break;
             case TypeInfo::Type::ARRAY:
             {
-                TypeRef elem;
-                if (type_array.elem->to_obj(node_info, elem))
-                    return true;
-                tmp = type_manager->create_array(TypeInfo::Category::VIRTUAL, nullptr, type_array.elem);
-                if (!tmp) return true;
-                type = type_manager->create_type(
-                    TypeInfo::Category::CONST,
-                    [&node_info, elem](Scope& scope) -> bool {
+                tmp = type_manager->create_array(
+                    TypeInfo::Category::DEFAULT,
+                    [&node_info](Scope& scope) -> bool {
                         return
-                            elem->codegen(scope) ||
-                            body->add_instruction(instruction::Arr(node_info));
-                    }, tmp);
+                            body->add_instruction(instruction::Agg(node_info, 0)) ||
+                            scope.push();
+                    }, type_array.elem);
+                if (!tmp) return true;
+                if (type_array.elem->ty == TypeInfo::Type::PLACEHOLDER)
+                {
+                    type = type_manager->create_type(
+                        TypeInfo::Category::CONST,
+                        [&node_info](Scope& scope) -> bool {
+                            return
+                                body->add_instruction(instruction::Nul(node_info)) ||
+                                body->add_instruction(instruction::Arr(node_info)) ||
+                                scope.push();
+                        }, tmp);
+                }
+                else
+                {
+                    TypeRef elem;
+                    if (type_array.elem->to_obj(node_info, elem))
+                        return true;
+                    type = type_manager->create_type(
+                        TypeInfo::Category::CONST,
+                        [&node_info, elem](Scope& scope) -> bool {
+                            return
+                                elem->codegen(scope) ||
+                                body->add_instruction(instruction::Arr(node_info));
+                        }, tmp);
+                }
                 break;
             }
             case TypeInfo::Type::TUPLE:
@@ -696,7 +863,21 @@ namespace nn
                         return true;
                     elem_types.push_back(elem_type);
                 }
-                tmp = type_manager->create_tuple(TypeInfo::Category::VIRTUAL, nullptr, type_tuple.elems);
+                tmp = type_manager->create_tuple(
+                    TypeInfo::Category::DEFAULT,
+                    [&node_info, elem_types](Scope& scope) -> bool {
+                        for (TypeRef elem_type : elem_types)
+                            if (elem_type->type_type.base->codegen(scope) ||
+                                elem_type->codegen(scope) ||
+                                body->add_instruction(instruction::Cpy(node_info)) ||
+                                scope.pop()
+                                ) return true;
+                        if (body->add_instruction(instruction::Agg(node_info, elem_types.size())))
+                            return true;
+                        if (elem_types.size() == 0)
+                            return scope.push();
+                        return scope.pop(elem_types.size() - 1);
+                    }, type_tuple.elems);
                 if (!tmp) return true;
                 type = type_manager->create_type(
                     TypeInfo::Category::CONST,
@@ -704,20 +885,16 @@ namespace nn
                         for (TypeRef elem_type : elem_types)
                             if (elem_type->codegen(scope))
                                 return true;
+                        if (body->add_instruction(instruction::Aty(node_info, elem_types.size())))
+                            return true;
                         if (elem_types.size() == 0)
-                            return
-                            body->add_instruction(instruction::Agg(node_info, elem_types.size())) ||
-                            scope.push();
-                        if (elem_types.size() == 1)
-                            return body->add_instruction(instruction::Agg(node_info, elem_types.size()));
-                        return
-                            body->add_instruction(instruction::Agg(node_info, elem_types.size())) ||
-                            scope.pop(elem_types.size() - 1);
+                            return scope.push();
+                        return scope.pop(elem_types.size() - 1);
                     }, tmp);
                 break;
             }
             default:
-                return error::compiler(node_info, "Unable to transform the given type into a runtime object");
+                return error::compiler(node_info, "Unable to transform the type % into a runtime object", to_string());
             }
             return !type;
         }
@@ -749,6 +926,8 @@ namespace nn
                 assert(false);
                 // TODO: implement structs
                 return false;
+            case TypeInfo::Type::GENERIC:
+                return lhs->type_generic.name == rhs->type_generic.name;
             }
             return false;
         }
@@ -758,51 +937,35 @@ namespace nn
             return !(lhs == rhs);
         }
 
-        TypeInfo* TypeManager::get(size_t ptr)
+        TypeInfo* TypeManager::get(size_t ptr) noexcept
         {
-            return (TypeInfo*)(buf + ptr);
+            return &buf[ptr];
+        }
+
+        const TypeInfo* TypeManager::get(size_t ptr) const noexcept
+        {
+            return &buf[ptr];
         }
 
         TypeRef TypeManager::next()
         {
-            if (len + sizeof(TypeInfo) > bufsz)
-            {
-                size_t nsz = 2 * bufsz;
-                void* tmp = realloc(buf, nsz);
-                if (!tmp)
-                    return TypeInfo::null;
-                buf = (uint8_t*)tmp;
-                bufsz = nsz;
-            }
-
-            TypeRef ret = TypeRef(len);
-            new (buf + len) TypeInfo();
-            len += sizeof(TypeInfo);
+            TypeRef ret = TypeRef(buf.size());
+            buf.push_back(TypeInfo());
             return ret;
         }
 
         TypeManager::TypeManager()
         {
-            constexpr size_t initial_size = 65536;
-            buf = (uint8_t*)malloc(initial_size * sizeof(uint8_t));
-            if (!buf)
-                throw std::bad_alloc();
-            bufsz = initial_size;
+            buf.reserve(1024);
+            buf.push_back(TypeInfo());  // null element
         }
 
-        TypeManager::~TypeManager()
-        {
-            for (size_t i = 1; i < len; i += sizeof(TypeInfo))
-                get(i)->~TypeInfo();
-            free(buf);
-        }
-
-        TypeRef TypeManager::duplicate(TypeRef src)
+        TypeRef TypeManager::duplicate(const TypeRef src)
         {
             return duplicate(src->cat, src->codegen, src);
         }
 
-        TypeRef TypeManager::duplicate(TypeInfo::Category cat, CodegenCallback codegen, TypeRef src)
+        TypeRef TypeManager::duplicate(TypeInfo::Category cat, CodegenCallback codegen, const TypeRef src)
         {
             TypeRef type = next();
             TypeRef tmp;
@@ -832,9 +995,9 @@ namespace nn
             case TypeInfo::Type::TUPLE:
                 new (&type->type_tuple) TypeInfoTuple();
                 type->ty = TypeInfo::Type::TUPLE;
-                for (TypeRef elem_type : src->type_tuple.elems)
+                for (const TypeRef elem_type : src->type_tuple.elems)
                 {
-                    tmp = duplicate(elem_type->cat, elem_type->codegen, elem_type);
+                    tmp = duplicate(elem_type);
                     if (!tmp) return TypeInfo::null;
                     type->type_tuple.elems.push_back(tmp);
                 }
@@ -1164,6 +1327,11 @@ namespace nn
             return false;
         }
 
+        const Scope* Scope::get_parent() const
+        {
+            return parent;
+        }
+
         bool Scope::local_size(size_t& sz, const Scope* scope) const
         {
             sz += stack_vars.size();
@@ -1199,10 +1367,10 @@ namespace nn
 
         ProcCall::~ProcCall()
         {
-            for (size_t i = 0; i < val_buflen; i += sizeof(ValNode))
-                reinterpret_cast<ValNode*>(val_buf + i)->~ValNode();
-            for (size_t i = 0; i < type_buflen; i += sizeof(TypeNode))
-                reinterpret_cast<TypeNode*>(type_buf + i)->~TypeNode();
+            for (size_t i = 0; i < val_buflen; i++)
+                val_buf[i].~ValNode();
+            for (size_t i = 0; i < type_buflen; i++)
+                type_buf[i].~TypeNode();
         }
 
         ProcCall::ValNode::ValNode(ProcCall::ValNode&& node) noexcept
@@ -1871,7 +2039,6 @@ namespace nn
 
         bool ProcCall::codegen_type_dltype(Scope& scope, TypeNode& node, TypeRef& type)
         {
-            // TODO: figure out how to deal with this a bit better
             if (type->ty != dltype)
                 return error::compiler(*node.node_info, "Type conflict found during signature deduction");
             TypeRef fptype = get_fp(*node.node_info, type);
@@ -1901,7 +2068,8 @@ namespace nn
                 if (!shape_type)
                     return true;
                 if (shape_type->codegen(scope) ||
-                    body->add_instruction(instruction::Dup(*node.node_info, 0)) ||
+                    body->add_instruction(instruction::New(*node.node_info, int_addr)) ||
+                    body->add_instruction(instruction::Arr(*node.node_info)) ||
                     body->add_instruction(instruction::Len(*node.node_info)) ||
                     body->add_instruction(instruction::New(*node.node_info, sz_addr)) ||
                     body->add_instruction(instruction::New(*node.node_info, int_addr)) ||
@@ -1934,7 +2102,7 @@ namespace nn
                 return false;
             }
 
-            // There was an unpack, so theres just a minimum size constraint placed on the tensor's shape,
+            // There was an unpack, so theres just a minimum size constraint placed on the tensor's rank,
             // and the nodes peel elements off both the front and back of the shape
 
             // Initializing static objects for later use
@@ -1950,7 +2118,8 @@ namespace nn
                 return true;
             // Check to make sure the rank is large enough
             if (shape_type->codegen(scope) ||
-                body->add_instruction(instruction::Dup(*node.node_info, 0)) ||
+                body->add_instruction(instruction::New(*node_info, int_addr)) ||
+                body->add_instruction(instruction::Arr(*node_info)) ||
                 body->add_instruction(instruction::Len(*node.node_info)) ||
                 body->add_instruction(instruction::New(*node.node_info, sz_addr)) ||
                 body->add_instruction(instruction::New(*node.node_info, int_addr)) ||
@@ -1994,9 +2163,11 @@ namespace nn
                     [node_info{ node.node_info }, shape_type, int_addr, idx_addr](Scope& scope) -> bool {
                     return
                         shape_type->codegen(scope) ||
-                        body->add_instruction(instruction::New(*node_info, idx_addr)) ||
-                        body->add_instruction(instruction::Dup(*node_info, 1)) ||
+                        body->add_instruction(instruction::Dup(*node_info, 0)) ||
+                        body->add_instruction(instruction::New(*node_info, int_addr)) ||
+                        body->add_instruction(instruction::Arr(*node_info)) ||
                         body->add_instruction(instruction::Len(*node_info)) ||
+                        body->add_instruction(instruction::New(*node_info, idx_addr)) ||
                         body->add_instruction(instruction::New(*node_info, int_addr)) ||
                         body->add_instruction(instruction::Sub(*node_info)) ||
                         body->add_instruction(instruction::New(*node_info, int_addr)) ||
@@ -2010,37 +2181,35 @@ namespace nn
             // Building the packed argument
             size_t start_addr, end_addr, one_addr;
             if (bc->add_obj_int(start_addr, unpack_idx) ||
-                bc->add_obj_int(end_addr, node.type_dl.shape.size() - unpack_idx) ||
+                bc->add_obj_int(end_addr, node.type_dl.shape.size() - unpack_idx - 1) ||
                 bc->add_obj_int(one_addr, 1)
                 ) return true;
             TypeRef tmp = type_manager->create_int(TypeInfo::Category::VIRTUAL, nullptr);
             if (!tmp)
                 return true;
-            std::string raw_start_label = label_prefix(*node.node_info) + "_packed_loop_start_";
-            std::string raw_end_label = label_prefix(*node.node_info) + "_packed_loop_end_";
             TypeRef elem_ty = type_manager->create_array(
-                TypeInfo::Category::CONST, [
-                    node_info{ node.node_info }, raw_start_label, raw_end_label, shape_type,
-                    int_addr, start_addr, end_addr, one_addr
-                ](Scope& scope) -> bool {
-                    static size_t i = 0;
-                    std::string start_label = raw_start_label + std::to_string(i);
-                    std::string end_label = raw_end_label + std::to_string(i);
-                    i++;
+                TypeInfo::Category::CONST, [node_info{ node.node_info }, shape_type, int_addr, start_addr, end_addr, one_addr](Scope& scope) -> bool {
+                    std::string start_label = label_prefix(*node_info) + "_packed_loop_start";
+                    std::string end_label = label_prefix(*node_info) + "_packed_loop_end";
                     return
                         shape_type->codegen(scope) ||
                         body->add_instruction(instruction::Dup(*node_info, 0)) ||
+                        body->add_instruction(instruction::New(*node_info, int_addr)) ||
+                        body->add_instruction(instruction::Arr(*node_info)) ||
                         body->add_instruction(instruction::Len(*node_info)) ||
                         body->add_instruction(instruction::New(*node_info, end_addr)) ||
                         body->add_instruction(instruction::New(*node_info, int_addr)) ||
                         body->add_instruction(instruction::Sub(*node_info)) ||
                         body->add_instruction(instruction::New(*node_info, start_addr)) ||
+                        body->add_instruction(instruction::New(*node_info, int_addr)) ||
+                        body->add_instruction(instruction::Cpy(*node_info)) ||
                         body->add_instruction(instruction::Agg(*node_info, 0)) ||
                         // stack is: shape, n, i, result
                         // if i == n: break
                         body->add_label(*node_info, start_label) ||
                         body->add_instruction(instruction::Dup(*node_info, 2)) ||
                         body->add_instruction(instruction::Dup(*node_info, 2)) ||
+                        body->add_instruction(instruction::New(*node_info, int_addr)) ||
                         body->add_instruction(instruction::Eq(*node_info)) ||
                         body->add_instruction(instruction::Brt(*node_info, end_label)) ||
                         // result += [shape[i]]
@@ -2101,7 +2270,7 @@ namespace nn
 
         ProcCall::ValNode* ProcCall::next_val()
         {
-            if (val_buflen == 1024 * sizeof(ValNode))
+            if (val_buflen == bufsz)
             {
                 error::general("Exceeded the maximum number of value node allowed in the signature: 1024");
                 return nullptr;
@@ -2109,13 +2278,13 @@ namespace nn
 
             ValNode* ret = new (val_buf + val_buflen) ValNode();
             ret->ty = ValNode::Type::INVALID;
-            val_buflen += sizeof(ValNode);
+            val_buflen++;
             return ret;
         }
 
         ProcCall::TypeNode* ProcCall::next_type()
         {
-            if (type_buflen == 1024 * sizeof(TypeNode))
+            if (type_buflen == bufsz)
             {
                 error::general("Exceeded the maximum number of type node allowed in the signature: 1024");
                 return nullptr;
@@ -2123,7 +2292,7 @@ namespace nn
 
             TypeNode* ret = new (type_buf + type_buflen) TypeNode();
             ret->ty = TypeNode::Type::INVALID;
-            type_buflen += sizeof(TypeNode);
+            type_buflen++;
             return ret;
         }
 
@@ -2217,7 +2386,7 @@ namespace nn
                     arg_type(type, init_scope, arg_decl) ||
                     init_scope.add(arg_decl.var_name, type, arg_decl.node_info) ||
                     init_scope.push()
-                    ) return true;
+                    ) return error::compiler(arg_decl.node_info, "Unable to to construct a carg node for parameter %", arg_decl.var_name);
                 carg_nodes[arg_decl.var_name] = node;
                 carg_stack.push_back(arg_decl.var_name);
             }
@@ -2274,8 +2443,9 @@ namespace nn
                     val->codegen(scope) ||
                     type->codegen(scope) ||
                     body->add_instruction(instruction::New(*node->node_info, name_addr)) ||
-                    body->add_instruction(instruction::InCfg(*node->node_info))
-                    ) return true;
+                    body->add_instruction(instruction::InCfg(*node->node_info)) ||
+                    scope.pop(2)
+                    ) return error::compiler(*node->node_info, "Unable to compile the configuration for init carg '%'", name);
             }
             
             std::string var_name = scope.generate_var_name();
@@ -2283,8 +2453,9 @@ namespace nn
                 TypeInfo::Category::DEFAULT,
                 [var_name, node_info{ this->node_info }](Scope& scope) {
                     Scope::StackVar var;
+                    if (scope.at(var_name, var))
+                        return error::compiler(*node_info, "Unable to resolve identifier %", var_name);
                     return
-                        scope.at(var_name, var) ||
                         body->add_instruction(instruction::Dup(*node_info, var.ptr)) ||
                         scope.push();
                 });
@@ -2428,7 +2599,7 @@ namespace nn
             std::string proc_name;
             size_t proc_addr;
             Scope::StackVar var;
-            if (proc_name_def(proc_name, sig_ns, *ast_intr) ||
+            if (proc_name_intr(proc_name, sig_ns, *ast_intr) ||
                 bc->add_static_ref(*node_info, proc_name, proc_addr) ||
                 scope.at("~block", var) ||
                 body->add_instruction(instruction::Dup(*node_info, var.ptr)) ||
@@ -2447,7 +2618,7 @@ namespace nn
                 std::string var_name = scope.generate_var_name();
                 TypeRef ret = type_manager->create_edge(
                     TypeInfo::Category::DEFAULT,
-                    [this, var_name](Scope& scope) -> bool {
+                    [node_info{ node_info }, var_name](Scope& scope) -> bool {
                         Scope::StackVar var;
                         return
                             scope.at(var_name, var) ||
@@ -2556,6 +2727,7 @@ namespace nn
 
         bool DefCall::codegen(Scope& scope, std::vector<TypeRef>& rets)
         {
+
             // codegening all the nodes
             for (auto& [name, node] : carg_nodes)
                 if (node->is_root && codegen_root_arg(scope, *node))
@@ -2614,10 +2786,11 @@ namespace nn
                 std::string var_name = scope.generate_var_name();
                 TypeRef ret = type_manager->create_tensor(
                     TypeInfo::Category::DEFAULT,
-                    [this, var_name](Scope& scope) -> bool {
+                    [node_info{ node_info }, var_name](Scope& scope) -> bool {
                         Scope::StackVar var;
+                        if (scope.at(var_name, var))
+                            return error::compiler(*node_info, "Unable to resolve identifier %", var_name);
                         return
-                            scope.at(var_name, var) ||
                             body->add_instruction(instruction::Dup(*node_info, var.ptr)) ||
                             scope.push();
                     });
@@ -2625,6 +2798,76 @@ namespace nn
                     return true;
                 rets.push_back(ret);
             }
+            return false;
+        }
+
+        bool DefCall::codegen_entrypoint(Scope& scope, const std::map<std::string, TypeRef>& cargs)
+        {
+            // Checking to make sure all the provided cargs are in the signature
+            for (const auto& [name, carg] : cargs)
+                if (!carg_nodes.contains(name))
+                    return error::general("The provided carg '%' does not exist in the signature", name);
+
+            // Putting the carg data into the nodes
+            for (const auto& [name, carg] : cargs)
+                carg_nodes[name]->val = carg;
+
+            // codegening each of the root nodes in the cargs
+            for (auto& [name, node] : carg_nodes)
+                if (node->is_root && codegen_root_arg(scope, *node))
+                    return true;
+            // codegening each of the non-root nodes in the cargs (If these can't be codegened, the provided cargs are incomplete)
+            // but it is still possible for non-root nodes to get their values from root nodes which is why this happens second
+            for (auto& [name, node] : carg_nodes)
+                if (!node->is_root && codegen_root_arg(scope, *node))
+                    return error::general("The provided cargs are insufficient for an entry point.  Unable to deduce carg %", name);
+
+            // Putting the cargs (in order) onto the stack
+            for (const auto& name : carg_stack)
+            {
+                TypeRef type = type_manager->duplicate(
+                    TypeInfo::Category::CONST,
+                    [this, name](Scope& scope) -> bool {
+                        Scope::StackVar var;
+                        return
+                            scope.at(name, var) ||
+                            body->add_instruction(instruction::Dup(ast_def->node_info, var.ptr)) ||
+                            scope.push();
+                    }, carg_nodes.at(name)->val);
+                if (!type ||
+                    carg_nodes.at(name)->val->codegen(scope) ||
+                    scope.add(name, type, ast_def->node_info)
+                    ) return true;
+            }
+
+            // Codegening each of the vargs into a DLTYPE object
+            for (const AstArgDecl& varg : ast_def->signature.vargs)
+            {
+                TypeRef ret;
+                if (codegen_expr_single_ret<TypeInfo::AllowAll>(scope, *varg.type_expr, ret))
+                    return true;
+                if (ret->ty != TypeInfo::Type::DLTYPE)
+                    return error::compiler(varg.node_info, "Varg type did not resolve to a tensor");
+                if (ret->type_dltype.tensor->codegen(scope))
+                    return true;
+            }
+
+            // Resolving the procedure name of the top level def
+            std::string name;
+            size_t name_addr;
+            if (proc_name_def(name, {}, *ast_def) ||
+                bc->add_static_ref(ast_def->node_info, name, name_addr)
+                ) return true;
+
+            // Calling the def
+            if (body->add_instruction(instruction::Nul(ast_def->node_info)) ||
+                body->add_instruction(instruction::New(ast_def->node_info, name_addr)) ||
+                body->add_instruction(instruction::Call(ast_def->node_info))
+                ) return true;
+            // Popping the args off the stack
+            for (size_t i = 0; i < carg_stack.size() + varg_stack.size() + 1; i++)
+                if (body->add_instruction(instruction::Pop(ast_def->node_info, 0)))
+                    return true;
             return false;
         }
 
@@ -2790,47 +3033,186 @@ namespace nn
             for (TypeRef& ret : this->rets)
             {
                 // In a fn, I don't nessisarily know the ret type, so get the type from the init
-                // and overwrite the codegen (init made)
+                // and swap out the codegen function for a stack variable reference
                 std::string var_name = scope.generate_var_name();
-                ret->codegen = [this, var_name](Scope& scope) -> bool {
+                CodegenCallback codegen = [node_info{ node_info }, var_name](Scope& scope) -> bool {
                     Scope::StackVar var;
+                    if (scope.at(var_name, var))
+                        return error::compiler(*node_info, "Unable to resolve identifier %", var_name);
                     return
-                        scope.at(var_name, var) ||
                         body->add_instruction(instruction::Dup(*node_info, var.ptr)) ||
                         scope.push();
                 };
+                TypeRef ret_type;
+                if (ret->ty == TypeInfo::Type::TYPE)
+                    ret_type = type_manager->duplicate(TypeInfo::Category::CONST, codegen, ret->type_type.base);
+                else
+                {
+                    assert(ret->ty == TypeInfo::Type::DLTYPE);
+                    ret_type = type_manager->create_tensor(TypeInfo::Category::DEFAULT, codegen);
+                }
+                if (!ret_type)
+                    return true;
+                rets.push_back(ret_type);
                 if (scope.push() || scope.add(var_name, ret, *node_info))
                     return true;
             }
-            rets = std::move(this->rets);  // I don't need this->rets after codegen
             return false;
         }
 
         ModuleInfo::ModuleInfo() {}
 
-        bool ModuleInfo::entry_setup(std::string& ep_name, ByteCodeModule& bc, const std::string& name, const std::map<std::string, std::pair<Obj, TypeInfo>>& cargs) const
+        void ModuleInfo::init(TypeManager* pmanager)
         {
-            if (!entry_points.contains(name))
-                return error::general("Unable to find any entry points with name '%'", name);
+            type_manager = pmanager;
+        }
 
-            std::vector<EntryPoint*> matches;
-            for (auto& ep : entry_points.at(name))
+        bool ModuleInfo::entry_setup(const std::string& name, const std::map<std::string, TypeRef>& cargs)
+        {
+            if (bc->has_proc("main"))
+                return error::general("Unable to generate an entry point to a module that already has an entry point");
+
+            body_type = BodyType::DEF;
+            body_sig.block_sig = nullptr;  // This shouldn't ever get used
+
+            cg_ns = {};
+            Scope scope{ nullptr };
+            AstExpr lookup_expr;
+            new (&lookup_expr.expr_string) std::string();
+            lookup_expr.ty = ExprType::VAR;
+            lookup_expr.expr_string = name;
+            TypeRef ret;
+            if (codegen_expr_callee_var(scope, lookup_expr, ret))
+                return true;
+            assert(ret->ty == TypeInfo::Type::LOOKUP);  // With an empty scope, it should be impossible to shadow the name
+            if (ret->type_lookup.lookup.defs.size() == 0)
+                return error::general("Unable to find a def % entry point", name);
+            if (ret->type_lookup.lookup.defs.size() > 1)
+                return error::general("def % was overloaded multiple times.  Entry point is ambiguous", name);
+            assert(ret->type_lookup.lookup.defs.size() == 1);
+            const AstBlock& model = *ret->type_lookup.lookup.defs[0];
+            ByteCodeBody main_body{ model.node_info };
+            body = &main_body;
+
+            std::unique_ptr<DefCall> call = std::make_unique<DefCall>(cg_ns);
+            return
+                call->init(model) ||
+                call->codegen_entrypoint(scope, cargs) ||
+                body->add_instruction(instruction::Ret(model.node_info)) ||
+                bc->add_block("main", main_body);
+        }
+
+        TypeRef ModuleInfo::create_bool(BoolObj val)
+        {
+            size_t addr;
+            if (bc->add_obj_bool(addr, val))
+                return TypeInfo::null;
+            return type_manager->create_bool(
+                TypeInfo::Category::CONST,
+                [node_info{ node_info }, addr](Scope& scope) -> bool {
+                    return
+                        body->add_instruction(instruction::New(node_info, addr)) ||
+                        scope.push();
+                });
+        }
+
+        TypeRef ModuleInfo::create_fty(FtyObj val)
+        {
+            size_t addr;
+            if (bc->add_obj_fty(addr, val))
+                return TypeInfo::null;
+            return type_manager->create_fty(
+                TypeInfo::Category::CONST,
+                [node_info{ &node_info }, addr](Scope& scope) -> bool {
+                    return
+                        body->add_instruction(instruction::New(*node_info, addr)) ||
+                        scope.push();
+                });
+        }
+
+        TypeRef ModuleInfo::create_int(IntObj val)
+        {
+            size_t addr;
+            if (bc->add_obj_int(addr, val))
+                return TypeInfo::null;
+            return type_manager->create_int(
+                TypeInfo::Category::CONST,
+                [node_info{ &node_info }, addr](Scope& scope) -> bool {
+                    return
+                        body->add_instruction(instruction::New(*node_info, addr)) ||
+                        scope.push();
+                });
+        }
+
+        TypeRef ModuleInfo::create_float(FloatObj val)
+        {
+            size_t addr;
+            if (bc->add_obj_float(addr, val))
+                return TypeInfo::null;
+            return type_manager->create_float(
+                TypeInfo::Category::CONST,
+                [node_info{ &node_info }, addr](Scope& scope) -> bool {
+                    return
+                        body->add_instruction(instruction::New(*node_info, addr)) ||
+                        scope.push();
+                });
+        }
+
+        TypeRef ModuleInfo::create_str(const StrObj& val)
+        {
+            size_t addr;
+            if (bc->add_obj_str(addr, val))
+                return TypeInfo::null;
+            return type_manager->create_string(
+                TypeInfo::Category::CONST,
+                [node_info{ &node_info }, addr](Scope& scope) -> bool {
+                    return
+                        body->add_instruction(instruction::New(*node_info, addr)) ||
+                        scope.push();
+                });
+        }
+
+        TypeRef ModuleInfo::create_array(const std::vector<TypeRef>& val)
+        {
+            if (val.size() == 0)
             {
-                bool match = true;
-                // Checking to make sure that all the given cargs match and the types match
-                for (const auto& [name, data] : cargs)
-                {
-
-                }
-                ep.sig->cargs;
+                TypeRef tmp = type_manager->create_placeholder();
+                if (!tmp)
+                    return TypeInfo::null;
+                return type_manager->create_array(
+                    TypeInfo::Category::CONST,
+                    [node_info{ &node_info }](Scope& scope) -> bool {
+                        return
+                            body->add_instruction(instruction::Agg(*node_info, 0)) ||
+                            scope.push();
+                    }, tmp);
             }
-            return error::general("not implemented");
+            for (size_t i = 1; i < val.size(); i++)
+                if (val.front() != val[i])
+                {
+                    error::general("Found different types in array initialization");
+                    return TypeInfo::null;
+                }
+            TypeRef tmp = type_manager->duplicate(TypeInfo::Category::VIRTUAL, nullptr, val.front());
+            if (!tmp)
+                return TypeInfo::null;
+            return type_manager->create_array(
+                TypeInfo::Category::CONST,
+                [node_info{ &node_info }, val](Scope& scope) -> bool {
+                    for (TypeRef elem : val)
+                        if (elem->codegen(scope))
+                            return true;
+                    return
+                        body->add_instruction(instruction::Agg(*node_info, val.size())) ||
+                        scope.pop(val.size() - 1);
+                }, tmp);
         }
 
         std::string label_prefix(const AstNodeInfo& type)
         {
-            char buf[64];
-            sprintf(buf, "l%uc%u_", type.line_start, type.col_start);
+            char buf[128];
+            static size_t lbl_count = 0;
+            sprintf(buf, "l%u_%uc%u_%u_%zu_", type.line_start, type.line_end, type.col_start, type.col_end, lbl_count++);
             return buf;
         }
 
@@ -3248,7 +3630,27 @@ namespace nn
                 if (varg.is_packed)
                     return error::compiler(varg.node_info, "Internal error: packed vargs has not been implemented");
 
-            return error::compiler(fn.node_info, "Internal error: not implemented");
+            if (fn.signature.vargs.size() != param_vargs.size())
+                return true;
+
+            for (size_t i = 0; i < param_vargs.size(); i++)
+            {
+                TypeRef type;
+                if (codegen_expr_single_ret<TypeInfo::AllowAll>(sig_scope, *fn.signature.vargs[i].type_expr, type))
+                    return true;
+                if (type->ty == TypeInfo::Type::TYPE)
+                {
+                    if (type->type_type.base != param_vargs[i])
+                        return true;
+                    continue;
+                }
+                if (type->ty == TypeInfo::Type::DLTYPE)
+                    return error::compiler(fn.signature.vargs[i].node_info, "Internal error: not implemented");
+                return error::compiler(fn.signature.vargs[i].node_info, "Type expression for varg did not resolve to a type");
+            }
+
+            vargs = param_vargs;
+            return false;
         }
 
         bool codegen_expr_callee_kw(Scope& scope, const AstExpr& expr, TypeRef& ret)
@@ -3444,13 +3846,29 @@ namespace nn
             {
                 if (codegen_expr(scope, elem_expr, elem_types))
                     return true;
-                scope.push(elem_types.size() - sz);
                 sz = elem_types.size();
             }
-            return error::compiler(expr.node_info, "Internal error: not implemented");
+            
+            TypeRef type = type_manager->duplicate(TypeInfo::Category::VIRTUAL, nullptr, elem_types.front());
+            for (TypeRef elem_type : elem_types)
+                if (type != elem_type)
+                    return error::compiler(expr.node_info, "Unable to construct an array literal given different types - % and %", type, elem_type);
 
-            // TODO: Find a common element expression type between all of the elements and build type
-            return body->add_instruction(instruction::Agg(expr.node_info, sz));
+            TypeRef ret = type_manager->create_array(
+                TypeInfo::Category::CONST,
+                [&expr, elem_types](Scope& scope) -> bool {
+                    for (TypeRef elem_type : elem_types)
+                        if (elem_type->codegen(scope))  // don't need to copy since its const
+                            return true;
+                    if (body->add_instruction(instruction::Agg(expr.node_info, elem_types.size())))
+                        return true;
+                    assert(elem_types.size() != 0);
+                    return scope.pop(elem_types.size() - 1);
+                }, type);
+            if (!ret)
+                return true;
+            rets.push_back(ret);
+            return false;
         }
 
         bool codegen_expr_tuple(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
@@ -3602,6 +4020,7 @@ namespace nn
                 AstExpr lookup_expr;
                 new (&lookup_expr.expr_string) std::string();
                 lookup_expr.ty = ExprType::VAR;
+                lookup_expr.node_info = expr.node_info;
                 lookup_expr.expr_string = name;
                 TypeRef ret;
                 if (codegen_expr_callee_var(scope, lookup_expr, ret))
@@ -3620,11 +4039,23 @@ namespace nn
                     return error::compiler(expr.node_info, "Too many vargs found in def % signature, expected exactly two", name);
                 if (__def__.signature.rets.size() != 1)
                     return error::compiler(expr.node_info, "Expected exactly one return value from def %", name);
-                DefCall call{ ret->type_lookup.lookup.ns };
-                return
-                    call.init(__def__) ||
-                    call.apply_args(expr.node_info, {}, { lhs_type, rhs_type }) ||
-                    call.codegen(scope, rets);
+                // For some reason on debug builds, the desruction of the DefCall object invalidates all the
+                // lambdas inside the type manager resulting in a crash later on when either the block exits and
+                // the type manager deletes all the types generated during the block's compilation,
+                // or when another operation attempts to use a codegen method which ever comes first.
+                // 
+                // I tracked the bug down to a _free_dbg call on the memory allocated for the DefCall object
+                // (after all the dtors have run), so its probably an MSVC compiler bug.
+                // 
+                // The release build works fine, but I might need to switch c++ compilers for debugging
+                //std::unique_ptr<DefCall> call = std::make_unique<DefCall>(ret->type_lookup.lookup.ns);
+                DefCall* call = new DefCall(ret->type_lookup.lookup.ns);
+                bool ret_val =
+                    call->init(__def__) ||
+                    call->apply_args(expr.node_info, {}, { lhs_type, rhs_type }) ||
+                    call->codegen(scope, rets);
+                delete call;
+                return ret_val;
             }
 
             if (lhs_type->ty == TypeInfo::Type::EDGE && rhs_type->ty == TypeInfo::Type::EDGE)
@@ -3632,6 +4063,7 @@ namespace nn
                 AstExpr lookup_expr;
                 new (&lookup_expr.expr_string) std::string();
                 lookup_expr.ty = ExprType::VAR;
+                lookup_expr.node_info = expr.node_info;
                 lookup_expr.expr_string = name;
                 TypeRef ret;
                 if (codegen_expr_callee_var(scope, lookup_expr, ret))
@@ -3650,11 +4082,11 @@ namespace nn
                     return error::compiler(expr.node_info, "Too many vargs found in intr % signature, expected exactly two", name);
                 if (__intr__.signature.rets.size() != 1)
                     return error::compiler(expr.node_info, "Expected exactly one return value from intr %", name);
-                IntrCall call{ ret->type_lookup.lookup.ns };
+                std::unique_ptr<IntrCall> call = std::make_unique<IntrCall>(ret->type_lookup.lookup.ns);
                 return
-                    call.init(__intr__) ||
-                    call.apply_args(expr.node_info, {}, { lhs_type, rhs_type }) ||
-                    call.codegen(scope, rets);
+                    call->init(__intr__) ||
+                    call->apply_args(expr.node_info, {}, { lhs_type, rhs_type }) ||
+                    call->codegen(scope, rets);
             }
 
             if (!((*lhs_type).*check)())
@@ -3669,14 +4101,13 @@ namespace nn
             TypeRef ret = type_manager->duplicate(
                 TypeInfo::Category::CONST,
                 [type, &expr, lhs_type, rhs_type](Scope& scope) {
-                return
-                    lhs_type->codegen(scope) ||  // codegen the lhs
-                    rhs_type->codegen(scope) ||  // codegen the rhs
-                    type->codegen(scope) ||
-                    body->add_instruction(Node(expr.node_info)) ||
-                    scope.pop(2);  // pops ty, rhs, lhs; pushes ret
-            },
-                lhs_type);
+                    return
+                        lhs_type->codegen(scope) ||  // codegen the lhs
+                        rhs_type->codegen(scope) ||  // codegen the rhs
+                        type->codegen(scope) ||
+                        body->add_instruction(Node(expr.node_info)) ||
+                        scope.pop(2);  // pops ty, rhs, lhs; pushes ret
+                }, lhs_type);
             if (!ret)
                 return true;
             rets.push_back(ret);
@@ -3720,6 +4151,9 @@ namespace nn
                 lhs_type->codegen(scope) ||
                 rhs_type->codegen(scope) ||
                 ty->codegen(scope) ||
+                body->add_instruction(instruction::Cpy(expr.node_info)) ||
+                scope.pop() ||
+                ty->codegen(scope) ||
                 body->add_instruction(Node(expr.node_info)) ||
                 scope.pop(3);
         }
@@ -3749,11 +4183,12 @@ namespace nn
             if (lhs->ty == ExprType::VAR && !scope.contains(lhs->expr_string))
             {
                 // Its an implicit declaration
-                TypeRef type;
-                if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, *rhs, type))
+                TypeRef val;
+                if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, *rhs, val))
                     return true;
                 // doing the codegen for the right hand side
-                type->codegen(scope);
+                if (val->codegen(scope))
+                    return true;
 
                 // Overwriting the codegen with a dup instruction
                 CodegenCallback cb = [lhs](Scope& scope)
@@ -3761,35 +4196,37 @@ namespace nn
                     Scope::StackVar stack_var;
                     return
                         scope.at(lhs->expr_string, stack_var) ||
-                        body->add_instruction(instruction::Dup(lhs->node_info, stack_var.ptr));
+                        body->add_instruction(instruction::Dup(lhs->node_info, stack_var.ptr)) ||
+                        scope.push();
                 };
-                type->codegen = cb;
+                val->codegen = cb;
                 // Overwriting the type category based on the modifiers
                 // the non-virtual condition is handled by codegen_expr_single_ret<TypeInfo::NonVirtual>
                 if (is_const)
-                    type->cat = TypeInfo::Category::CONST;
+                    val->cat = TypeInfo::Category::CONST;
                 else if (is_ref)
                 {
-                    if (!type->in_category<TypeInfo::Mutable>())
+                    if (!val->in_category<TypeInfo::Mutable>())
                         return error::compiler(expr.node_info, "Unable to take a reference of an immutable object");
-                    type->cat = TypeInfo::Category::REF;
+                    val->cat = TypeInfo::Category::REF;
                 }
                 else
                 {
                     // objects that are handled by the graph builder
                     // don't have runtime type objects, and can't be copied
-                    if (type->check_cpy())
+                    if (val->check_cpy())
                     {
                         // copying the object during assignment
-                        TypeRef ty;
-                        if (type->to_obj(expr.node_info, ty) ||
-                            ty->codegen(scope) ||
-                            body->add_instruction(instruction::Cpy(expr.node_info))
+                        TypeRef type;
+                        if (val->to_obj(expr.node_info, type) ||
+                            type->codegen(scope) ||
+                            body->add_instruction(instruction::Cpy(expr.node_info)) ||
+                            scope.pop()
                             ) return true;
                     }
-                    type->cat = TypeInfo::Category::DEFAULT;
+                    val->cat = TypeInfo::Category::DEFAULT;
                 }
-                return scope.add(lhs->expr_string, type, expr.node_info);
+                return scope.add(lhs->expr_string, val, expr.node_info);
             }
             // const / ref can only be used with implicit declarations
             else if (is_ref)
@@ -3830,23 +4267,73 @@ namespace nn
                 {
                     if (lhs_type->ty != TypeInfo::Type::TENSOR)
                         return error::compiler(expr.node_info, "Tensor types can only be assigned to other tensors");
-                    // Independantly merge the forward edge and backward edge
+                    // Merging tensors is weird.  The forward edges can directly be merged, but thats not always true for the backward edges
+                    // This is cause if the tensors are used by multiple nodes, both backward edges will have bound inputs.
+                    // In this cases, if the backward edges were merged directly it would cause a runtime error, which is incorrect behaviour
+                    // Instead, it should implement the multivariable chain rule where the inputs to the backward edges get summed.
+                    // 
+                    // The best solution I could come up with to resolve this issue is to check if both the backward edges have their inputs bound
+                    // and call the user-overloaded intr __add__ to merge the edges, but this means more special instructions for checking edges...
+                    AstExpr lookup_expr;
+                    new (&lookup_expr.expr_string) std::string();
+                    lookup_expr.ty = ExprType::VAR;
+                    lookup_expr.node_info = expr.node_info;
+                    lookup_expr.expr_string = "__add__";
+                    TypeRef ret;
+                    if (codegen_expr_callee_var(scope, lookup_expr, ret))
+                        return true;
+                    if (ret->ty != TypeInfo::Type::LOOKUP)
+                        return error::compiler(expr.node_info, "intr __add__ overload is shadowed in the local scope for tensor merge operation");
+                    if (ret->type_lookup.lookup.intrs.size() == 0)
+                        return error::compiler(expr.node_info, "Unable to find a intr __add__ overload for tensor merge operation");
+                    if (ret->type_lookup.lookup.intrs.size() > 1)
+                        return error::compiler(expr.node_info, "intr __add__ was overloaded multiple times.  Merge operation is ambiguous");
+                    assert(ret->type_lookup.lookup.intrs.size() == 1);
+                    const AstBlock& __add__ = *ret->type_lookup.lookup.intrs[0];
+                    if (__add__.signature.vargs.size() < 2)
+                        return error::compiler(expr.node_info, "Too few vargs found in intr __add__ signature, expected exactly two");
+                    if (__add__.signature.vargs.size() > 2)
+                        return error::compiler(expr.node_info, "Too many vargs found in intr __add__ signature, expected exactly two");
+                    if (__add__.signature.rets.size() != 1)
+                        return error::compiler(expr.node_info, "Expected exactly one return value from intr __add__");
+                    std::vector<TypeRef> add_rets;
+                    std::string merge_label;
+                    std::string end_label;
+                    std::unique_ptr<IntrCall> call = std::make_unique<IntrCall>(ret->type_lookup.lookup.ns);
                     return
                         lhs_type->codegen(scope) ||
+                        body->add_instruction(instruction::GFwd(expr.node_info)) ||
                         rhs_type->codegen(scope) ||
-                        body->add_instruction(instruction::Dup(expr.node_info, 1)) ||
-                        body->add_instruction(instruction::GFwd(expr.node_info)) ||
-                        body->add_instruction(instruction::Dup(expr.node_info, 1)) ||
                         body->add_instruction(instruction::GFwd(expr.node_info)) ||
                         body->add_instruction(instruction::Mrg(expr.node_info)) ||
-                        body->add_instruction(instruction::Dup(expr.node_info, 1)) ||
+                        scope.pop(2) ||
+                        lhs_type->codegen(scope) ||
                         body->add_instruction(instruction::GBwd(expr.node_info)) ||
-                        body->add_instruction(instruction::Dup(expr.node_info, 1)) ||
+                        body->add_instruction(instruction::Einp(expr.node_info)) ||
+                        rhs_type->codegen(scope) ||
+                        body->add_instruction(instruction::GBwd(expr.node_info)) ||
+                        body->add_instruction(instruction::Einp(expr.node_info)) ||
+                        body->add_instruction(instruction::LAnd(expr.node_info)) ||
+                        body->add_instruction(instruction::Brf(expr.node_info, merge_label)) ||
+                        scope.pop(2) ||
+                        // multivariable chain rule, sum of the backward paths
+                        call->init(__add__) ||
+                        call->apply_args(expr.node_info, {}, { lhs_type, rhs_type }) ||
+                        call->codegen(scope, add_rets) ||
+                        lhs_type->codegen(scope) ||
+                        add_rets.front()->codegen(scope) ||
+                        body->add_instruction(instruction::SBwd(expr.node_info)) ||
+                        scope.pop(2) ||
+                        body->add_instruction(instruction::Jmp(expr.node_info, end_label)) ||
+                        // Either one or both of the backward edges did not have an input node, a simple mrg is fine
+                        body->add_label(expr.node_info, merge_label) ||
+                        lhs_type->codegen(scope) ||
+                        body->add_instruction(instruction::GBwd(expr.node_info)) ||
+                        rhs_type->codegen(scope) ||
                         body->add_instruction(instruction::GBwd(expr.node_info)) ||
                         body->add_instruction(instruction::Mrg(expr.node_info)) ||
-                        body->add_instruction(instruction::Pop(expr.node_info, 0)) ||
-                        body->add_instruction(instruction::Pop(expr.node_info, 0)) ||
-                        scope.pop(2);
+                        scope.pop(2) ||
+                        body->add_label(expr.node_info, end_label);
                 }
 
                 if (rhs_type->ty == TypeInfo::Type::EDGE)
@@ -3866,7 +4353,7 @@ namespace nn
                     lhs_type->to_obj(expr.node_info, ty) ||
                     ty->codegen(scope) ||
                     body->add_instruction(instruction::Set(expr.node_info)) ||
-                    scope.pop(2);
+                    scope.pop(3);
             }
         }
 
@@ -3896,6 +4383,7 @@ namespace nn
                 AstExpr lookup_expr;
                 new (&lookup_expr.expr_string) std::string();
                 lookup_expr.ty = ExprType::VAR;
+                lookup_expr.node_info = expr.node_info;
                 lookup_expr.expr_string = name;
                 TypeRef ret;
                 if (codegen_expr_callee_var(scope, lookup_expr, ret))
@@ -3914,11 +4402,11 @@ namespace nn
                     return error::compiler(expr.node_info, "Too many vargs found in def % signature, expected exactly two", name);
                 if (__def__.signature.rets.size() != 1)
                     return error::compiler(expr.node_info, "Expected exactly one return value from def %", name);
-                DefCall call{ ret->type_lookup.lookup.ns };
+                std::unique_ptr<DefCall> call = std::make_unique<DefCall>(ret->type_lookup.lookup.ns);
                 return
-                    call.init(__def__) ||
-                    call.apply_args(expr.node_info, {}, { lhs_type, rhs_type }) ||
-                    call.codegen(scope, rets);
+                    call->init(__def__) ||
+                    call->apply_args(expr.node_info, {}, { lhs_type, rhs_type }) ||
+                    call->codegen(scope, rets);
             }
 
             if (lhs_type->ty == TypeInfo::Type::EDGE && rhs_type->ty == TypeInfo::Type::EDGE)
@@ -3926,6 +4414,7 @@ namespace nn
                 AstExpr lookup_expr;
                 new (&lookup_expr.expr_string) std::string();
                 lookup_expr.ty = ExprType::VAR;
+                lookup_expr.node_info = expr.node_info;
                 lookup_expr.expr_string = name;
                 TypeRef ret;
                 if (codegen_expr_callee_var(scope, lookup_expr, ret))
@@ -3944,11 +4433,11 @@ namespace nn
                     return error::compiler(expr.node_info, "Too many vargs found in intr % signature, expected exactly two", name);
                 if (__intr__.signature.rets.size() != 1)
                     return error::compiler(expr.node_info, "Expected exactly one return value from intr %", name);
-                IntrCall call{ ret->type_lookup.lookup.ns };
+                std::unique_ptr<IntrCall> call = std::make_unique<IntrCall>(ret->type_lookup.lookup.ns);
                 return
-                    call.init(__intr__) ||
-                    call.apply_args(expr.node_info, {}, { lhs_type, rhs_type }) ||
-                    call.codegen(scope, rets);
+                    call->init(__intr__) ||
+                    call->apply_args(expr.node_info, {}, { lhs_type, rhs_type }) ||
+                    call->codegen(scope, rets);
             }
 
             if (!((*lhs_type).*check)())
@@ -4001,12 +4490,13 @@ namespace nn
             if (lhs_type->ty == TypeInfo::Type::DLTYPE)
             {
                 // Its a reshape operation
-                AstExpr add_lookup;
-                new (&add_lookup.expr_string) std::string();
-                add_lookup.ty = ExprType::VAR;
-                add_lookup.expr_string = "__cast__";
+                AstExpr lookup_expr;
+                new (&lookup_expr.expr_string) std::string();
+                lookup_expr.ty = ExprType::VAR;
+                lookup_expr.node_info = expr.node_info;
+                lookup_expr.expr_string = "__cast__";
                 TypeRef ret;
-                if (codegen_expr_callee_var(scope, add_lookup, ret))
+                if (codegen_expr_callee_var(scope, lookup_expr, ret))
                     return true;
 
                 if (rhs_type->ty == TypeInfo::Type::TENSOR)
@@ -4025,14 +4515,14 @@ namespace nn
                         return error::compiler(expr.node_info, "Too many vargs found in def __cast__ signature, expected exactly one");
                     if (__cast__.signature.rets.size() != 1)
                         return error::compiler(expr.node_info, "Expected exactly one return value from def __cast__");
-                    DefCall call{ ret->type_lookup.lookup.ns };
+                    std::unique_ptr<DefCall> call = std::make_unique<DefCall>(ret->type_lookup.lookup.ns);
                     return
-                        call.init(__cast__) ||
-                        call.apply_args(expr.node_info, {
-                                { "fp", lhs_type->type_dltype.fp },
+                        call->init(__cast__) ||
+                        call->apply_args(expr.node_info, {
+                                { "out_fp", lhs_type->type_dltype.fp },
                                 { "out_shape", lhs_type->type_dltype.shape },
-                            }, { lhs_type, rhs_type }) ||
-                            call.codegen(scope, rets);
+                            }, { rhs_type }) ||
+                        call->codegen(scope, rets);
                 }
                 if (rhs_type->ty == TypeInfo::Type::EDGE)
                 {
@@ -4050,14 +4540,14 @@ namespace nn
                         return error::compiler(expr.node_info, "Too many vargs found in intr __cast__ signature, expected exactly two");
                     if (__cast__.signature.rets.size() != 1)
                         return error::compiler(expr.node_info, "Expected exactly one return value from intr __cast__");
-                    IntrCall call{ ret->type_lookup.lookup.ns };
+                    std::unique_ptr<IntrCall> call = std::make_unique<IntrCall>(ret->type_lookup.lookup.ns);
                     return
-                        call.init(__cast__) ||
-                        call.apply_args(expr.node_info, {
-                                { "fp", lhs_type->type_dltype.fp },
+                        call->init(__cast__) ||
+                        call->apply_args(expr.node_info, {
+                                { "out_fp", lhs_type->type_dltype.fp },
                                 { "out_shape", lhs_type->type_dltype.shape },
-                            }, { lhs_type, rhs_type }) ||
-                            call.codegen(scope, rets);
+                            }, { rhs_type }) ||
+                        call->codegen(scope, rets);
                 }
                 return error::compiler(expr.expr_binary.right->node_info, "Expected either a tensor or an edge in a reshape cast operation");
             }
@@ -4097,6 +4587,7 @@ namespace nn
                             body->add_instruction(instruction::XFlt(expr.node_info)) ||
                             scope.pop();
                     });
+                break;
             case TypeInfo::Type::STR:
                 if (!rhs_type->check_xstr())
                     return error::compiler(expr.node_info, "Unable to cast type '%' to string", rhs_type->to_string());
@@ -4109,6 +4600,7 @@ namespace nn
                             body->add_instruction(instruction::XStr(expr.node_info)) ||
                             scope.pop();
                     });
+                break;
             default:
                 return error::compiler(expr.expr_binary.left->node_info, "Casting to type '%' is not supported", lhs_type->type_type.base->to_string());
             }
@@ -4120,7 +4612,62 @@ namespace nn
 
         bool codegen_expr_idx(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
         {
-            return error::compiler(expr.node_info, "Internal error: not implemented");
+            TypeRef callee;
+            if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, *expr.expr_index.expr, callee))
+                return true;
+            if (callee->ty == TypeInfo::Type::TENSOR)
+                return error::compiler(expr.node_info, "Tensor slicing has not been implemented");
+            if (callee->ty == TypeInfo::Type::EDGE)
+                return error::compiler(expr.node_info, "Edge slicing has not been implemented");
+            
+            if (expr.expr_index.args.size() != 1)
+                return error::compiler(expr.node_info, "Expected a single index argument, recieved %", expr.expr_index.args.size());
+            const AstExprIndex::Elem& expr_arg = expr.expr_index.args.front();
+            assert(expr_arg.ty != AstExprIndex::Elem::Type::INVALID);
+            if (expr_arg.ty == AstExprIndex::Elem::Type::ELLIPSES)
+                return error::compiler(expr.node_info, "Invalid usage of ellipses (...)");
+            if (expr_arg.ty == AstExprIndex::Elem::Type::SLICE)
+            {
+                // Do a slice
+                return error::compiler(expr.node_info, "Internal error: slicing has not been implemented");
+            }
+            if (expr_arg.ty == AstExprIndex::Elem::Type::DIRECT)
+            {
+                // Do an index
+                TypeRef ret;
+                TypeRef callee_type;
+                if (callee->to_obj(expr.node_info, callee_type))
+                    return true;
+                TypeRef arg;
+                if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, *expr_arg.lhs, arg))
+                    return true;
+                if (arg->ty != TypeInfo::Type::INT)
+                    return error::compiler(expr_arg.lhs->node_info, "Expected integer as index argument, recieved %", arg);
+                switch (callee->ty)
+                {
+                case TypeInfo::Type::ARRAY:
+                    ret = type_manager->duplicate(
+                        callee->cat,
+                        [&expr, callee, arg, callee_type](Scope& scope) -> bool {
+                            return
+                                callee->codegen(scope) ||
+                                arg->codegen(scope) ||
+                                callee_type->codegen(scope) ||
+                                body->add_instruction(instruction::Idx(expr.node_info)) ||
+                                scope.pop(2);
+                        }, callee->type_array.elem);
+                    break;
+                case TypeInfo::Type::TUPLE:
+                    return error::compiler(expr.node_info, "Internal error: tuple indexing has not been implemented");
+                default:
+                    return error::compiler(expr.node_info, "Unable to index into type %", callee->to_string());
+                }
+                if (!ret)
+                    return true;
+                rets.push_back(ret);
+                return false;
+            }
+            return error::compiler(expr.node_info, "Internal error: invalid index elem enum %", (int)expr_arg.ty);
         }
 
         bool codegen_expr_dot(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
@@ -4187,59 +4734,59 @@ namespace nn
                 return true;
             if (decl_type->ty != TypeInfo::Type::TYPE)
             {
-                if (decl_type->ty == TypeInfo::Type::DLTYPE)
+                if (decl_type->ty != TypeInfo::Type::DLTYPE)
+                    return error::compiler(expr.node_info, "Variable declarations require a type");
+                
+                // Its either a tensor declaration or edge declaration depending on the context
+                TypeRef ret;
+                switch (body_type)
                 {
-                    TypeRef ret;
-                    switch (body_type)
-                    {
-                    case BodyType::INVALID:
-                        return error::compiler(expr.node_info, "Internal error: body_type enum is invalid");
-                    case BodyType::STRUCT:
-                    case BodyType::DEF:
-                    case BodyType::FN:
-                        // In all of these contexts, its a tensor
-                        if (decl_type->type_dltype.tensor->codegen(scope))
-                            return true;
-                        ret = type_manager->create_tensor(
-                            TypeInfo::Category::DEFAULT,
-                            [&expr](Scope& scope) -> bool {
-                                Scope::StackVar var;
-                                return
-                                    scope.at(expr.expr_name.val, var) ||
-                                    body->add_instruction(instruction::Dup(expr.node_info, var.ptr)) ||
-                                    scope.push();
-                            });
-                        break;
-                    case BodyType::INTR:
-                        // Only in intrs are tensor declarations actually edges
-                        if (decl_type->type_dltype.edge->codegen(scope))
-                            return true;
-                        ret = type_manager->create_edge(
-                            TypeInfo::Category::DEFAULT,
-                            [&expr](Scope& scope) -> bool {
-                                Scope::StackVar var;
-                                return
-                                    scope.at(expr.expr_name.val, var) ||
-                                    body->add_instruction(instruction::Dup(expr.node_info, var.ptr)) ||
-                                    scope.push();
-                            });
-                        break;
-                    default:
-                        return error::compiler(expr.node_info, "Internal error: body_type enum is out of range");
-                    }
-                    if (!ret || scope.add(expr.expr_name.val, ret, expr.node_info))
+                case BodyType::INVALID:
+                    return error::compiler(expr.node_info, "Internal error: body_type enum is invalid");
+                case BodyType::STRUCT:
+                case BodyType::DEF:
+                case BodyType::FN:
+                    // In all of these contexts, its a tensor
+                    if (decl_type->type_dltype.tensor->codegen(scope))
                         return true;
-                    rets.push_back(ret);
-                    return false;
+                    ret = type_manager->create_tensor(
+                        TypeInfo::Category::DEFAULT,
+                        [&expr](Scope& scope) -> bool {
+                            Scope::StackVar var;
+                            return
+                                scope.at(expr.expr_name.val, var) ||
+                                body->add_instruction(instruction::Dup(expr.node_info, var.ptr)) ||
+                                scope.push();
+                        });
+                    break;
+                case BodyType::INTR:
+                    // Only in intrs are tensor declarations actually edges
+                    if (decl_type->type_dltype.edge->codegen(scope))
+                        return true;
+                    ret = type_manager->create_edge(
+                        TypeInfo::Category::DEFAULT,
+                        [&expr](Scope& scope) -> bool {
+                            Scope::StackVar var;
+                            return
+                                scope.at(expr.expr_name.val, var) ||
+                                body->add_instruction(instruction::Dup(expr.node_info, var.ptr)) ||
+                                scope.push();
+                        });
+                    break;
+                default:
+                    return error::compiler(expr.node_info, "Internal error: body_type enum is out of range");
                 }
-                return error::compiler(expr.node_info, "Variable declarations require a type");
+                if (!ret || scope.add(expr.expr_name.val, ret, expr.node_info))
+                    return true;
+                rets.push_back(ret);
+                return false;
             }
+            
             TypeRef type = decl_type->type_type.base;
             if (type->cat != TypeInfo::Category::DEFAULT)
                 return error::compiler(expr.node_info, "Invalid type category for variable declaration");
-            if (type->codegen(scope) ||
-                scope.push()
-                ) return true;
+            if (type->codegen(scope))
+                return true;
             type->codegen = [&expr](Scope& scope) {
                 Scope::StackVar var;
                 if (scope.at(expr.expr_name.val, var))
@@ -4248,7 +4795,10 @@ namespace nn
                     body->add_instruction(instruction::Dup(expr.node_info, var.ptr)) ||
                     scope.push();
             };
-            return scope.add(expr.expr_name.val, type, expr.node_info);
+            if (scope.add(expr.expr_name.val, type, expr.node_info))
+                return true;
+            rets.push_back(type);
+            return false;
         }
 
         bool codegen_expr_cargs(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
@@ -4290,48 +4840,35 @@ namespace nn
                     TypeRef arg_type;
                     if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, expr.expr_call.args[0], arg_type))
                         return true;
-                    TypeRef type = type_manager->create_array(
-                        TypeInfo::Category::CONST,
-                        [&arg_type, &expr](Scope& scope) {
-                            return
-                                arg_type->codegen(scope) ||
-                                body->add_instruction(instruction::Arr(expr.node_info));
-                        },
-                        arg_type);
-                    if (!type)
+                    if (arg_type->ty != TypeInfo::Type::TYPE)
+                        return error::compiler(expr.expr_call.args[0].node_info, "The carg of array must be a type, recieved %", arg_type->to_string());
+                    TypeRef tmp = type_manager->create_array(TypeInfo::Category::VIRTUAL, nullptr, arg_type->type_type.base);
+                    if (!tmp)
+                        return true;
+                    TypeRef type;
+                    if (tmp->to_obj(expr.node_info, type))
                         return true;
                     rets.push_back(type);
                     return false;
                 }
                 case ExprKW::TUPLE:
                 {
-                    std::vector<TypeRef> arg_types;
+                    std::vector<TypeRef> raw_arg_types;
                     for (const auto& arg : expr.expr_call.args)
-                        if (codegen_expr(scope, arg, arg_types))
+                        if (codegen_expr(scope, arg, raw_arg_types))
                             return true;
-                    for (const auto& arg_type : arg_types)
+                    std::vector<TypeRef> arg_types;
+                    for (const auto& raw_arg_type : raw_arg_types)
                     {
-                        if (arg_type->ty != TypeInfo::Type::TYPE)
-                            return error::compiler(expr.node_info, "A tuple type must be constructed from other types");
-                        if (arg_type->cat == TypeInfo::Category::VIRTUAL)
-                            return error::compiler(expr.node_info, "Tuple cargs must be non-virtual");
+                        if (raw_arg_type->ty != TypeInfo::Type::TYPE)
+                            return error::compiler(expr.node_info, "The cargs of a tuple must be types, recieved %", raw_arg_type->to_string());
+                        arg_types.push_back(raw_arg_type->type_type.base);
                     }
-                    TypeRef type = type_manager->create_tuple(
-                        TypeInfo::Category::CONST,
-                        [&arg_types, &expr](Scope& scope) {
-                            for (const auto& arg_type : arg_types)
-                                if (arg_type->codegen(scope))
-                                    return true;
-                            if (body->add_instruction(instruction::Aty(expr.node_info, arg_types.size())))
-                                return true;
-                            if (arg_types.size() == 0)
-                                return scope.push();
-                            if (arg_types.size() == 1)
-                                return false;
-                            return scope.pop(arg_types.size() - 1);
-                        },
-                        arg_types);
-                    if (!type)
+                    TypeRef tmp = type_manager->create_tuple(TypeInfo::Category::VIRTUAL, nullptr, arg_types);
+                    if (!tmp)
+                        return true;
+                    TypeRef type;
+                    if (tmp->to_obj(expr.node_info, type))
                         return true;
                     rets.push_back(type);
                     return false;
@@ -4371,11 +4908,11 @@ namespace nn
                 if (init_matches.size() == 1)
                 {
                     // Perfect match, return it
-                    InitCall call{ callee->type_lookup.lookup.ns };
+                    std::unique_ptr<InitCall> call = std::make_unique<InitCall>(callee->type_lookup.lookup.ns);
                     return
-                        call.init(*init_matches[0].first) ||
-                        call.apply_args(expr.node_info, init_matches[0].second) ||
-                        call.codegen(scope, rets);
+                        call->init(*init_matches[0].first) ||
+                        call->apply_args(expr.node_info, init_matches[0].second) ||
+                        call->codegen(scope, rets);
                 }
                 // Non of the inits matched the cargs, so see if a struct matches
                 std::vector<std::pair<const AstStruct*, std::map<std::string, TypeRef>>> struct_matches;
@@ -4437,20 +4974,23 @@ namespace nn
                         for (const auto& arg : args)
                             if (arg->ty == TypeInfo::Type::INT)
                                 start_val++;
-                        size_t addr;
+                        size_t addr, int_addr;
                         if (bc->add_obj_int(addr, start_val) ||
-                            body->add_instruction(instruction::New(expr.node_info, addr))
+                            bc->add_type_int(int_addr) ||
+                            body->add_instruction(instruction::New(expr.node_info, addr)) ||
+                            body->add_instruction(instruction::New(expr.node_info, int_addr)) ||
+                            body->add_instruction(instruction::Cpy(expr.node_info))
                             ) return true;
                         // for arg in args: dup n; dup arg; len; new type int; iadd
-                        if (bc->add_type_int(addr))
-                            return true;
                         for (size_t i = 0; i < args.size(); i++)
                             if (args[i]->ty == TypeInfo::Type::UNPACK)
                             {
                                 if (body->add_instruction(instruction::Dup(expr.node_info, 0)) ||
                                     body->add_instruction(instruction::Dup(expr.node_info, args.size() - i + 1)) ||
+                                    body->add_instruction(instruction::New(expr.node_info, int_addr)) ||
+                                    body->add_instruction(instruction::Arr(expr.node_info)) ||
                                     body->add_instruction(instruction::Len(expr.node_info)) ||
-                                    body->add_instruction(instruction::New(expr.node_info, addr)) ||
+                                    body->add_instruction(instruction::New(expr.node_info, int_addr)) ||
                                     body->add_instruction(instruction::IAdd(expr.node_info))
                                     ) return true;
                             }
@@ -4468,13 +5008,13 @@ namespace nn
                         for (size_t n = 0; n < 2; n++)
                         {
                             // Setup for edge generation
-                            if (body->add_instruction(instruction::Dup(expr.node_info, args.size() + 2)) ||  // dup fp
-                                body->add_instruction(instruction::Dup(expr.node_info, 2))                   // dup n
-                                ) return true;
-                            // for arg in args: dup <arg>
-                            for (size_t i = 0; i < args.size(); i++)
-                                if (body->add_instruction(instruction::Dup(expr.node_info, args.size() + 3)))
+                            if (body->add_instruction(instruction::Dup(expr.node_info, args.size() + 2)))  // dup fp
+                                return true;
+                            for (size_t i = 0; i < args.size(); i++)  // for arg in args: dup <arg>
+                                if (body->add_instruction(instruction::Dup(expr.node_info, args.size() + 2)))
                                     return true;
+                            if (body->add_instruction(instruction::Dup(expr.node_info, args.size() + 2)))  // dup n
+                                return true;
 
                             // Expanding each of the packed arguments onto the stack
                             for (size_t k = 0; k < args.size(); k++)
@@ -4485,24 +5025,26 @@ namespace nn
                                     std::string end_label = label_prefix(expr.node_info) + "_end" + std::to_string(n) + "_" + std::to_string(k);
 
                                     // Break condition for the loop over args[k]
-                                    if (body->add_instruction(instruction::New(expr.node_info, int0)) ||             // new int 0  # i
-                                        body->add_label(expr.node_info, loop_label) ||                               // :loop
-                                        body->add_instruction(instruction::Dup(expr.node_info, args.size() - k)) ||  // dup <args[k]>
-                                        body->add_instruction(instruction::New(expr.node_info, addr)) ||             // new type int
-                                        body->add_instruction(instruction::Arr(expr.node_info)) ||                   // arr
-                                        body->add_instruction(instruction::Len(expr.node_info)) ||                   // len
-                                        body->add_instruction(instruction::Dup(expr.node_info, 1)) ||                // dup i
-                                        body->add_instruction(instruction::New(expr.node_info, addr)) ||             // new type int
-                                        body->add_instruction(instruction::Eq(expr.node_info)) ||                    // eq
-                                        body->add_instruction(instruction::Brt(expr.node_info, end_label))           // brt end
+                                    if (body->add_instruction(instruction::New(expr.node_info, int0)) ||                 // new int 0  # i
+                                        body->add_instruction(instruction::New(expr.node_info, int_addr)) ||             // new type int
+                                        body->add_instruction(instruction::Cpy(expr.node_info)) ||                       // cpy
+                                        body->add_label(expr.node_info, loop_label) ||                                   // :loop
+                                        body->add_instruction(instruction::Dup(expr.node_info, args.size() - k + 1)) ||  // dup <args[k]>
+                                        body->add_instruction(instruction::New(expr.node_info, int_addr)) ||             // new type int
+                                        body->add_instruction(instruction::Arr(expr.node_info)) ||                       // arr
+                                        body->add_instruction(instruction::Len(expr.node_info)) ||                       // len
+                                        body->add_instruction(instruction::Dup(expr.node_info, 1)) ||                    // dup i
+                                        body->add_instruction(instruction::New(expr.node_info, int_addr)) ||             // new type int
+                                        body->add_instruction(instruction::Eq(expr.node_info)) ||                        // eq
+                                        body->add_instruction(instruction::Brt(expr.node_info, end_label))               // brt end
                                         ) return true;
 
                                     // Placing the next element from args[k] onto the stack
-                                    if (body->add_instruction(instruction::Dup(expr.node_info, args.size() - k)) ||  // dup args[k]
-                                        body->add_instruction(instruction::Dup(expr.node_info, 1)) ||                // dup i
-                                        body->add_instruction(instruction::New(expr.node_info, addr)) ||             // new type int
-                                        body->add_instruction(instruction::Arr(expr.node_info)) ||                   // arr
-                                        body->add_instruction(instruction::Idx(expr.node_info))                      // idx
+                                    if (body->add_instruction(instruction::Dup(expr.node_info, args.size() - k + 1)) ||  // dup args[k]
+                                        body->add_instruction(instruction::Dup(expr.node_info, 1)) ||                    // dup i
+                                        body->add_instruction(instruction::New(expr.node_info, int_addr)) ||             // new type int
+                                        body->add_instruction(instruction::Arr(expr.node_info)) ||                       // arr
+                                        body->add_instruction(instruction::Idx(expr.node_info))                          // idx
                                         ) return true;
 
                                     // Reorganizing the stack
@@ -4515,17 +5057,17 @@ namespace nn
                                     }
 
                                     // Incrementing i
-                                    if (body->add_instruction(instruction::Dup(expr.node_info, 0)) ||     // dup i
-                                        body->add_instruction(instruction::New(expr.node_info, int1)) ||  // new int 1
-                                        body->add_instruction(instruction::New(expr.node_info, addr)) ||  // new type int
-                                        body->add_instruction(instruction::IAdd(expr.node_info))          // iadd
+                                    if (body->add_instruction(instruction::Dup(expr.node_info, 0)) ||         // dup i
+                                        body->add_instruction(instruction::New(expr.node_info, int1)) ||      // new int 1
+                                        body->add_instruction(instruction::New(expr.node_info, int_addr)) ||  // new type int
+                                        body->add_instruction(instruction::IAdd(expr.node_info))              // iadd
                                         ) return true;
 
                                     // Looping back and stack cleanup
-                                    if (body->add_instruction(instruction::Jmp(expr.node_info, loop_label)) ||       // jmp loop
-                                        body->add_label(expr.node_info, end_label) ||                                // :end
-                                        body->add_instruction(instruction::Pop(expr.node_info, args.size() - k)) ||  // pop args[k]
-                                        body->add_instruction(instruction::Pop(expr.node_info, 0))                   // pop i
+                                    if (body->add_instruction(instruction::Jmp(expr.node_info, loop_label)) ||           // jmp loop
+                                        body->add_label(expr.node_info, end_label) ||                                    // :end
+                                        body->add_instruction(instruction::Pop(expr.node_info, args.size() - k + 1)) ||  // pop args[k]
+                                        body->add_instruction(instruction::Pop(expr.node_info, 0))                       // pop i
                                         ) return true;
                                 }
                             
@@ -4567,20 +5109,23 @@ namespace nn
                         for (const auto& arg : args)
                             if (arg->ty == TypeInfo::Type::INT)
                                 start_val++;
-                        size_t addr;
+                        size_t addr, int_addr;
                         if (bc->add_obj_int(addr, start_val) ||
-                            body->add_instruction(instruction::New(expr.node_info, addr))
+                            bc->add_type_int(int_addr) ||
+                            body->add_instruction(instruction::New(expr.node_info, addr)) ||
+                            body->add_instruction(instruction::New(expr.node_info, int_addr)) ||
+                            body->add_instruction(instruction::Cpy(expr.node_info))
                             ) return true;
                         // for arg in args: dup n; dup arg; len; new type int; iadd
-                        if (bc->add_type_int(addr))
-                            return true;
                         for (size_t i = 0; i < args.size(); i++)
                             if (args[i]->ty == TypeInfo::Type::UNPACK)
                             {
                                 if (body->add_instruction(instruction::Dup(expr.node_info, 0)) ||
                                     body->add_instruction(instruction::Dup(expr.node_info, args.size() - i + 1)) ||
+                                    body->add_instruction(instruction::New(expr.node_info, int_addr)) ||
+                                    body->add_instruction(instruction::Arr(expr.node_info)) ||
                                     body->add_instruction(instruction::Len(expr.node_info)) ||
-                                    body->add_instruction(instruction::New(expr.node_info, addr)) ||
+                                    body->add_instruction(instruction::New(expr.node_info, int_addr)) ||
                                     body->add_instruction(instruction::IAdd(expr.node_info))
                                     ) return true;
                             }
@@ -4601,13 +5146,15 @@ namespace nn
 
                                 // Break condition for the loop over args[k]
                                 if (body->add_instruction(instruction::New(expr.node_info, zero_addr)) ||            // new int 0  # i
+                                    body->add_instruction(instruction::New(expr.node_info, int_addr)) ||             // new type int
+                                    body->add_instruction(instruction::Cpy(expr.node_info)) ||                       // cpy
                                     body->add_label(expr.node_info, loop_label) ||                                   // :loop
                                     body->add_instruction(instruction::Dup(expr.node_info, args.size() - k + 1)) ||  // dup <args[k]>
-                                    body->add_instruction(instruction::New(expr.node_info, addr)) ||                 // new type int
+                                    body->add_instruction(instruction::New(expr.node_info, int_addr)) ||             // new type int
                                     body->add_instruction(instruction::Arr(expr.node_info)) ||                       // arr
                                     body->add_instruction(instruction::Len(expr.node_info)) ||                       // len
                                     body->add_instruction(instruction::Dup(expr.node_info, 1)) ||                    // dup i
-                                    body->add_instruction(instruction::New(expr.node_info, addr)) ||                 // new type int
+                                    body->add_instruction(instruction::New(expr.node_info, int_addr)) ||             // new type int
                                     body->add_instruction(instruction::Eq(expr.node_info)) ||                        // eq
                                     body->add_instruction(instruction::Brt(expr.node_info, end_label))               // brt end
                                     ) return true;
@@ -4615,14 +5162,14 @@ namespace nn
                                 // Placing the next element from args[k] onto the stack
                                 if (body->add_instruction(instruction::Dup(expr.node_info, args.size() - k + 1)) ||  // dup args[k]
                                     body->add_instruction(instruction::Dup(expr.node_info, 1)) ||                    // dup i
-                                    body->add_instruction(instruction::New(expr.node_info, addr)) ||                 // new type int
+                                    body->add_instruction(instruction::New(expr.node_info, int_addr)) ||             // new type int
                                     body->add_instruction(instruction::Arr(expr.node_info)) ||                       // arr
                                     body->add_instruction(instruction::Idx(expr.node_info))                          // idx
                                     ) return true;
 
                                 // Reorganizing the stack
                                 // 1 for n, "args.size() - k" args, and 1 for i
-                                for (int j = 0; j < args.size() - k + 1; j++)
+                                for (int j = 0; j < args.size() - k + 2; j++)
                                 {
                                     if (body->add_instruction(instruction::Dup(expr.node_info, args.size() - k + 2)) ||
                                         body->add_instruction(instruction::Pop(expr.node_info, args.size() - k + 3))
@@ -4632,15 +5179,15 @@ namespace nn
                                 // Incrementing i
                                 if (body->add_instruction(instruction::Dup(expr.node_info, 0)) ||         // dup i
                                     body->add_instruction(instruction::New(expr.node_info, one_addr)) ||  // new int 1
-                                    body->add_instruction(instruction::New(expr.node_info, addr)) ||      // new type int
+                                    body->add_instruction(instruction::New(expr.node_info, int_addr)) ||  // new type int
                                     body->add_instruction(instruction::IAdd(expr.node_info))              // iadd
                                     ) return true;
 
                                 // Looping back and stack cleanup
-                                if (body->add_instruction(instruction::Jmp(expr.node_info, loop_label)) ||       // jmp loop
-                                    body->add_label(expr.node_info, end_label) ||                                // :end
-                                    body->add_instruction(instruction::Pop(expr.node_info, args.size() - k)) ||  // pop args[k]
-                                    body->add_instruction(instruction::Pop(expr.node_info, 0))                   // pop i
+                                if (body->add_instruction(instruction::Jmp(expr.node_info, loop_label)) ||           // jmp loop
+                                    body->add_label(expr.node_info, end_label) ||                                    // :end
+                                    body->add_instruction(instruction::Pop(expr.node_info, args.size() - k + 1)) ||  // pop args[k]
+                                    body->add_instruction(instruction::Pop(expr.node_info, 0))                       // pop i
                                     ) return true;
                             }
 
@@ -4669,8 +5216,16 @@ namespace nn
                                 if (stack_size)
                                 {
                                     if (body->add_instruction(instruction::Agg(expr.node_info, stack_size)) ||
-                                        scope.pop(stack_size)
+                                        scope.pop((size_t)stack_size - 1)
                                         ) return true;
+                                    if (init)
+                                    {
+                                        if (body->add_instruction(instruction::New(expr.node_info, int_addr)) ||
+                                            body->add_instruction(instruction::Arr(expr.node_info)) ||
+                                            body->add_instruction(instruction::Add(expr.node_info)) ||
+                                            scope.pop()
+                                            ) return true;
+                                    }
                                     stack_size = 0;
                                     init = true;
                                 }
@@ -4680,7 +5235,8 @@ namespace nn
                                 {
                                     if (body->add_instruction(instruction::New(expr.node_info, int_addr)) ||
                                         body->add_instruction(instruction::Arr(expr.node_info)) ||
-                                        body->add_instruction(instruction::Add(expr.node_info))
+                                        body->add_instruction(instruction::Add(expr.node_info)) ||
+                                        scope.pop()
                                         ) return true;
                                 }
                             }
@@ -4695,23 +5251,25 @@ namespace nn
                         if (stack_size)
                         {
                             if (body->add_instruction(instruction::Agg(expr.node_info, stack_size)) ||
-                                scope.pop(stack_size)
+                                scope.pop(stack_size - 1)
                                 ) return true;
-                            init = true;
                         }
-
                         if (init)
                         {
                             if (body->add_instruction(instruction::New(expr.node_info, int_addr)) ||
                                 body->add_instruction(instruction::Arr(expr.node_info)) ||
-                                body->add_instruction(instruction::Add(expr.node_info))
+                                body->add_instruction(instruction::Add(expr.node_info)) ||
+                                scope.pop()
                                 ) return true;
                         }
                         return false;
                     }, tmp);
                 if (!shape)
                     return true;
-                TypeRef type = type_manager->create_dltype(tensor, edge, shape, callee);
+                TypeRef fp = type_manager->duplicate(callee);
+                if (!fp)
+                    return true;
+                TypeRef type = type_manager->create_dltype(tensor, edge, shape, fp);
                 if (!type)
                     return true;
                 rets.push_back(type);
@@ -4723,6 +5281,35 @@ namespace nn
 
         bool codegen_expr_vargs(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
         {
+            // Check if its a len() call
+            if (expr.expr_call.callee->ty == ExprType::KW && expr.expr_call.callee->expr_kw == ExprKW::LEN)
+            {
+                // its a length call
+                if (expr.expr_call.args.size() != 1)
+                    return error::compiler(expr.node_info, "len call requires exactly one argument");
+                TypeRef arg;
+                if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, expr.expr_call.args.front(), arg))
+                    return true;
+                if (!arg->check_len())
+                    return error::compiler(expr.node_info, "Unable to get the length of type %", arg->to_string());
+                TypeRef type;
+                if (arg->to_obj(expr.node_info, type))
+                    return true;
+                TypeRef ret = type_manager->create_int(
+                    TypeInfo::Category::CONST,
+                    [&expr, type, arg](Scope& scope) -> bool {
+                        return
+                            arg->codegen(scope) ||
+                            type->codegen(scope) ||
+                            body->add_instruction(instruction::Len(expr.node_info)) ||
+                            scope.pop();
+                    });
+                if (!ret)
+                    return true;
+                rets.push_back(ret);
+                return false;
+            }
+
             TypeRef callee;
             if (codegen_expr_callee(scope, *expr.expr_call.callee, callee))
                 return true;
@@ -4768,7 +5355,11 @@ namespace nn
                 if (def_matches.size() == 1)
                 {
                     // Perfect match, return it
-                    return error::compiler(expr.node_info, "Interal error: not implemented");
+                    std::unique_ptr<DefCall> def_call = std::make_unique<DefCall>(callee->type_lookup.lookup.ns);
+                    return
+                        def_call->init(*std::get<0>(def_matches.front())) ||
+                        def_call->apply_args(expr.node_info, std::get<1>(def_matches.front()), std::get<2>(def_matches.front())) ||
+                        def_call->codegen(scope, rets);
                 }
             }
             if (check_intr)
@@ -4787,7 +5378,11 @@ namespace nn
                 if (intr_matches.size() == 1)
                 {
                     // Perfect match, return it
-                    return error::compiler(expr.node_info, "Interal error: not implemented");
+                    std::unique_ptr<IntrCall> intr_call = std::make_unique<IntrCall>(callee->type_lookup.lookup.ns);
+                    return
+                        intr_call->init(*std::get<0>(intr_matches.front())) ||
+                        intr_call->apply_args(expr.node_info, std::get<1>(intr_matches.front()), std::get<2>(intr_matches.front())) ||
+                        intr_call->codegen(scope, rets);
                 }
             }
             // It doesn't match a def nor an intr, try for a function
@@ -4802,10 +5397,14 @@ namespace nn
             }
             if (fn_matches.size() > 1)
                 return error::compiler(expr.node_info, "Reference to fn '%' is ambiguous", callee->type_lookup.name);
-            if (fn_matches.size() == 0)
+            if (fn_matches.size() == 1)
             {
                 // Perfect match, return it
-                return error::compiler(expr.node_info, "Internal error: not implemented");
+                std::unique_ptr<FnCall> fn_call = std::make_unique<FnCall>(callee->type_lookup.lookup.ns);
+                return
+                    fn_call->init(*std::get<0>(fn_matches.front())) ||
+                    fn_call->apply_args(expr.node_info, std::get<1>(fn_matches.front()), std::get<2>(fn_matches.front())) ||
+                    fn_call->codegen(scope, rets);
             }
             return error::compiler(expr.node_info, "Unable to find a suitable overload for the varg call");
         }
@@ -5171,7 +5770,7 @@ namespace nn
         bool codegen_exit(Scope& scope, const AstNodeInfo& type)
         {
             std::vector<Scope::StackVar> vars;
-            if (scope.list_local_vars(vars, scope.parent))
+            if (scope.list_local_vars(vars, scope.get_parent()))
                 return true;
             std::sort(vars.begin(), vars.end(), [](const Scope::StackVar& lhs, const Scope::StackVar& rhs) { return lhs.ptr > rhs.ptr; });
             for (const auto& var : vars)
@@ -5179,7 +5778,7 @@ namespace nn
                 if (body->add_instruction(instruction::Pop(type, var.ptr)))
                     return true;
             }
-            scope.parent->pop(vars.size());
+            scope.pop(vars.size());
             return false;
         }
 
@@ -5188,15 +5787,12 @@ namespace nn
             if (!loop_ctx)
                 return error::compiler(line.node_info, "break statements are not allowed outside a looping structure");
 
-            std::vector<Scope::StackVar> vars;
-            if (scope.list_local_vars(vars, loop_ctx->scope))
+            size_t local_sz = 0;
+            if (scope.local_size(local_sz, loop_ctx->scope))
                 return true;
-            std::sort(vars.begin(), vars.end(), [](const Scope::StackVar& lhs, const Scope::StackVar& rhs) { return lhs.ptr > rhs.ptr; });
-            for (const auto& var : vars)
-            {
-                if (body->add_instruction(instruction::Pop(line.node_info, var.ptr)))
+            for (size_t i = 0; i < local_sz; i++)
+                if (body->add_instruction(instruction::Pop(line.node_info, 0)))
                     return true;
-            }
             return body->add_instruction(instruction::Jmp(line.node_info, loop_ctx->break_label));
         }
 
@@ -5205,16 +5801,13 @@ namespace nn
             if (!loop_ctx)
                 return error::compiler(line.node_info, "continue statements are not allowed outside a looping structure");
 
-            std::vector<Scope::StackVar> vars;
-            if (scope.list_local_vars(vars, loop_ctx->scope))
+            size_t local_sz = 0;
+            if (scope.local_size(local_sz, loop_ctx->scope))
                 return true;
-            std::sort(vars.begin(), vars.end(), [](const Scope::StackVar& lhs, const Scope::StackVar& rhs) { return lhs.ptr > rhs.ptr; });
-            for (const auto& var : vars)
-            {
-                if (body->add_instruction(instruction::Pop(line.node_info, var.ptr)))
+            for (size_t i = 0; i < local_sz; i++)
+                if (body->add_instruction(instruction::Pop(line.node_info, 0)))
                     return true;
-            }
-            return body->add_instruction(instruction::Jmp(line.node_info, loop_ctx->break_label));
+            return body->add_instruction(instruction::Jmp(line.node_info, loop_ctx->cont_label));
         }
 
         bool codegen_line_export(Scope& scope, const AstLine& line)
@@ -5224,7 +5817,7 @@ namespace nn
 
         bool codegen_line_extern(Scope& scope, const AstLine& line)
         {
-            Scope::StackVar var, base;
+            Scope::StackVar var;
             size_t name_addr;
             TypeRef init;
             if (scope.at(line.line_extern.var_name, var) ||
@@ -5233,35 +5826,34 @@ namespace nn
                 ) return true;
             if (init->ty != TypeInfo::Type::INIT)
                 return error::compiler(line.line_extern.init_expr.node_info, "Expected an init, recieved %", init->to_string());
-            std::string base_name;
-            if (body_type == BodyType::INTR)
-                base_name = "~block";
-            else
-                base_name = "~node";
-            return
-                scope.at(base_name, base) ||
-                body->add_instruction(instruction::Dup(line.node_info, base.ptr)) ||
+            if (body_type != BodyType::DEF)
+                return error::compiler(line.node_info, "The keyword 'extern' can only be used inside def blocks");
+            if (scope.at("~block", var) ||
+                body->add_instruction(instruction::Dup(line.node_info, var.ptr)) ||
+                scope.push() ||
+                scope.at(line.line_extern.var_name, var) ||
+                body->add_instruction(instruction::Dup(line.node_info, var.ptr)) ||
                 scope.push() ||
                 init->codegen(scope) ||
+                body->add_instruction(instruction::SIni(line.node_info)) ||
                 body->add_instruction(instruction::New(line.node_info, name_addr)) ||
-                body->add_instruction(instruction::BkCfg(line.node_info)) ||
-                scope.pop(2);
+                body->add_instruction(instruction::BkExt(line.node_info)) ||
+                scope.pop(3)
+                ) return error::compiler(line.node_info, "Unable to compile extern");
+            return false;
         }
 
         bool codegen_line_raise(Scope& scope, const AstLine& line)
         {
-            std::vector<TypeRef> rets;
-            if (codegen_expr(scope, line.line_func.expr, rets))
+            TypeRef ret;
+            if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, line.line_func.expr, ret))
                 return true;
-            if (rets.size() != 1)
-                return error::compiler(line.node_info, "A raise expression must resolve to a single string value");
-            if (rets[0]->ty != TypeInfo::Type::STR)
-                return body->add_instruction(instruction::Err(line.node_info));
-            else if (!rets[0]->check_xstr())
-                return error::compiler(line.node_info, "A raise expression must resolve to a single string value");
+            if (ret->ty != TypeInfo::Type::STR)
+                return error::compiler(line.line_func.expr.node_info, "raise expected string, recieved %", ret->to_string());
             return
-                body->add_instruction(instruction::XStr(line.node_info)) ||
-                body->add_instruction(instruction::Err(line.node_info));
+                ret->codegen(scope) ||
+                body->add_instruction(instruction::Err(line.node_info)) ||
+                scope.pop();
         }
 
         bool codegen_line_print(Scope& scope, const AstLine& line)
@@ -5270,43 +5862,231 @@ namespace nn
             if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, line.line_func.expr, ret))
                 return true;
             if (ret->ty != TypeInfo::Type::STR)
-                return error::compiler(line.node_info, "A print expression must resolve to a single string value");
+                return error::compiler(line.line_func.expr.node_info, "print expected string, recieved %", ret->to_string());
             return
                 ret->codegen(scope) ||
                 body->add_instruction(instruction::Dsp(line.node_info)) ||
                 scope.pop();
         }
 
+        bool codegen_line_retdef(Scope& scope, const AstLine& line)
+        {
+            if (!ret_label)
+                return error::compiler(line.node_info, "Internal error: ret_label was nullptr");
+            // Getting the rets
+            std::vector<TypeRef> rets;
+            size_t local_sz = 0;
+            if (codegen_expr(scope, line.line_func.expr, rets) ||
+                scope.local_size(local_sz, nullptr)
+                ) return true;
+            if (rets.size() == 1 && rets.back()->ty == TypeInfo::Type::TUPLE)
+                // Expanding the tuple
+                rets = rets.back()->type_tuple.elems;
+            // Checking the number of provided rets against the signature
+            if (rets.size() != body_sig.block_sig->rets.size())
+                return error::compiler(line.node_info, "Expected % return value(s), recieved %", body_sig.block_sig->rets.size(), rets.size());
+            // Codegening all the rets onto the stack
+            for (TypeRef ret : rets)
+            {
+                if (ret->ty != TypeInfo::Type::TENSOR)
+                    return error::compiler(line.node_info, "The return values from a def must be all tensors");
+                if (ret->cat == TypeInfo::Category::VIRTUAL)
+                    return error::compiler(line.node_info, "The return values from a def must be non-virtual");
+
+                if (ret->codegen(scope))
+                    return true;
+            }
+            // Popping everything in the scope except the rets and args
+            for (size_t i = body_sig.block_sig->cargs.size() + body_sig.block_sig->vargs.size() + 1; i < local_sz; i++)
+                if (body->add_instruction(instruction::Pop(line.node_info, rets.size())))
+                    return true;
+            return body->add_instruction(instruction::Jmp(line.node_info, *ret_label));
+        }
+
+        bool codegen_line_retfn(Scope& scope, const AstLine& line)
+        {
+            // Codegening each of the return types from the signature to compare against
+            std::vector<TypeRef> sig_rets;
+            for (const AstExpr& expr : body_sig.fn_sig->rets)
+            {
+                TypeRef ret;
+                if (codegen_expr_single_ret<TypeInfo::AllowAll>(scope, expr, ret))
+                    return true;
+                if (ret->ty != TypeInfo::Type::TYPE && ret->ty != TypeInfo::Type::DLTYPE)
+                    return error::compiler(expr.node_info, "The return expression did not resolve to a type");
+                sig_rets.push_back(ret);
+            }
+            // Getting the rets
+            std::vector<TypeRef> rets;
+            size_t local_sz = 0;
+            if (codegen_expr(scope, line.line_func.expr, rets) ||
+                scope.local_size(local_sz, nullptr)  // None of the remaining code should add stuff to the scope
+                ) return true;
+            if (rets.size() == 1 && rets.back()->ty == TypeInfo::Type::TUPLE)
+                // Expanding the tuple
+                rets = rets.back()->type_tuple.elems;
+            // Type checking each of the rets
+            if (rets.size() != sig_rets.size())
+                return error::compiler(line.node_info, "Expected % return value(s), recieved %", sig_rets.size(), rets.size());
+            for (size_t i = 0; i < rets.size(); i++)
+            {
+                if (sig_rets[i]->ty == TypeInfo::Type::TYPE)
+                {
+                    // I can do compile time check for the return value
+                    if (sig_rets[i]->type_type.base != rets[i])
+                        return error::compiler(line.node_info, error::format("Expected type % for return value %, but recieved type %",
+                            sig_rets[i]->type_type.base->to_string(), i + 1, rets[i]->to_string()));
+                }
+                else
+                {
+                    assert(sig_rets[i]->ty == TypeInfo::Type::DLTYPE);
+                    // I have to embed a check into the runtime
+                    std::string fty_end_label = label_prefix(line.node_info) + "_ret" + std::to_string(i) + "_fty_end";
+                    std::string shp_end_label = label_prefix(line.node_info) + "_ret" + std::to_string(i) + "_shp_end";
+                    if (rets[i]->ty == TypeInfo::Type::TENSOR)
+                    {
+                        size_t fty_errmsg, shp_errmsg;
+                        if (bc->add_obj_str(fty_errmsg, error::format("Tensor fty mismatch found in return value %", i + 1)) ||
+                            bc->add_obj_str(shp_errmsg, error::format("Tensor shape mismatch found in return value %", i + 1))
+                            ) return true;
+
+                        // Checking the fty
+                        size_t fty_addr;
+                        if (bc->add_type_int(fty_addr) ||
+                            rets[i]->codegen(scope) ||  // This should only be a dup, so its not worth dupping the codegen result
+                            body->add_instruction(instruction::Tfty(line.node_info)) ||
+                            sig_rets[i]->type_dltype.fp->codegen(scope) ||
+                            body->add_instruction(instruction::New(line.node_info, fty_addr)) ||
+                            body->add_instruction(instruction::Eq(line.node_info)) ||
+                            body->add_instruction(instruction::Brt(line.node_info, fty_end_label)) ||
+                            scope.pop(2) ||
+                            // Error condition instructions
+                            body->add_instruction(instruction::New(line.node_info, fty_errmsg)) ||
+                            body->add_instruction(instruction::Err(line.node_info)) ||
+                            body->add_label(line.node_info, fty_end_label)
+                            ) return true;
+
+                        // Checking the shape
+                        size_t int_addr;
+                        if (bc->add_type_int(int_addr) ||
+                            rets[i]->codegen(scope) ||  // This should only be a dup, so its not worth dupping the codegen result
+                            body->add_instruction(instruction::Tshp(line.node_info)) ||
+                            sig_rets[i]->type_dltype.shape->codegen(scope) ||
+                            body->add_instruction(instruction::New(line.node_info, int_addr)) ||
+                            body->add_instruction(instruction::Arr(line.node_info)) ||
+                            body->add_instruction(instruction::Eq(line.node_info)) ||
+                            body->add_instruction(instruction::Brt(line.node_info, shp_end_label)) ||
+                            scope.pop(2) ||
+                            // Error condition instructions
+                            body->add_instruction(instruction::New(line.node_info, shp_errmsg)) ||
+                            body->add_instruction(instruction::Err(line.node_info)) ||
+                            body->add_label(line.node_info, shp_end_label)
+                            ) return true;
+                        continue;
+                    }
+                    return error::compiler(line.node_info, "Expected a tensor for return value %, recieved %", i + 1, rets[i]->to_string());
+                }
+            }
+#ifdef _DEBUG
+            // Making sure the above code didn't do anything to the scope
+            size_t debug_sz = 0;
+            if (scope.local_size(debug_sz, nullptr))
+                return true;
+            assert(debug_sz == local_sz);
+#endif
+            // Codegening all the rets onto the stack
+            for (TypeRef ret : rets)
+                if (ret->codegen(scope))
+                    return true;
+            // Popping everything in the scope except the rets and args
+            for (size_t i = body_sig.fn_sig->cargs.size() + body_sig.fn_sig->vargs.size() + 1; i < local_sz; i++)
+                if (body->add_instruction(instruction::Pop(line.node_info, rets.size())))
+                    return true;
+            return body->add_instruction(instruction::Ret(line.node_info));
+        }
+
+        bool codegen_line_retintr(Scope& scope, const AstLine& line)
+        {
+            if (!ret_label)
+                return error::compiler(line.node_info, "Internal error: ret_label was nullptr");
+            // Getting the rets
+            std::vector<TypeRef> rets;
+            size_t local_sz = 0;
+            if (codegen_expr(scope, line.line_func.expr, rets) ||
+                scope.local_size(local_sz, nullptr)
+                ) return true;
+            if (rets.size() == 1 && rets.back()->ty == TypeInfo::Type::TUPLE)
+                // Expanding the tuple
+                rets = rets.back()->type_tuple.elems;
+            // Checking the number of provided rets against the signature
+            if (rets.size() != body_sig.block_sig->rets.size())
+                return error::compiler(line.node_info, "Expected % return value(s), recieved %", body_sig.block_sig->rets.size(), rets.size());
+            // Codegening all the rets onto the stack and checking the individual types as I go
+            for (TypeRef ret : rets)
+            {
+                if (ret->ty != TypeInfo::Type::EDGE)
+                    return error::compiler(line.node_info, "The return values from an intr must be all edges");
+                if (ret->cat == TypeInfo::Category::VIRTUAL)
+                    return error::compiler(line.node_info, "The return values from an intr must be non-virtual");
+
+                if (ret->codegen(scope))
+                    return true;
+            }
+            // Popping everything in the scope except the rets, args, and the intr node
+            for (size_t i = body_sig.block_sig->cargs.size() + body_sig.block_sig->vargs.size() + 2; i < local_sz; i++)
+                if (body->add_instruction(instruction::Pop(line.node_info, rets.size())))
+                    return true;
+            return body->add_instruction(instruction::Jmp(line.node_info, *ret_label));
+        }
+
         bool codegen_line_return(Scope& scope, const AstLine& line)
         {
-            // TODO: codegen the return value using the signature to disambiguate tuple return values vs multiple return values
-            std::vector<Scope::StackVar> vars;
-            if (scope.list_local_vars(vars, nullptr))
-                return true;
-            std::sort(vars.begin(), vars.end(), [](const Scope::StackVar& lhs, const Scope::StackVar& rhs) { return lhs.ptr > rhs.ptr; });
-            for (const auto& var : vars)
-                if (body->add_instruction(instruction::Pop(line.node_info, var.ptr)))
-                    return true;
-            if (ret_label)
-                return body->add_instruction(instruction::Jmp(line.node_info, *ret_label));
-            return body->add_instruction(instruction::Ret(line.node_info));
+            switch (body_type)
+            {
+            case BodyType::INVALID:
+                return error::compiler(line.node_info, "Internal error: body_type enum was INVALID");
+            case BodyType::STRUCT:
+                return error::compiler(line.node_info, "Keyword 'return' is not allowed in a struct definition");
+            case BodyType::DEF:
+                return codegen_line_retdef(scope, line);
+            case BodyType::FN:
+                return codegen_line_retfn(scope, line);
+            case BodyType::INTR:
+                return codegen_line_retintr(scope, line);
+            }
+            return error::compiler(line.node_info, "Internal error: body_type enum was out of range");
         }
 
         bool codegen_line_branch(Scope& scope, const AstLine& line, const std::string& end_label)
         {
             Scope block_scope{ &scope };
-            Scope cond_scope{ &scope };
-            std::vector<TypeRef> rets;
-            if (codegen_expr(cond_scope, line.line_branch.cond, rets) ||
-                codegen_exit(cond_scope, line.node_info)  // leaving the conditional's scope
+            TypeRef ret;
+            size_t local_sz = 0;
+            if (codegen_expr_single_ret<TypeInfo::NonVirtual>(block_scope, line.line_branch.cond, ret) ||
+                block_scope.local_size(local_sz, block_scope.get_parent())
                 ) return true;
-            if (rets.size() != 1 || rets[0]->ty != TypeInfo::Type::BOOL)
-                return error::compiler(line.node_info, "A conditional expression must resolve to a single boolean value");
+            if (ret->ty != TypeInfo::Type::BOOL)
+                return error::compiler(line.node_info, "A conditional expression must resolve to a boolean value");
+            if (ret->codegen(block_scope))
+                return true;
+            // Clearing out any stack variables created during the condition evaluation (except for the condition itself)
+            for (size_t i = 1; i < local_sz; i++)
+                if (body->add_instruction(instruction::Pop(line.node_info, 1)) ||
+                    block_scope.pop()
+                    ) return true;
             std::string false_branch = label_prefix(line.node_info) + "false_branch";
-            return
-                body->add_instruction(instruction::Brf(line.node_info, false_branch)) ||
+            if (body->add_instruction(instruction::Brf(line.node_info, false_branch)) ||
+                block_scope.pop() ||
                 codegen_lines(block_scope, line.line_branch.body) ||
-                codegen_exit(block_scope, line.node_info) || // leaving the block's scope
+                block_scope.local_size(local_sz, block_scope.get_parent())
+                ) return true;
+            // Clearing out any stack variables created in the body of the branch
+            for (size_t i = 1; i < local_sz; i++)
+                if (body->add_instruction(instruction::Pop(line.node_info, 0)) ||
+                    scope.pop()
+                    ) return true;
+            // Ending off the branch block
+            return
                 body->add_instruction(instruction::Jmp(line.node_info, end_label)) ||
                 body->add_label(line.node_info, false_branch);
         }
@@ -5314,26 +6094,42 @@ namespace nn
         bool codegen_line_while(Scope& scope, const AstLine& line)
         {
             LoopContext* old_ctx = loop_ctx;
-            Scope cond_scope{ &scope };
             Scope block_scope{ &scope };
             std::string loop_start = label_prefix(line.node_info) + "loop_start";
             std::string loop_end = label_prefix(line.node_info) + "loop_end";
-            std::vector<TypeRef> rets;
+            TypeRef ret;
             if (body->add_label(line.node_info, loop_start) ||
-                codegen_expr(cond_scope, line.line_branch.cond, rets) ||
-                codegen_exit(cond_scope, line.node_info)
+                codegen_expr_single_ret<TypeInfo::NonVirtual>(block_scope, line.line_branch.cond, ret)
                 ) return true;
-            LoopContext new_ctx = { &block_scope, loop_start, loop_end };
+            LoopContext new_ctx = { &scope, loop_start, loop_end };
             loop_ctx = &new_ctx;
-            if (rets.size() != 1 || rets[0]->ty != TypeInfo::Type::BOOL)
-                return error::compiler(line.node_info, "A conditional expression must resolve to a single boolean value");
-            bool ret =
-                body->add_instruction(instruction::Brf(line.node_info, loop_end)) ||
+            if (ret->ty != TypeInfo::Type::BOOL)
+                return error::compiler(line.node_info, "A conditional expression must resolve to a boolean value");
+            size_t local_sz = 0;
+            if (block_scope.local_size(local_sz, block_scope.get_parent()) ||
+                ret->codegen(block_scope)
+                ) return error::compiler(line.node_info, "Unable to compile while loop condition");
+            // Clearing the scope of any stack variables creating in the while loop condition (besides the condition itself)
+            for (size_t i = 1; i < local_sz; i++)
+                if (body->add_instruction(instruction::Pop(line.node_info, 1)) ||
+                    block_scope.pop()
+                    ) return true;
+            // While loop condition and body
+            if (body->add_instruction(instruction::Brf(line.node_info, loop_end)) ||
+                block_scope.pop() ||
                 codegen_lines(block_scope, line.line_branch.body) ||
-                body->add_instruction(instruction::Jmp(line.node_info, loop_start)) ||
-                body->add_label(line.node_info, loop_end);
+                block_scope.local_size(local_sz, block_scope.get_parent())
+                ) return error::compiler(line.node_info, "Unable to compile while loop body");
+            // Clearing the scope of any declarations present in the body
+            for (size_t i = 0; i < local_sz; i++)
+                if (body->add_instruction(instruction::Pop(line.node_info, 0)) ||
+                    block_scope.pop()
+                    ) return true;
+            if (body->add_instruction(instruction::Jmp(line.node_info, loop_start)) ||
+                body->add_label(line.node_info, loop_end)
+                ) return true;
             loop_ctx = old_ctx;
-            return ret;
+            return false;
         }
 
         bool codegen_line_for(Scope& scope, const AstLine& line)
@@ -5346,18 +6142,24 @@ namespace nn
                 return error::compiler(line.line_for.iter.node_info, "For loops are only able to iterate through array types");
             Scope block_scope{ &scope };
             std::string loop_start = label_prefix(line.node_info) + "_loop_start";
+            std::string loop_cont = label_prefix(line.node_info) + "_loop_continue";
             std::string loop_end = label_prefix(line.node_info) + "_loop_end";
             size_t zero_addr, one_addr, int_addr;
+            size_t prev_sz = 0;
             if (bc->add_obj_int(zero_addr, 0) ||
                 bc->add_obj_int(one_addr, 1) ||
                 bc->add_type_int(int_addr) ||
                 // Setup the for loop (stack will be [iter, len(iter), i])
+                // None of this setup is in the block scope, its in the parent scope and is cleaned seperately
+                scope.local_size(prev_sz, scope.get_parent()) ||
                 ret->codegen(scope) ||
                 body->add_instruction(instruction::Dup(line.node_info, 0)) ||
                 body->add_instruction(instruction::Nul(line.node_info)) ||
                 body->add_instruction(instruction::Arr(line.node_info)) ||
                 body->add_instruction(instruction::Len(line.node_info)) ||
                 body->add_instruction(instruction::New(line.node_info, zero_addr)) ||
+                body->add_instruction(instruction::New(line.node_info, int_addr)) ||
+                body->add_instruction(instruction::Cpy(line.node_info)) ||
                 scope.push(2) ||
                 // for loop condition
                 body->add_label(line.node_info, loop_start) ||
@@ -5366,13 +6168,13 @@ namespace nn
                 body->add_instruction(instruction::New(line.node_info, int_addr)) ||
                 body->add_instruction(instruction::Eq(line.node_info)) ||
                 body->add_instruction(instruction::Brt(line.node_info, loop_end))
-                ) return true;
+                ) return error::compiler(line.node_info, "Unable to compile for loop collection");
             
             // assignment
             if (line.line_for.decl.ty == ExprType::VAR)
             {
                 // implicit declaration
-                if (scope.contains(line.line_for.decl.expr_string))
+                if (block_scope.contains(line.line_for.decl.expr_string))
                     return error::compiler(line.line_for.decl.node_info, "Unable to use an already defined variable as in for loop");
                 // Creating a type for the iterator
                 TypeRef elem_type = type_manager->duplicate(
@@ -5400,16 +6202,21 @@ namespace nn
                 return error::compiler(line.line_for.decl.node_info, "Internal error: not implemented");
             
             // for loop body
-            LoopContext new_ctx = { &block_scope, loop_start, loop_end };
+            LoopContext new_ctx = { &scope, loop_cont, loop_end };
             loop_ctx = &new_ctx;
-            if (codegen_lines(block_scope, line.line_for.body))
-                return true;
+            size_t local_sz = 0;
+            if (codegen_lines(block_scope, line.line_for.body) ||
+                block_scope.local_size(local_sz, block_scope.get_parent())
+                ) return error::compiler(line.node_info, "Unable to compile for loop body");
             loop_ctx = old_ctx;
             
-            return
-                // popping the assignment
-                body->add_instruction(instruction::Pop(line.node_info, 0)) ||
-                block_scope.pop();
+            // Clearing the stack of all variables declared in the body of the loop (this will include the assignment)
+            for (size_t i = 0; i < local_sz; i++)
+                if (body->add_instruction(instruction::Pop(line.node_info, 0)) ||
+                    scope.pop()
+                    ) return true;
+            
+            if (body->add_label(line.node_info, loop_cont) ||
                 // increment the array index
                 body->add_instruction(instruction::Dup(line.node_info, 0)) ||
                 body->add_instruction(instruction::New(line.node_info, one_addr)) ||
@@ -5418,10 +6225,17 @@ namespace nn
                 // loop back
                 body->add_instruction(instruction::Jmp(line.node_info, loop_start)) ||
                 body->add_label(line.node_info, loop_end) ||
-                // unwind the stack setup
+                // getting the current size of the current scope
+                scope.local_size(local_sz, scope.get_parent())
+                ) return true;
+
+            // unwind the stack setup
+            if (body->add_instruction(instruction::Pop(line.node_info, 0)) ||
                 body->add_instruction(instruction::Pop(line.node_info, 0)) ||
                 body->add_instruction(instruction::Pop(line.node_info, 0)) ||
-                body->add_instruction(instruction::Pop(line.node_info, 0));
+                scope.pop(3)
+                ) return true;
+            return false;
         }
 
         bool codegen_line_expr(Scope& scope, const AstLine& line)
@@ -5483,8 +6297,8 @@ namespace nn
 
         bool codegen_lines(Scope& scope, const std::vector<AstLine>& lines)
         {
-            // TODO: add a check into the parser for this
-            assert(lines.size() > 0);
+            if (lines.size() == 0)
+                return false;  // If no lines are there, no need to codegen anything
 
             bool ret = false;
             for (size_t i = 0; i < lines.size(); i++)
@@ -5494,6 +6308,7 @@ namespace nn
                     std::string end_label = label_prefix(lines[i].node_info) + "branch_end";
                     if (codegen_line_branch(scope, lines[i], end_label))
                         return true;
+                    i++;
                     while (i < lines.size() && lines[i].ty == LineType::ELIF)
                     {
                         if (codegen_line_branch(scope, lines[i], end_label))
@@ -5504,26 +6319,16 @@ namespace nn
                     {
                         if (codegen_lines(scope, lines[i].line_block.body))
                             return true;
+                        i++;
                     }
+                    i--;
                     if (body->add_label(lines[i].node_info, end_label))
                         return true;
                 }
                 else
-                    ret = ret || codegen_line(scope, lines[i]);
+                    ret = codegen_line(scope, lines[i]) || ret;
             }
-
-            // During proper code execution, this point should be unreachable.
-            // If this point is reached during execution, it will fall through to the next function which is undefined
-            // and will cause the interpreter to start bahaving unpredictably which would be very difficult to debug.
-            // For safety, a raise statement is added manually by the compiler to generate a runtime error
-            // if the programmer made a mistake.  If this point was in fact unreachable,
-            // the raise will never get run and will not have any consequences (besides moving labels around in the bytecode)
-            size_t addr;
-            return
-                ret ||
-                bc->add_obj_str(addr, "Reached the end of the procedure without returning") ||
-                body->add_instruction(instruction::New(lines[lines.size() - 1].node_info, addr)) ||
-                body->add_instruction(instruction::Err(lines[lines.size() - 1].node_info));
+            return ret;
         }
 
         bool proc_name_struct(std::string& name, const std::vector<std::string>& ns, const AstStruct& ast_struct)
@@ -5619,9 +6424,25 @@ namespace nn
             return error::compiler(ast_struct.node_info, "Not implemented");
         }
 
+        bool codegen_proc_safety(const AstNodeInfo& node_info)
+        {
+            // During proper code execution, this point should be unreachable.
+            // If this point is reached during execution, it will fall through to the next function which is undefined
+            // and will cause the interpreter to start bahaving unpredictably which would be very difficult to debug.
+            // For safety, a raise statement is added manually by the compiler to generate a runtime error
+            // if the programmer made a mistake.  If this point was in fact unreachable,
+            // the raise will never get run and will not have any consequences (besides moving labels around in the bytecode)
+            size_t addr;
+            return
+                bc->add_obj_str(addr, "Reached the end of the procedure without returning") ||
+                body->add_instruction(instruction::New(node_info, addr)) ||
+                body->add_instruction(instruction::Err(node_info));
+        }
+
         bool codegen_func(const std::string& name, const AstFn& ast_fn, const std::vector<std::string>& ns)
         {
             body_type = BodyType::FN;
+            body_sig.fn_sig = &ast_fn.signature;
             ByteCodeBody fn_body{ ast_fn.node_info };
             TypeManager fn_type_manager{};
             body = &fn_body;
@@ -5666,14 +6487,17 @@ namespace nn
             if (bc->has_proc(fn_name))
                 // TODO: provide a better error message
                 return error::compiler(ast_fn.node_info, "fn block conflict found");
-            return
-                codegen_lines(scope, ast_fn.body) ||
-                bc->add_block(fn_name, *body);
+            if (codegen_lines(scope, ast_fn.body) ||
+                codegen_proc_safety(ast_fn.node_info) ||
+                bc->add_block(fn_name, *body)
+                ) return error::compiler(ast_fn.node_info, "Unable to compile body of function");
+            return false;
         }
 
         bool codegen_def(const std::string& name, const AstBlock& ast_def, const std::vector<std::string>& ns)
         {
             body_type = BodyType::DEF;
+            body_sig.block_sig = &ast_def.signature;
             ByteCodeBody def_body{ ast_def.node_info };
             TypeManager def_type_manager{};
             body = &def_body;
@@ -5770,12 +6594,13 @@ namespace nn
             std::string def_ret_label = label_prefix(ast_def.node_info) + "_return";
             ret_label = &def_ret_label;
             if (codegen_lines(scope, ast_def.body))  // generating the code for the body
-                return true;
+                return error::compiler(ast_def.node_info, "Unable to compile body of def block");
             ret_label = nullptr;
 
             // Bytecode for the return subroutine
 
-            if (body->add_label(ast_def.node_info, def_ret_label) ||
+            if (codegen_proc_safety(ast_def.node_info) ||
+                body->add_label(ast_def.node_info, def_ret_label) ||
                 body->add_instruction(instruction::Dup(ast_def.node_info, ast_def.signature.rets.size()))  // grabbing a reference to the block
                 ) return true;
 
@@ -5794,7 +6619,7 @@ namespace nn
                 // TODO: provide a better error message
                 return error::compiler(ast_def.node_info, "def block conflict found");
             return
-                body->add_instruction(instruction::Pop(ast_def.node_info, 0)) ||  // popping the block reference off
+                body->add_instruction(instruction::Pop(ast_def.node_info, 0)) ||  // popping the block reference off (from the output edge configuration, not the argument)
                 body->add_instruction(instruction::Ret(ast_def.node_info)) ||
                 bc->add_block(def_name, *body);
         }
@@ -5802,6 +6627,7 @@ namespace nn
         bool codegen_intr(const std::string& name, const AstBlock& ast_intr, const std::vector<std::string>& ns)
         {
             body_type = BodyType::INTR;
+            body_sig.block_sig = &ast_intr.signature;
             ByteCodeBody intr_body{ ast_intr.node_info };
             TypeManager intr_type_manager{};
             body = &intr_body;
@@ -5912,12 +6738,13 @@ namespace nn
             std::string intr_ret_label = label_prefix(ast_intr.node_info) + "_return";
             ret_label = &intr_ret_label;
             if (codegen_lines(scope, ast_intr.body))  // generating the code for the body
-                return true;
+                return error::compiler(ast_intr.node_info, "Unable to compile body of intrinsic");
             ret_label = nullptr;
 
             // Bytecode for the return subroutine
 
-            if (body->add_label(ast_intr.node_info, intr_ret_label) ||
+            if (codegen_proc_safety(ast_intr.node_info) ||
+                body->add_label(ast_intr.node_info, intr_ret_label) ||
                 body->add_instruction(instruction::Dup(ast_intr.node_info, ast_intr.signature.rets.size()))  // grabbing a reference to the node
                 ) return true;
 
@@ -5950,12 +6777,12 @@ namespace nn
             case CodeModule::AttrType::NODE:
                 for (const auto& [name, intrs] : std::get<CodeModule::Node>(attr).intrs)
                     for (const AstBlock* intr : intrs)
-                        ret = ret || codegen_intr(name, *intr, ns);
+                        ret = codegen_intr(name, *intr, ns) || ret;
                 for (const auto& [node_name, node_attrs] : std::get<CodeModule::Node>(attr).attrs)
                 {
                     ns.push_back(node_name);
                     for (const auto& node_attr : node_attrs)
-                        ret = ret || codegen_attr(node_name, node_attr, ns);
+                        ret = codegen_attr(node_name, node_attr, ns) || ret;
                     ns.pop_back();
                 }
                 return ret;
@@ -5973,21 +6800,22 @@ namespace nn
         bool codegen_module(ByteCodeModule& inp_bc, ModuleInfo& info, AstModule& ast, const std::vector<std::string>& imp_dirs)
         {
             bc = &inp_bc;
+            mod = &info.mod;
+            info.node_info = { ast.fname, 0, 0, 0, 0 };
+
             // Resolving imports to build a CodeModule object
-            CodeModule inp_mod;
             std::vector<std::string> visited = { ast.fname };
-            if (CodeModule::create(inp_mod, ast, imp_dirs, visited))
-                return true;
-            mod = &inp_mod;
+            if (CodeModule::create(info.mod, ast, imp_dirs, visited))
+                return error::compiler(AstNodeInfo(ast.fname, 0, 0, 0, 0), "Unable to generate a code module");
 
             bool ret = false;
             std::vector<std::string> ns;
             for (auto& [name, intrs] : mod->root.intrs)
                 for (const AstBlock* intr : intrs)
-                    ret = ret || codegen_intr(name, *intr, ns);
+                    ret = codegen_intr(name, *intr, ns) || ret;
             for (const auto& [name, attrs] : mod->root.attrs)
                 for (const auto& attr : attrs)
-                    ret = ret || codegen_attr(name, attr, ns);
+                    ret = codegen_attr(name, attr, ns) || ret;
             return ret;
         }
     }

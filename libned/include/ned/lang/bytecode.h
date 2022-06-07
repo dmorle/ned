@@ -191,6 +191,7 @@ namespace nn
             TFTY,
             ESHP,
             EFTY,
+            EINP,
             NDCFG,
             BKCFG,
             INCFG,
@@ -353,6 +354,7 @@ namespace nn
             using Tfty  = Implicit < TFTY  >;
             using Eshp  = Implicit < ESHP  >;
             using Efty  = Implicit < EFTY  >;
+            using Einp  = Implicit < EINP  >;
             using NdCfg = Implicit < NDCFG >;
             using BkCfg = Implicit < BKCFG >;
             using InCfg = Implicit < INCFG >;
@@ -454,6 +456,7 @@ namespace nn
 * tfty         Gets the fty of a tensor
 * eshp         Gets the shape of an edge
 * efty         Gets the fty of an edge
+* einp         Checks if the input to an edge has been bound
 * 
 * ndcfg        Adds a named configuration to a node
 * bkcfg        Adds a named configuration to a block

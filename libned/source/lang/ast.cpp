@@ -294,7 +294,7 @@ namespace nn
         };
 
         // Eventually this can become constexpr, but it seems my current c++ compiler doesn't have that yet...
-        const std::vector<std::tuple<OpAssoc, std::vector<TokenType>>> prec_ops = {
+        const std::vector<std::pair<OpAssoc, std::vector<TokenType>>> prec_ops = {
             { OpAssoc::RTOL, { TokenType::ASSIGN, TokenType::IADD, TokenType::ISUB, TokenType::IMUL, TokenType::IDIV, TokenType::IMOD, TokenType::IPOW }},
             { OpAssoc::LTOR, { TokenType::COMMA }},
             { OpAssoc::LTOR, { TokenType::KW_AND, TokenType::KW_OR }},
@@ -312,7 +312,7 @@ namespace nn
             while (true)
             {
                 for (; start < tarr.size() && tarr[start]->is_whitespace(); start++);
-                if (start == tarr.size())
+                if (start >= tarr.size())
                     break;
                 if (tarr[start]->ty == TokenType::ELLIPSES)
                 {
@@ -371,7 +371,7 @@ namespace nn
                     }
                 }
 
-                end = start + 1;
+                start = end + 1;
                 elems.push_back(std::move(elem));
             }
 
@@ -390,7 +390,7 @@ namespace nn
             {
             case TokenType::SQUARE_O:
                 for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
-                end = tarr.search(IsSameCriteria(TokenType::SQUARE_C), start);
+                end = tarr.search(IsSameCriteria(TokenType::SQUARE_C));  // It needs to see the '[' otherwise it'll ignore the ']'
                 if (end == -1)
                     return error::syntax(tarr[0], "Missing closing ']' in index expression");
                 i = end + 1;
@@ -591,6 +591,10 @@ namespace nn
                 ast_expr.expr_kw = ExprKW::F64;
                 ast_expr.ty = ExprType::KW;
                 return false;
+            case TokenType::KW_LEN:
+                ast_expr.expr_kw = ExprKW::LEN;
+                ast_expr.ty = ExprType::KW;
+                return false;
             default:
                 error::syntax(ptk, "Unexpected token for single token expression leaf node");
                 return true;
@@ -725,17 +729,19 @@ namespace nn
         template<int prec>
         bool parse_expr_prec(const TokenArray& tarr, AstExpr& ast_expr)
         {
-            static_assert(0 <= prec && prec <= 7);
+            static_assert(0 <= prec && prec <= 7 && prec != 1);
             assert(tarr.size() > 0);
-            const auto& [op_assoc, tys] = prec_ops[prec];  // TODO: update my c++ compiler and make this constexpr
+            // Note to self: never trust the MSVC compiler to not fuck up structured bindings...
+            OpAssoc op_assoc = std::get<0>(prec_ops[prec]);
+            std::vector<TokenType> tys = std::get<1>(prec_ops[prec]);
             int pos;
             if (op_assoc == OpAssoc::LTOR)
-                pos = tarr.search(IsInCriteria(tys), 1, -1);
-            else
                 pos = tarr.rsearch(IsInCriteria(tys));
-            if (pos == -1)
+            else
+                pos = tarr.search(IsInCriteria(tys));
+            if (pos < 1)  // allow for pos == 0 cause of unary operators
                 return parse_expr_prec<prec + 1>(tarr, ast_expr);
-            if (pos < 1 || tarr.size() - pos < 2)
+            if (tarr.size() - pos < 2)
                 return error::syntax(tarr[pos], "Dangling operator");
             // I need to explicitly initialize the node_info for pleft and pright
             // since they don't go into parse_expr, they won't get initialized automatically.
@@ -757,14 +763,14 @@ namespace nn
             };
             if (op_assoc == OpAssoc::LTOR)
             {
-                if (parse_expr_prec<prec + 1>({ tarr, 0, pos }, *pleft) ||
-                    parse_expr_prec<prec>({ tarr, pos + 1 }, *pright)
+                if (parse_expr_prec<prec>({ tarr, 0, pos }, *pleft) ||
+                    parse_expr_prec<prec + 1>({ tarr, pos + 1 }, *pright)
                     ) return true;
             }
             else
             {
-                if (parse_expr_prec<prec>({ tarr, 0, pos }, *pleft) ||
-                    parse_expr_prec<prec + 1>({ tarr, pos + 1 }, *pright)
+                if (parse_expr_prec<prec + 1>({ tarr, 0, pos }, *pleft) ||
+                    parse_expr_prec<prec>({ tarr, pos + 1 }, *pright)
                     ) return true;
             }
             new (&ast_expr.expr_binary) AstExprBinaryOp();
@@ -817,10 +823,19 @@ namespace nn
                 int end;
                 for (end = i + 1; end < tarr.size() && tarr[end]->is_whitespace(); end++);
 
-                if (i == 1)
+                // Checking if the array is empty
+                bool is_empty = true;
+                for (int j = 1; j < i; j++)
+                    if (!tarr[j]->is_whitespace())
+                    {
+                        is_empty = false;
+                        break;
+                    }
+
+                if (is_empty)
                 {
                     // Empty array
-                    if (end != tarr.size() - 1)
+                    if (end != tarr.size())
                     {
                         // has mods => initialize lhs and continue execution
                         lhs = std::make_unique<AstExpr>();
@@ -849,7 +864,7 @@ namespace nn
                     AstExpr arr_expr;
                     if (parse_expr({ tarr, 1, i }, arr_expr))
                         return true;
-                    if (end != tarr.size() - 1)
+                    if (end != tarr.size())
                     {
                         // has mods => initialize lhs and continue execution
                         lhs = std::make_unique<AstExpr>();
@@ -1282,7 +1297,7 @@ namespace nn
                 if (end == tarr.size())
                     return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
                 if (tarr[end]->expect<TokenType::ENDL>() ||
-                    parse_lines<AstLine, parse_line>(tarr, end, indent_level + 1, ast_line.line_branch.body))
+                    parse_lines<AstLine, parse_line>(tarr, end, indent_level + 1, ast_line.line_for.body))
                     return true;
                 break;
 
@@ -1773,11 +1788,13 @@ namespace nn
             case ExprType::BINARY_MUL:
             case ExprType::BINARY_DIV:
             case ExprType::BINARY_MOD:
+            case ExprType::BINARY_POW:
             case ExprType::BINARY_IADD:
             case ExprType::BINARY_ISUB:
             case ExprType::BINARY_IMUL:
             case ExprType::BINARY_IDIV:
             case ExprType::BINARY_IMOD:
+            case ExprType::BINARY_IPOW:
             case ExprType::BINARY_ASSIGN:
             case ExprType::BINARY_AND:
             case ExprType::BINARY_OR:
@@ -1822,10 +1839,18 @@ namespace nn
             switch (ty)
             {
             case ExprType::INVALID:
+                break;
             case ExprType::LIT_BOOL:
+                new (&expr_bool) decltype(expr_bool)(std::move(expr.expr_bool));
+                break;
             case ExprType::LIT_INT:
+                new (&expr_int) decltype(expr_int)(std::move(expr.expr_int));
+                break;
             case ExprType::LIT_FLOAT:
+                new (&expr_float) decltype(expr_float)(std::move(expr.expr_float));
+                break;
             case ExprType::KW:
+                new (&expr_kw) decltype(expr_kw)(std::move(expr.expr_kw));
                 break;
             case ExprType::LIT_STRING:
             case ExprType::VAR:
@@ -1850,11 +1875,13 @@ namespace nn
             case ExprType::BINARY_MUL:
             case ExprType::BINARY_DIV:
             case ExprType::BINARY_MOD:
+            case ExprType::BINARY_POW:
             case ExprType::BINARY_IADD:
             case ExprType::BINARY_ISUB:
             case ExprType::BINARY_IMUL:
             case ExprType::BINARY_IDIV:
             case ExprType::BINARY_IMOD:
+            case ExprType::BINARY_IPOW:
             case ExprType::BINARY_ASSIGN:
             case ExprType::BINARY_AND:
             case ExprType::BINARY_OR:

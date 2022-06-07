@@ -755,6 +755,7 @@ namespace nn
         bool ArrType::add(ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs)
         {
             std::vector<Obj> objs;
+            volatile const Obj lhs_cpy = lhs;
             objs.insert(objs.end(), lhs.agg_obj->begin(), lhs.agg_obj->end());
             objs.insert(objs.end(), rhs.agg_obj->begin(), rhs.agg_obj->end());
             return heap.create_obj_agg(dst, objs);
@@ -833,7 +834,8 @@ namespace nn
 
         bool ArrType::cfg(core::Config*& cfg, const Obj src)
         {
-            std::vector<core::Config*> configs(src.agg_obj->size());
+            std::vector<core::Config*> configs;
+            configs.reserve(src.agg_obj->size());
             for (Obj e : *src.agg_obj)
             {
                 core::Config* elem_cfg;
@@ -969,7 +971,8 @@ namespace nn
                 return error::runtime("type object mismatch in aggregate object");
             }
 
-            std::vector<core::Config*> configs(src.agg_obj->size());
+            std::vector<core::Config*> configs;
+            configs.reserve(src.agg_obj->size());
             for (size_t i = 0; i < src.agg_obj->size(); i++)
             {
                 core::Config* elem_cfg;

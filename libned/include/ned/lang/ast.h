@@ -13,11 +13,11 @@ namespace nn
     {
         struct AstNodeInfo
         {
-            std::string fname;
-            uint32_t line_start;
-            uint32_t line_end;
-            uint32_t col_start;
-            uint32_t col_end;
+            std::string fname = "";
+            uint32_t line_start = 0;
+            uint32_t line_end = 0;
+            uint32_t col_start = 0;
+            uint32_t col_end = 0;
         };
 
         struct AstExpr;
@@ -124,7 +124,8 @@ namespace nn
             TUPLE,
             F16,
             F32,
-            F64
+            F64,
+            LEN
         };
 
         std::string to_string(ExprKW kw);

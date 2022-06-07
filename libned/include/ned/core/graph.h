@@ -39,8 +39,8 @@ namespace nn
 
         struct Tensor
         {
-            Edge* forward;
-            Edge* backward;
+            Edge* forward  = nullptr;
+            Edge* backward = nullptr;
         };
 
         struct Parameter

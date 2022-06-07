@@ -9,13 +9,6 @@
 
 #include <string>
 
-namespace std
-{
-    std::string to_string(std::string val);
-    std::string to_string(const char* val);
-    std::string to_string(bool val);
-}
-
 namespace nn
 {
     namespace lang
@@ -23,8 +16,20 @@ namespace nn
         class Token;
         class ByteCodeDebugInfo;
         struct AstNodeInfo;
+        class TypeRef;
     }
+}
 
+namespace std
+{
+    std::string to_string(std::string val);
+    std::string to_string(const char* val);
+    std::string to_string(bool val);
+    std::string to_string(::nn::lang::TypeRef type);
+}
+
+namespace nn
+{
     namespace error
     {
         template<typename... Args> struct _Format;

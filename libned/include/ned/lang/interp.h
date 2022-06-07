@@ -22,7 +22,7 @@ namespace nn
         {
             struct EdgeBuilder
             {
-                struct Connector { uint64_t node; std::string name; };
+                struct Connector { uint64_t node = 0; std::string name; };
 
                 core::EdgeInfo info;
                 std::map<std::string, Connector> md_inps;
@@ -85,6 +85,7 @@ namespace nn
                 std::map<std::string, uint64_t> exps;  // Local to the block
                 uint64_t parent = 0;  // 0 if it is the root block or it is uninitialized
                 std::map<std::string, uint64_t> sub_blocks;
+                std::map<std::string, uint64_t> sub_nodes;
                 std::map<std::string, std::unique_ptr<core::Config>> configs;
                 
                 // used only for exporting
@@ -136,6 +137,7 @@ namespace nn
             bool get_tfty(Obj& obj, ProgramHeap& heap, uint64_t tensor);
             bool get_eshp(Obj& obj, ProgramHeap& heap, uint64_t edge);
             bool get_efty(Obj& obj, ProgramHeap& heap, uint64_t edge);
+            bool get_einp(Obj& obj, ProgramHeap& heap, uint64_t edge);
 
             bool add_ndcfg(const std::string& name, uint64_t node, core::Config* pconfig);
             bool add_bkcfg(const std::string& name, uint64_t block, core::Config* pconfig);
@@ -156,6 +158,8 @@ namespace nn
         private:
             bool export_edge(core::Edge*& edge, uint64_t i);  // Exports edges from the outputs to the inputs
             bool export_node(core::Node*& node, uint64_t i);  // Exports nodes from the outputs to the inputs
+            bool bind_edge(uint64_t i);
+            bool bind_node(uint64_t i);
             bool export_init(core::Init*& init, uint64_t i);
             bool export_tensor(uint64_t i);
             bool export_block(core::Block& block, uint64_t i);

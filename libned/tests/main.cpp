@@ -83,29 +83,61 @@ int main(void)
         if (lex_file(TESTS_DIR"adding.nn", tarr))
         {
             error::print();
-            return 1;
+            return 0;
         }
 
         AstModule ast;
         if (parse_module(tarr, ast))
         {
             error::print();
-            return 1;
+            return 0;
         }
 
         ProgramHeap heap;
-        ByteCodeModule mod{ heap };
+        ByteCodeModule bc{ heap };
         ModuleInfo info;
-        if (codegen_module(mod, info, ast, {}))
+        if (codegen_module(bc, info, ast, {}))
         {
             error::print();
-            return 1;
+            return 0;
         }
-        else
+
+        TypeManager manager{};
+        info.init(&manager);
+        TypeRef N = info.create_int(5);
+        TypeRef M = info.create_int(6);
+        if (!N || !M)
         {
-            std::ofstream ofs{ TESTS_DIR"adding.bcnn" };
-            ofs << mod.to_string() << std::endl;
+            error::print();
+            return 0;
         }
+        TypeRef fp = info.create_fty(core::EdgeFty::F16);
+        TypeRef shape = info.create_array({ N, M });
+        if (!fp || !shape || info.entry_setup("model", { {"fp", fp}, {"shape", shape} }))
+        {
+            error::print();
+            return 0;
+        }
+
+        std::ofstream ofs{ TESTS_DIR"adding.bcnn" };
+        ofs << bc.to_string() << std::endl;
+
+        ByteCode byte_code;
+        GraphBuilder builder;
+        if (bc.export_module(byte_code) || exec(stack, heap, builder, byte_code, "main"))
+        {
+            error::print();
+            return 0;
+        }
+
+        core::Graph graph;
+        if (builder.export_graph(graph))
+        {
+            error::print();
+            return 0;
+        }
+
+        return 0;
     }
 
     return 0;

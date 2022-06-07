@@ -364,6 +364,7 @@ namespace nn
             template<> std::string ins_str<InstructionType::TFTY >() { return "tfty" ; }
             template<> std::string ins_str<InstructionType::ESHP >() { return "eshp" ; }
             template<> std::string ins_str<InstructionType::EFTY >() { return "efty" ; }
+            template<> std::string ins_str<InstructionType::EINP >() { return "einp" ; }
             template<> std::string ins_str<InstructionType::NDCFG>() { return "ndcfg"; }
             template<> std::string ins_str<InstructionType::BKCFG>() { return "bkcfg"; }
             template<> std::string ins_str<InstructionType::INCFG>() { return "incfg"; }
@@ -736,6 +737,10 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(Efty(tarr[0]));
+            case hash("einp"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(Einp(tarr[0]));
             case hash("ndcfg"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");

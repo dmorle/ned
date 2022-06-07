@@ -188,7 +188,7 @@ namespace nn
             if (tensors[tensor]->fwd_edge)
             {
                 // Make sure the shape and fty match
-                uint64_t fwd_edge = tensors[tensor]->bwd_edge;
+                uint64_t fwd_edge = tensors[tensor]->fwd_edge;
                 if (edges[fwd_edge]->info.dims.size() != edges[edge]->info.dims.size())
                     return error::runtime("Tensor rank mismatch found while binding a backward edge");
                 for (size_t i = 0; i < edges[edge]->info.dims.size(); i++)
@@ -317,9 +317,19 @@ namespace nn
             assert(!is_exported);
 
             if (!edge_exists(edge))
-                return error::runtime("Attempted toreference a non-existant edge object");
+                return error::runtime("Attempted to reference a non-existant edge object");
             
             return heap.create_obj_fty(obj, edges[edge]->info.fty);
+        }
+
+        bool GraphBuilder::get_einp(Obj& obj, ProgramHeap& heap, uint64_t edge)
+        {
+            assert(!is_exported);
+
+            if (!edge_exists(edge))
+                return error::runtime("Attempted to reference a non-existant edge object");
+
+            return heap.create_obj_bool(obj, node_exists(edges[edge]->md_inps.at(current_mode()).node));
         }
 
         bool GraphBuilder::add_ndcfg(const std::string& name, uint64_t node, core::Config* pconfig)
@@ -370,7 +380,20 @@ namespace nn
             if (nodes[node]->parent)
                 return error::runtime("Attempted to set a block's parent when it has already been set");
             nodes[node]->parent = parent;
-            return false;
+            
+            // Adding the node as a sub-node of parent
+            std::string base = nodes[node]->name;
+            for (size_t i = 0; true; i++)
+            {
+                std::string name = base + "~" + std::to_string(i);
+                if (!blocks[parent]->sub_nodes.contains(name))
+                {
+                    blocks[parent]->sub_nodes[name] = node;
+                    return false;
+                }
+            }
+            assert(false);
+            return error::runtime("Internal error: unreachable code execution in set_ndprt");
         }
 
         bool GraphBuilder::set_ndinp(const std::string& name, uint64_t node, uint64_t edge)
@@ -420,7 +443,22 @@ namespace nn
 
             blocks[block]->parent = parent;
             if (parent)
-                return false;
+            {
+                // Adding the block as a sub-block of the parent
+                std::string base = blocks[block]->name;
+                for (size_t i = 0; true; i++)
+                {
+                    std::string name = base + "~" + std::to_string(i);
+                    if (!blocks[parent]->sub_blocks.contains(name))
+                    {
+                        blocks[parent]->sub_blocks[name] = block;
+                        return false;
+                    }
+                }
+                // Should be unreachable
+                assert(false);
+                return error::runtime("Internal error: unreachable code execution in set_bkprt");
+            }
 
             if (root)
                 return error::runtime("Attempted to set a block as the root, when a root was already set");
@@ -517,28 +555,44 @@ namespace nn
                 return true;
 
             // Export the nodes and edges from the outputs to the inputs
+            // Because of the backward references in the graph, I can't do it all in one DFS.
+            // Instead, I first do a DFS where the edges and nodes get created and the forward references are made.
+            // Then, on a second DFS, I can do the reverse references since everything will already be initialized.
+            
+            // Exporting the edges/nodes and making the forward references
             // root block output tensors' forward edges
             // export_edge is responsible for binding the edge to the tensor - no memory leaks here
             core::Edge* edge;
             for (const auto& [name, tensor] : blocks[root]->outs)
-            {
                 if (export_edge(edge, tensors[tensor]->fwd_edge))
                     return true;
-            }
-            // root block input tensors' backward edges
-            for (const auto& [name, tensor] : blocks[root]->inps)
-            {
-                if (export_edge(edge, tensors[tensor]->bwd_edge))
-                    return true;
-            }
             // explicitly exported tensors
             for (const auto& [name, tensor] : blocks[root]->exps)
-            {
                 if (export_edge(edge, tensors[tensor]->fwd_edge))
                     return true;
+            // root block input tensors' backward edges
+            for (const auto& [name, tensor] : blocks[root]->inps)
                 if (export_edge(edge, tensors[tensor]->bwd_edge))
                     return true;
-            }
+            // model weights
+            for (const auto& [name, tensor] : blocks[root]->exts)
+                if (export_edge(edge, tensors[tensor]->bwd_edge))
+                    return true;
+
+            // Second DFS, adding the reverse references
+            for (const auto& [name, tensor] : blocks[root]->outs)
+                if (bind_edge(tensors[tensor]->fwd_edge))
+                    return true;
+            for (const auto& [name, tensor] : blocks[root]->exps)
+                if (bind_edge(tensors[tensor]->fwd_edge))
+                    return true;
+            for (const auto& [name, tensor] : blocks[root]->inps)
+                if (bind_edge(tensors[tensor]->bwd_edge))
+                    return true;
+            for (const auto& [name, tensor] : blocks[root]->exts)
+                if (bind_edge(tensors[tensor]->bwd_edge))
+                    return true;
+
 
             // Then attach the blocks to the nodes and edges
             if (bind_block(graph.model, root))
@@ -561,43 +615,17 @@ namespace nn
             edge = new core::Edge();
             edges[i]->edge = edge;
             
-            // Binding the outputs
-            for (const auto& [name, conns] : edges[i]->md_outs)
-            {
-                std::vector<core::Edge::Connector> real_conns;
-                for (const auto& [node, conn_name] : conns)
-                {
-                    if (!node_exists(node))
-                    {
-                        delete edge;
-                        return error::graph("Found an invalid node during graph exporting");
-                    }
-                    assert(nodes[node]->node);  // Since I export from the outputs, the node should already be exported
-                    real_conns.push_back({ nodes[node]->node, conn_name });
-                }
-                edge->md_outs[name] = std::move(real_conns);
-            }
-
             // Binding the edge to any tensors that referenced it
             for (const auto [id, fwd_edge] : edges[i]->tensors)
             {
                 assert(tensor_exists(id));
                 assert(tensors[id]->ty != TensorBuilder::NON_EXPORTED);
-                if (tensors[id]->ty == TensorBuilder::TENSOR)
-                {
-                    if (fwd_edge)
-                        tensors[id]->tensor.forward = edge;
-                    else
-                        tensors[id]->tensor.backward = edge;
-                }
+                // Doesn't matter if its a tensor or parameter, both have a forward and backward edge
+                // And the unions used have the same layout for the edges.
+                if (fwd_edge)
+                    tensors[id]->tensor.forward = edge;
                 else
-                {
-                    assert(tensors[id]->ty == TensorBuilder::PARAMETER);
-                    if (fwd_edge)
-                        tensors[id]->param.forward = edge;
-                    else
-                        tensors[id]->param.backward = edge;
-                }
+                    tensors[id]->tensor.backward = edge;
             }
             
             // Exporting the feeding nodes and binding the inputs
@@ -612,6 +640,8 @@ namespace nn
                 edge->md_inps[name] = { node, conn.name };
             }
 
+            // Copying the edge info (fp and shape)
+            edge->info = edges[i]->info;
             return false;
         }
 
@@ -628,25 +658,13 @@ namespace nn
             node = new core::Node();
             nodes[i]->node = node;
 
-            // Binding the outputs
-            for (const auto& [name, edge] : nodes[i]->outs)
-            {
-                if (!edge_exists(edge))
-                {
-                    delete node;
-                    return true;
-                }
-                assert(edges[edge]->edge);  // Since I export from the outputs, the edge should already be exported
-                node->outs[name] = edges[edge]->edge;
-            }
-
             // Binding the node to the parent block
             if (!block_exists(nodes[i]->parent))
             {
                 delete node;
                 return true;
             }
-            assert(blocks[nodes[i]->parent]->block);
+            assert(blocks[nodes[i]->parent]->block);  // The blocks should all be exported at this point
             blocks[nodes[i]->parent]->block->sub_nodes[nodes[i]->name] = node;
             node->parent = blocks[nodes[i]->parent]->block;
 
@@ -669,6 +687,49 @@ namespace nn
             return false;
         }
 
+        bool GraphBuilder::bind_edge(uint64_t i)
+        {
+            // Binding the outputs
+            for (const auto& [name, conns] : edges[i]->md_outs)
+            {
+                std::vector<core::Edge::Connector> real_conns;
+                for (const auto& [node, conn_name] : conns)
+                {
+                    if (!node_exists(node))
+                        return error::graph("Found an invalid node during graph exporting");
+                    assert(nodes[node]->node);  // Everything should be exported at this point
+                    real_conns.push_back({ nodes[node]->node, conn_name });
+                }
+                edges[i]->edge->md_outs[name] = std::move(real_conns);
+            }
+
+            // Recursively bind the feeding nodes
+            for (const auto& [name, conn] : edges[i]->md_inps)
+                if (bind_node(conn.node))
+                    return true;
+
+            return false;
+        }
+
+        bool GraphBuilder::bind_node(uint64_t i)
+        {
+            // Binding the outputs
+            for (const auto& [name, edge] : nodes[i]->outs)
+            {
+                if (!edge_exists(edge))
+                    return true;
+                assert(edges[edge]->edge);  // Everything should be exported at this point
+                nodes[i]->node->outs[name] = edges[edge]->edge;
+            }
+
+            // Recursively bind the feeding edges
+            for (const auto& [name, edge] : nodes[i]->inps)
+                if (bind_edge(edge))
+                    return true;
+
+            return false;
+        }
+
         bool GraphBuilder::export_init(core::Init*& init, uint64_t i)
         {
             if (!init_exists(i))
@@ -688,7 +749,7 @@ namespace nn
             // Initial checks
             if (!tensor_exists(i))
                 return error::graph("Found an invalid tensor during exporting");
-            if (tensors[i]->ty)
+            if (tensors[i]->ty != TensorBuilder::NON_EXPORTED)  // Checking if its already been exported
                 return false;
             if (!edge_exists(tensors[i]->fwd_edge) || !edge_exists(tensors[i]->bwd_edge))
                 return error::graph("Found a tensor with a missing forward or backward edge");
@@ -726,7 +787,7 @@ namespace nn
         {
             if (!block_exists(i))
                 return error::graph("Found an invalid block during exporting");
-            assert(!blocks[i]->block);
+            assert(!blocks[i]->block);  // Asserting that 'i' hasn't already been exported
             blocks[i]->block = &block;
 
             // making sure all the tensor are exported
@@ -735,29 +796,39 @@ namespace nn
             {
                 if (export_tensor(tensor))
                     return true;
-                if (tensors[tensor]->ty == TensorBuilder::PARAMETER)
-                    return error::graph("Found a parameter set as a block input.  A tensor was expected");
+                assert(tensors[tensor]->ty != TensorBuilder::NON_EXPORTED);
+                // Its ok for the input to be a parameter, just treat it like its a tensor anyway
+                if (block.inps.contains(name))
+                    return error::graph("Found an input name conflict for block %, name %", block.name, name);
+                block.inps[name] = tensors[tensor]->tensor;
             }
             for (const auto& [name, tensor] : blocks[i]->outs)
             {
                 if (export_tensor(tensor))
                     return true;
-                if (tensors[tensor]->ty == TensorBuilder::PARAMETER)
-                    return error::graph("Found a parameter set as a block output.  A tensor was expected");
-            }
-            for (const auto& [name, tensor] : blocks[i]->exts)
-            {
-                if (export_tensor(tensor))
-                    return true;
-                if (tensors[tensor]->ty == TensorBuilder::PARAMETER)
-                    return error::graph("Found a parameter set as a block export.  A tensor was expected");
+                assert(tensors[tensor]->ty != TensorBuilder::NON_EXPORTED);
+                if (block.outs.contains(name))
+                    return error::graph("Found an output name conflict for block %, name %", block.name, name);
+                block.outs[name] = tensors[tensor]->tensor;
             }
             for (const auto& [name, tensor] : blocks[i]->exps)
             {
                 if (export_tensor(tensor))
                     return true;
-                if (tensors[tensor]->ty == TensorBuilder::TENSOR)
+                assert(tensors[tensor]->ty != TensorBuilder::NON_EXPORTED);
+                if (block.exports.contains(name))
+                    return error::graph("Found an export name conflict for block %, name %", block.name, name);
+                block.exports[name] = tensors[tensor]->tensor;
+            }
+            for (const auto& [name, tensor] : blocks[i]->exts)
+            {
+                if (export_tensor(tensor))
+                    return true;
+                if (tensors[tensor]->ty != TensorBuilder::PARAMETER)
                     return error::graph("Found a tensor set as a block weight.  A parameter was expected");
+                if (block.weights.contains(name))
+                    return error::graph("Found a weight name conflict for block %, name %", block.name, name);
+                block.weights[name] = tensors[tensor]->param;
             }
 
             // The parent should already be initialized for non-root blocks
@@ -911,7 +982,8 @@ namespace nn
 
         inline bool exec_agg(CallStack& stack, ProgramHeap& heap)
         {
-            std::vector<Obj> objs(oprand);
+            std::vector<Obj> objs;
+            objs.reserve(oprand);
             for (size_t i = 0; i < oprand; i++)
             {
                 Obj obj;
@@ -919,6 +991,7 @@ namespace nn
                     return true;
                 objs.push_back(obj);
             }
+            std::reverse(objs.begin(), objs.end());
             Obj dst;
             return
                 heap.create_obj_agg(dst, objs) ||
@@ -937,7 +1010,8 @@ namespace nn
 
         inline bool exec_aty(CallStack& stack, ProgramHeap& heap)
         {
-            std::vector<TypeObj*> tys(oprand);
+            std::vector<TypeObj*> tys;
+            tys.reserve(oprand);
             for (size_t i = 0; i < oprand; i++)
             {
                 Obj ty;
@@ -945,6 +1019,7 @@ namespace nn
                     return true;
                 tys.push_back(ty.type_obj);
             }
+            std::reverse(tys.begin(), tys.end());
             Obj type;
             return
                 heap.create_type_agg(type, tys) ||
@@ -1325,7 +1400,7 @@ namespace nn
             if (stack.pop(argnum))
                 return true;
             std::vector<size_t> dims;
-            dims.resize(*argnum.int_obj);
+            dims.reserve(*argnum.int_obj);
             for (IntObj i = 0; i < *argnum.int_obj; i++)
             {
                 Obj dim;
@@ -1333,6 +1408,7 @@ namespace nn
                     return true;
                 dims.push_back(*dim.int_obj);
             }
+            std::reverse(dims.begin(), dims.end());
             Obj obj, fty;
             return
                 stack.pop(fty) ||
@@ -1475,6 +1551,15 @@ namespace nn
                 stack.pop(edge) ||
                 pbuilder->get_efty(fty, heap, edge.ptr) ||
                 stack.push(fty);
+        }
+
+        inline bool exec_einp(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj edge, ret;
+            return
+                stack.pop(edge) ||
+                pbuilder->get_einp(ret, heap, edge.ptr) ||
+                stack.push(ret);
         }
 
         inline bool exec_ndcfg(CallStack& stack)
@@ -1862,6 +1947,10 @@ namespace nn
                     break;
                 case InstructionType::EFTY:
                     if (exec_efty(stack, heap))
+                        goto runtime_error;
+                    break;
+                case InstructionType::EINP:
+                    if (exec_einp(stack, heap))
                         goto runtime_error;
                     break;
                 case InstructionType::NDCFG:

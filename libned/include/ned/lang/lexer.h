@@ -97,6 +97,7 @@ namespace nn
             KW_AND,
             KW_OR,
             KW_NOT,
+            KW_LEN,
         };
 
         class Token;
@@ -104,8 +105,8 @@ namespace nn
         class TokenImp;
 
         template<TokenType TY> constexpr const TokenImp<TY>& create_default(Token* ptk);
-        extern constexpr std::string to_string(TokenType ty);  // Without 'extern', this creates a linker error.  Maybe a linker bug?
-        std::string to_string(const Token* ptk);
+        extern constexpr std::string to_string(TokenType ty) noexcept;  // Without 'extern', this creates a linker error.  Maybe a linker bug?
+        std::string to_string(const Token* ptk) noexcept;
 
         class Token
         {
@@ -300,13 +301,14 @@ namespace nn
                 rawlen += nsz;
             }
 
+            std::string to_string() const noexcept;
 #ifdef _DEBUG
             void print() const;
 #endif
 
             // returns -1 if token is not present in range
             template<class SearchCriteria>
-            int search(SearchCriteria&& sc, int start = 0) const
+            int search(SearchCriteria sc, int start = 0) const
             {
                 // A bit better cache utilization than rfind
                 int idx = start;
@@ -325,7 +327,7 @@ namespace nn
 
             // returns -1 if token is not present in range
             template<class SearchCriteria>
-            int search(SearchCriteria&& sc, int start, int end) const
+            int search(SearchCriteria sc, int start, int end) const
             {
                 if (end < 0)
                     end += size();
@@ -347,7 +349,7 @@ namespace nn
             // less efficient than a forward search
             // start argument < 0 offsets from the end of the token array
             template<class SearchCriteria>
-            int rsearch(SearchCriteria&& sc, int start = -1, int end = 0) const
+            int rsearch(SearchCriteria sc, int start = -1, int end = 0) const
             {
                 if (start < 0)
                     start += size();
@@ -398,9 +400,9 @@ namespace nn
         class IsInCriteria :
             public BracketCounter
         {
-            std::vector<TokenType> tys;
+            std::vector<TokenType> tys{};
         public:
-            IsInCriteria(std::vector<TokenType> tys);
+            IsInCriteria(const std::vector<TokenType>& tys);
             int accept(const Token* ptk, int idx);
         };
 

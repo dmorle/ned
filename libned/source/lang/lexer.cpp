@@ -4,9 +4,7 @@
 #include <cassert>
 #include <cmath>
 
-#ifdef _DEBUG
 #include <iostream>
-#endif
 
 #define FNV_PRIME 0x00000100000001B3ULL
 #define FNV_OFFSET_BASIS 0XCBF29CE484222325ULL
@@ -43,7 +41,7 @@ namespace nn
 {
     namespace lang
     {
-        constexpr std::string to_string(TokenType ty)
+        constexpr std::string to_string(TokenType ty) noexcept
         {
             switch (ty)
             {
@@ -196,15 +194,17 @@ namespace nn
             case TokenType::KW_AND:
                 return "keyword and";
             case TokenType::KW_OR:
-                return "or";
+                return "keyword or";
             case TokenType::KW_NOT:
-                return "not";
+                return "keyword not";
+            case TokenType::KW_LEN:
+                return "keyword len";
             default:
                 return "UNKNOWN TOKEN - LEXER BUG";
             }
         }
 
-        std::string to_string(const Token* ptk)
+        std::string to_string(const Token* ptk) noexcept
         {
             switch (ptk->ty)
             {
@@ -360,6 +360,8 @@ namespace nn
                 return " or ";
             case TokenType::KW_NOT:
                 return " not ";
+            case TokenType::KW_LEN:
+                return " len";
             default:
                 return "unknown";
             }
@@ -418,13 +420,13 @@ namespace nn
             this->pbuf = base.pbuf + base_offset;
 
             this->off_cap = 0;
-            this->off_len = end - start;
+            this->off_len = (size_t)end - start;
             this->offsets = (size_t*)std::malloc(sizeof(size_t) * this->off_len);
             if (!this->offsets)
                 throw std::bad_alloc();
 
             for (int i = 0; i < this->off_len; i++)
-                this->offsets[i] = base.offsets[start + i] - base_offset;
+                this->offsets[i] = base.offsets[(size_t)start + i] - base_offset;
         }
 
         TokenArray::~TokenArray()
@@ -498,11 +500,20 @@ namespace nn
             return off_len;
         }
 
+        std::string TokenArray::to_string() const noexcept
+        {
+            std::string result;
+            for (int i = 0; i < size(); i++)
+                result += ::nn::lang::to_string((*this)[i]);
+            result += "\n";
+            return result;
+        }
+
 #ifdef _DEBUG
         void TokenArray::print() const
         {
             for (int i = 0; i < size(); i++)
-                std::cout << to_string((*this)[i]);
+                std::cout << ::nn::lang::to_string((*this)[i]);
             std::cout << std::endl;
         }
 #endif
@@ -961,6 +972,9 @@ namespace nn
                     case hash("not"):
                         tarr.push_back(TokenImp<TokenType::KW_NOT>(fname, line_num, col_num));
                         continue;
+                    case hash("len"):
+                        tarr.push_back(TokenImp<TokenType::KW_LEN>(fname, line_num, col_num));
+                        continue;
                     }
                     
                     TokenImp<TokenType::IDN> tk(fname, line_num, col_num);
@@ -1047,7 +1061,10 @@ namespace nn
             return (idx + 1) * (!in_bracket() && ptk->ty == ty) - 1;
         }
 
-        IsInCriteria::IsInCriteria(std::vector<TokenType> tys) : tys(tys) {}
+        IsInCriteria::IsInCriteria(const std::vector<TokenType>& tys)
+        {
+            this->tys = tys;
+        }
 
         int IsInCriteria::accept(const Token* ptk, int idx)
         {

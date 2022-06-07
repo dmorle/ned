@@ -82,11 +82,11 @@ namespace nn
             TypeRef& operator=(const TypeRef&) = default;
             TypeRef& operator=(TypeRef&&) = default;
 
-            operator bool() const;
-            TypeInfo* operator->();
-            const TypeInfo* operator->() const;
-            TypeInfo& operator*();
-            const TypeInfo& operator*() const;
+            operator bool() const noexcept;
+            TypeInfo* operator->() noexcept;
+            const TypeInfo* operator->() const noexcept;
+            TypeInfo& operator*() noexcept;
+            const TypeInfo& operator*() const noexcept;
 
         };
 
@@ -232,10 +232,8 @@ namespace nn
             };
 
             TypeInfo();
-            TypeInfo(const TypeInfo& type) = delete;
-            TypeInfo(TypeInfo&& type) = delete;
-            TypeInfo& operator=(const TypeInfo& type) = delete;
-            TypeInfo& operator=(TypeInfo&& type) = delete;
+            TypeInfo(TypeInfo&& type) noexcept;
+            TypeInfo& operator=(TypeInfo&& type) noexcept;
             ~TypeInfo();
 
             bool check_pos() const;
@@ -259,6 +257,8 @@ namespace nn
             bool check_xint() const;  // whether the type can be converted into an int
             bool check_xflt() const;  // whether the type can be converted into a float
             bool check_cpy() const;
+            bool check_idx() const;
+            bool check_len() const;
 
             std::string encode() const;
             std::string to_string() const;
@@ -275,17 +275,19 @@ namespace nn
 
             // puts the object that the type references onto the top of the stack if possible
             CodegenCallback codegen = nullptr;
+
+        private:
+            void do_move(TypeInfo&& type) noexcept;
         };
 
         class TypeManager
         {
             friend class TypeRef;
 
-            uint8_t* buf = nullptr;
-            size_t bufsz = 0;
-            size_t len = 1;
+            std::vector<TypeInfo> buf;
 
-            inline TypeInfo* get(size_t ptr);
+            inline TypeInfo* get(size_t ptr) noexcept;
+            inline const TypeInfo* get(size_t ptr) const noexcept;
             inline TypeRef next();
 
         public:
@@ -294,10 +296,9 @@ namespace nn
             TypeManager(TypeManager&&) = delete;
             TypeManager& operator=(const TypeManager&) = delete;
             TypeManager& operator=(TypeManager&&) = delete;
-            ~TypeManager();
 
-            TypeRef duplicate          (TypeRef src);
-            TypeRef duplicate          (TypeInfo::Category cat, CodegenCallback codegen, TypeRef src);
+            TypeRef duplicate          (const TypeRef src);
+            TypeRef duplicate          (TypeInfo::Category cat, CodegenCallback codegen, const TypeRef src);
 
             TypeRef create_type        (TypeInfo::Category cat, CodegenCallback codegen, TypeRef base);
             TypeRef create_placeholder ();  // always virtual
@@ -329,8 +330,6 @@ namespace nn
 
         class Scope
         {
-            friend bool codegen_exit(Scope& scope, const AstNodeInfo& info);
-
         public:
             struct StackVar
             {
@@ -355,6 +354,7 @@ namespace nn
             bool push(size_t n=1);
             bool pop(size_t n=1);
 
+            const Scope* get_parent() const;
             bool local_size(size_t& sz, const Scope* scope) const;
             bool list_local_vars(std::vector<StackVar>& vars, const Scope* scope);
         };
@@ -539,10 +539,12 @@ namespace nn
             TypeNode* next_type();
 
         private:
-            uint8_t val_buf[1024 * sizeof(ValNode)];
+            static constexpr size_t bufsz = 1024;
+
+            ValNode val_buf[bufsz] = {};
             size_t val_buflen = 0;
 
-            uint8_t type_buf[1024 * sizeof(TypeNode)];
+            TypeNode type_buf[bufsz] = {};
             size_t type_buflen = 0;
         };
 
@@ -620,6 +622,7 @@ namespace nn
             bool init(const AstBlock& sig);
             bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs, const std::vector<TypeRef>& vargs);
             bool codegen(Scope& scope, std::vector<TypeRef>& rets);
+            bool codegen_entrypoint(Scope& scope, const std::map<std::string, TypeRef>& cargs);
 
         private:
             std::map<std::string, ValNode*> varg_nodes;
@@ -647,20 +650,23 @@ namespace nn
 
         class ModuleInfo
         {
-            struct EntryPoint
-            {
-                std::string bc_name;
-                AstBlockSig* sig;
-            };
-
-            std::map<std::string, std::vector<EntryPoint>> entry_points;
+            friend bool codegen_module(ByteCodeModule& bc, ModuleInfo& info, AstModule& ast, const std::vector<std::string>& imp_dirs);
 
             CodeModule mod;
+            AstNodeInfo node_info{ "", 0, 0, 0, 0 };
 
         public:
             ModuleInfo();
 
-            bool entry_setup(std::string& ep_name, ByteCodeModule& bc, const std::string& name, const std::map<std::string, std::pair<Obj, TypeInfo>>& cargs) const;
+            void init(TypeManager* type_manager);
+            bool entry_setup(const std::string& name, const std::map<std::string, TypeRef>& cargs);
+
+            TypeRef create_bool  (BoolObj val);
+            TypeRef create_fty   (FtyObj val);
+            TypeRef create_int   (IntObj val);
+            TypeRef create_float (FloatObj val);
+            TypeRef create_str   (const StrObj& val);
+            TypeRef create_array (const std::vector<TypeRef>& val);
         };
 
         std::string label_prefix(const AstNodeInfo& info);
