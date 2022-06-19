@@ -323,9 +323,9 @@ namespace nn
             return heap.create_obj_str(dst, *src.bool_obj ? "true" : "false");
         }
 
-        bool BoolType::cfg(core::Config*& cfg, const Obj src)
+        bool BoolType::cfg(core::ConfigVal& cfg, const Obj src)
         {
-            cfg = new core::BoolConfig(*src.bool_obj);
+            cfg = core::ConfigVal::make_bool(*src.bool_obj);
             return false;
         }
 
@@ -363,9 +363,9 @@ namespace nn
                 heap.create_obj_str(dst, str);
         }
 
-        bool FtyType::cfg(core::Config*& cfg, const Obj src)
+        bool FtyType::cfg(core::ConfigVal& cfg, const Obj src)
         {
-            cfg = new core::FtyConfig(*src.fty_obj);
+            cfg = core::ConfigVal::make_fty(*src.fty_obj);
             return false;
         }
 
@@ -503,9 +503,9 @@ namespace nn
             return heap.create_obj_int(dst, *src.int_obj);
         }
 
-        bool IntType::cfg(core::Config*& cfg, const Obj src)
+        bool IntType::cfg(core::ConfigVal& cfg, const Obj src)
         {
-            cfg = new core::IntConfig(*src.int_obj);
+            cfg = core::ConfigVal::make_int(*src.int_obj);
             return false;
         }
         
@@ -631,9 +631,9 @@ namespace nn
             return heap.create_obj_int(dst, (IntObj)*src.float_obj);
         }
 
-        bool FloatType::cfg(core::Config*& cfg, const Obj src)
+        bool FloatType::cfg(core::ConfigVal& cfg, const Obj src)
         {
-            cfg = new core::FloatConfig(*src.float_obj);
+            cfg = core::ConfigVal::make_float(*src.float_obj);
             return false;
         }
 
@@ -716,9 +716,9 @@ namespace nn
             return heap.create_obj_int(dst, std::stoll(*src.str_obj));
         }
         
-        bool StrType::cfg(core::Config*& cfg, const Obj src)
+        bool StrType::cfg(core::ConfigVal& cfg, const Obj src)
         {
-            cfg = new core::StringConfig(*src.str_obj);
+            cfg = core::ConfigVal::make_str(*src.str_obj);
             return false;
         }
 
@@ -832,22 +832,18 @@ namespace nn
             return heap.create_obj_str(dst, ss.str());
         }
 
-        bool ArrType::cfg(core::Config*& cfg, const Obj src)
+        bool ArrType::cfg(core::ConfigVal& cfg, const Obj src)
         {
-            std::vector<core::Config*> configs;
+            std::vector<core::ConfigVal> configs;
             configs.reserve(src.agg_obj->size());
             for (Obj e : *src.agg_obj)
             {
-                core::Config* elem_cfg;
-                if (elem_ty->cfg(elem_cfg, e))
-                {
-                    for (core::Config* cfg : configs)
-                        delete cfg;
+                core::ConfigVal elem;
+                if (elem_ty->cfg(elem, e))
                     return true;
-                }
-                configs.push_back(elem_cfg);
+                configs.push_back(elem);
             }
-            cfg = new core::ListConfig(configs);
+            cfg = core::ConfigVal::make_list(configs);
             return false;
         }
 
@@ -962,7 +958,7 @@ namespace nn
             return heap.create_obj_str(dst, ss.str());
         }
 
-        bool AggType::cfg(core::Config*& cfg, const Obj src)
+        bool AggType::cfg(core::ConfigVal& cfg, const Obj src)
         {
             if (src.agg_obj->size() != elem_tys.size())
             {
@@ -971,20 +967,16 @@ namespace nn
                 return error::runtime("type object mismatch in aggregate object");
             }
 
-            std::vector<core::Config*> configs;
+            std::vector<core::ConfigVal> configs;
             configs.reserve(src.agg_obj->size());
             for (size_t i = 0; i < src.agg_obj->size(); i++)
             {
-                core::Config* elem_cfg;
-                if (elem_tys[i]->cfg(elem_cfg, src.agg_obj->operator[](i)))
-                {
-                    for (core::Config* cfg : configs)
-                        delete cfg;
+                core::ConfigVal elem;
+                if (elem_tys[i]->cfg(elem, src.agg_obj->operator[](i)))
                     return true;
-                }
-                configs.push_back(elem_cfg);
+                configs.push_back(elem);
             }
-            cfg = new core::ListConfig(configs);
+            cfg = core::ConfigVal::make_list(configs);
             return false;
         }
     }

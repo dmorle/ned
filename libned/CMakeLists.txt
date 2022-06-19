@@ -8,8 +8,8 @@ add_library(
     "source/util/libs.cpp"
 
     "source/core/config.cpp"
-    "source/core/setup.cpp"
     "source/core/graph.cpp"
+    "source/core/reduce.cpp"
 
     "source/lang/ast.cpp"
     "source/lang/bytecode.cpp"
@@ -23,8 +23,8 @@ add_library(
     "include/ned/util/libs.h"
 
     "include/ned/core/config.h"
-    "include/ned/core/setup.h"
     "include/ned/core/graph.h"
+    "include/ned/core/reduce.h"
     
     "include/ned/lang/ast.h"
     "include/ned/lang/bytecode.h"

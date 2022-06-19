@@ -1,8 +1,9 @@
-#ifndef NED_CONFIG_H
-#define NED_CONFIG_H
+#ifndef NED_CORE_CONFIG_H
+#define NED_CORE_CONFIG_H
 
 #include <vector>
 #include <string>
+#include <memory>
 
 namespace nn
 {
@@ -26,78 +27,88 @@ namespace nn
         size_t fty_size(EdgeFty fty);
         bool fty_str(EdgeFty fty, std::string& str);
 
-        enum class ConfigType
+        struct ConfigVal
         {
-            FTY,
-            BOOL,
-            INT,
-            FLOAT,
-            STRING,
-            LIST
+            static ConfigVal make_bool(bool val);
+            static ConfigVal make_fty(EdgeFty val);
+            static ConfigVal make_int(int64_t val);
+            static ConfigVal make_float(double val);
+            static ConfigVal make_str(const std::string& val);
+            static ConfigVal make_list(const std::vector<ConfigVal>& val);
+
+            enum class Type
+            {
+                INVALID,
+                FTY,
+                BOOL,
+                INT,
+                FLOAT,
+                STRING,
+                LIST
+            }
+            ty = Type::INVALID;
+
+            union
+            {
+                bool                   val_bool;
+                EdgeFty                val_fty;
+                int64_t                val_int;
+                double                 val_float;
+                std::string            val_str;
+                std::vector<ConfigVal> val_list;
+            };
+
+            ConfigVal() {}
+            ConfigVal(const ConfigVal& val);
+            ConfigVal(ConfigVal&& val) noexcept;
+            ConfigVal& operator=(const ConfigVal& val);
+            ConfigVal& operator=(ConfigVal&& val) noexcept;
+            ~ConfigVal();
+
+        private:
+            void do_move(ConfigVal&& val) noexcept;
+            void do_copy(const ConfigVal& val) noexcept;
         };
 
-        struct Config
+        struct ConfigType
         {
-            ConfigType ty;
-            Config(ConfigType ty) : ty(ty) {}
-            virtual ~Config() {}
+            static ConfigType make_bool();
+            static ConfigType make_fty();
+            static ConfigType make_int();
+            static ConfigType make_float();
+            static ConfigType make_str();
+            static ConfigType make_array(const ConfigType& val);
+            static ConfigType make_tuple(const std::vector<ConfigType>& val);
 
-            virtual Config* clone() const = 0;
-        };
+            enum class Type
+            {
+                INVALID,
+                BOOL,
+                FTY,
+                INT,
+                FLOAT,
+                STRING,
+                ARRAY,
+                TUPLE
+            }
+            ty = Type::INVALID;
 
-        struct BoolConfig :
-            public Config
-        {
-            bool val;
-            BoolConfig(bool val) : Config(ConfigType::BOOL), val(val) {}
+            union
+            {
+                std::unique_ptr<ConfigType> type_arr;
+                std::vector<ConfigType>     type_tuple;
+            };
 
-            virtual Config* clone() const;
-        };
+            ConfigType() {}
+            ConfigType(const ConfigType& val);
+            ConfigType(ConfigType&& val) noexcept;
+            ConfigType& operator=(const ConfigType& val);
+            ConfigType& operator=(ConfigType&& val) noexcept;
+            ~ConfigType();
 
-        struct FtyConfig :
-            public Config
-        {
-            EdgeFty val;
-            FtyConfig(EdgeFty val) : Config(ConfigType::FTY), val(val) {}
-
-            virtual Config* clone() const;
-        };
-
-        struct IntConfig :
-            public Config
-        {
-            int64_t val;
-            IntConfig(int64_t val) : Config(ConfigType::INT), val(val) {}
-
-            virtual Config* clone() const;
-        };
-
-        struct FloatConfig :
-            public Config
-        {
-            double val;
-            FloatConfig(double val) : Config(ConfigType::FLOAT), val(val) {}
-
-            virtual Config* clone() const;
-        };
-
-        struct StringConfig :
-            public Config
-        {
-            std::string val;
-            StringConfig(const std::string& val) : Config(ConfigType::STRING), val(val) {}
-
-            virtual Config* clone() const;
-        };
-
-        struct ListConfig :
-            public Config
-        {
-            std::vector<Config*> val;
-            ListConfig(const std::vector<Config*>& val) : Config(ConfigType::LIST), val(val) {}
-            ~ListConfig();
-
-            virtual Config* clone() const;
+        private:
+            void do_move(ConfigType&& val) noexcept;
+            void do_copy(const ConfigType& val) noexcept;
         };
     }
 }

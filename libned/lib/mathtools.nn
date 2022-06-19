@@ -1,0 +1,55 @@
+fn min(int lhs, int rhs) -> int:
+    if lhs < rhs:
+        return lhs
+    return rhs
+
+fn max(int lhs, int rhs) -> int:
+    if lhs < rhs:
+        return rhs
+    return lhs
+
+fn min(float lhs, float rhs) -> float:
+    if lhs < rhs:
+        return lhs
+    return rhs
+
+fn max(float lhs, float rhs) -> float:
+    if lhs < rhs:
+        return rhs
+    return lhs
+
+fn max(const array<int> arr) -> int:
+    if len(arr) == 0:
+        raise "Unable to determine the max of an empty array"
+    max_val = arr[0]
+    for e in arr:
+        if e > max_val:
+            max_val = e
+    return max_val
+
+fn min(const array<int> arr) -> int:
+    if len(arr) == 0:
+        raise "Unable to determine the min of an empty array"
+    min_val = arr[0]
+    for e in arr:
+        if e < min_val:
+            min_val = e
+    return min_val
+
+fn max(const array<float> arr) -> float:
+    if len(arr) == 0:
+        raise "Unable to determine the max of an empty array"
+    max_val = arr[0]
+    for e in arr:
+        if e > max_val:
+            max_val = e
+    return max_val
+
+fn min(const array<float> arr) -> float:
+    if len(arr) == 0:
+        raise "Unable to determine the min of an empty array"
+    min_val = arr[0]
+    for e in arr:
+        if e < min_val:
+            min_val = e
+    return min_val

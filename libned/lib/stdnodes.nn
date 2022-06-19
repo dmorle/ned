@@ -1,0 +1,137 @@
+import mathtools
+import itertools
+
+intr const_val<float val, fty fp, int *shape>() -> val:
+    return fp<*shape> out
+
+intr __neg__<fty fp, int *shape>(fp<*shape> inp) -> out:
+    return fp<*shape> out
+
+intr __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+	return fp<*shape> out
+
+intr __sub__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+    return fp<*shape> out
+
+intr __mul__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+    return fp<*shape> out
+
+intr __div__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+    return fp<*shape> out
+
+intr __pow__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+    return fp<*shape> out
+
+intr __cast__<fty out_fp, int *out_shape, fty inp_fp, int *inp_shape>(inp_fp<*inp_shape> inp) -> out:
+    inp_size = 1
+    for dim_size in inp_shape:
+        inp_size *= dim_size
+
+    out_size = 1
+    unknown_idx = -1
+    for i in range(len(out_shape)):
+        if out_shape[i] == -1:
+            if unknown_idx != -1:
+                raise "Multiple -1 values in output shape"
+            unknown_idx = i
+        else:
+            out_size *= out_shape[i]
+
+	actual_shape = out_shape  # copying out_shape
+    if unknown_idx != -1:
+        actual_shape[unknown_idx] = inp_size / out_size
+        out_size *= actual_shape[unknown_idx]
+
+    if out_size != inp_size:
+        raise "Unable to transform tensor with size " + str::inp_size + " to size " + str::out_size
+    return out_fp<*actual_shape> out
+
+intr add_st<fty fp, int *shape>(fp<*shape> lhs, fp<> rhs) -> out:
+    return fp<*shape> out
+
+intr add_ts<fty fp, int *shape>(fp<> lhs, fp<*shape> rhs) -> out:
+    return fp<*shape> out
+
+intr sub_st<fty fp, int *shape>(fp<*shape> lhs, fp<> rhs) -> out:
+    return fp<*shape> out
+
+intr sub_ts<fty fp, int *shape>(fp<> lhs, fp<*shape> rhs) -> out:
+    return fp<*shape> out
+
+intr mul_st<fty fp, int *shape>(fp<*shape> lhs, fp<> rhs) -> out:
+    return fp<*shape> out
+
+intr mul_ts<fty fp, int *shape>(fp<> lhs, fp<*shape> rhs) -> out:
+    return fp<*shape> out
+
+intr div_ts<fty fp, int *shape>(fp<*shape> lhs, fp<> rhs) -> out:
+    return fp<*shape> out
+
+intr div_st<fty fp, int *shape>(fp<> lhs, fp<*shape> rhs) -> out:
+    return fp<*shape> out
+
+intr pow_ts<fty fp, int *shape>(fp<*shape> lhs, fp<> rhs) -> out:
+    return fp<*shape> out
+
+intr pow_st<fty fp, int *shape>(fp<> lhs, fp<*shape> rhs) -> out:
+    return fp<*shape> out
+
+intr matmul<fty fp, int M, int S, int N>(fp<M, S> lhs, fp<S, N> rhs) -> prod:
+	return fp<M, N> prod
+
+intr transpose<fty fp, int M, int N>(fp<M, N> inp) -> out:
+    return fp<N, M> out
+
+intr permute<int *dims, fty fp, int *shape>(fp<*shape> inp) -> out:
+    if len(dims) != len(shape):
+        raise "Invalid number of dims provided to permute, expected " +
+            str::len(shape) + ", recieved " str::len(dims)
+
+    array<int> out_shape
+    for i in len(shape):
+        out_shape += [0]
+
+    for i, dim in enumerate(dims):
+        if 0 < dim or dim <= len(shape):
+             raise "permute index is out of range"
+        out_shape[i] = dim
+
+    return fp<*out_shape> out
+
+intr reverse<int *axes, fty fp, int *shape>(fp<*shape> inp) -> out:
+    array<bool> mapped
+    for _ in shape:
+        mapped += [false]
+
+    for axis in axes:
+        if axis < 0 or len(shape) <= axis:
+            raise "axis " + str::axis + " is out of range for shape " + str::shape
+        if mapped[dim]:
+            raise "axis " + str::axis + " has already been mapped for reversal"
+        mapped[dim] = true
+
+    return fp<*shape> out
+
+intr sum_reduce<fty fp, int *shape>(fp<*shape> inp) -> out:
+    return fp<> out
+
+intr prod_reduce<fty fp, int *shape>(fp<*shape> inp) -> out:
+    return fp<> out
+
+intr expand_dims<int *nshape, fty fp, int *shape>(fp<*shape> inp) -> out:
+    if len(nshape) != len(shape):
+        raise "Incomplete data provided to intr expand_dims"
+
+    array<int> actual_shape
+    for i in range(len(shape)):
+        if nshape[i] == -1:
+            actual_shape += [shape[i]]
+        elif nshape[i] % shape[i] != 0:
+            raise "Unable to expand axis " + str::i + " from " + str::shape[i] + " to " + str::nshape[i] + " in expand_dims"
+        actual_shape += [nshape[i]]
+
+    return fp<*actual_shape> out
+
+intr expand_scalar<int *shape, fty fp>(fp<> inp) -> out:
+    return fp<*shape> out
+    

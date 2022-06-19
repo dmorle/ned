@@ -1,0 +1,56 @@
+import stdnodes
+
+def __add__<fty fp, int *lshape, int *rshape>(fp<*lshape> lhs, fp<*rshape> rhs) -> out:
+	if lshape == rshape:
+		fp<*lshape> out
+		out.forward = lhs.forward + rhs.forward
+		lhs.backward = out.backward
+		rhs.backward = out.backward
+		return out
+
+	if len(rshape) == 0:
+		fp<*lshape> out
+		out.forward = add_ts(lhs, rhs)
+		lhs.backward = out.backward
+		rhs.backward = sum_reduce(out.backward)
+		return out
+
+	if len(lshape) == 0:
+		fp<*rshape> out
+		out.forward = add_st(lhs, rhs)
+		lhs.backward = sum_reduce(out.backward)
+		rhs.backward = out.backward
+		return out
+
+	raise "Unable to add shape " + str::lshape + " to shape " + str::rshape
+
+def __sub__<fty fp, int *lshape, int *rshape>(fp<*lshape> lhs, fp<*rshape> rhs) -> out:
+	if lshape == rshape:
+		fp<*lshape> out
+		out.forward = lhs.forward - rhs.forward
+		lhs.backward = out.backward
+		rhs.backward = out.backward
+		return out
+
+	if len(rshape) == 0:
+		fp<*lshape> out
+		out.forward = sub_ts(lhs, rhs)
+		lhs.backward = out.backward
+		rhs.backward = -sum_reduce(out.backward)
+		return out
+
+	if len(lshape) == 0:
+		fp<*rshape> out
+		out.forward = sub_st(lhs, rhs)
+		lhs.backward = sum_reduce(out.backward)
+		rhs.backward = -out.backward
+		return out
+
+	raise "Unable to add shape " + str::lshape + " to shape " + str::rshape
+
+def matmul<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> out:
+	fp<M, N> out
+	out.forward = matmul(lhs.forward, rhs.forward)
+	lhs.backward = matmul(out.backward, transpose(rhs.backward))
+	rhs.backward = matmul(transpose(lhs.backward), out.backward)
+	return out

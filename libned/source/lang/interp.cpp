@@ -332,7 +332,7 @@ namespace nn
             return heap.create_obj_bool(obj, node_exists(edges[edge]->md_inps.at(current_mode()).node));
         }
 
-        bool GraphBuilder::add_ndcfg(const std::string& name, uint64_t node, core::Config* pconfig)
+        bool GraphBuilder::add_ndcfg(const std::string& name, uint64_t node, const core::ConfigVal& cfg)
         {
             assert(!is_exported);
 
@@ -340,11 +340,11 @@ namespace nn
                 return error::runtime("Attempted to reference a non-existant node");
             if (nodes[node]->configs.contains(name))
                 return error::runtime("Attempted to overwrite node configuration '%'", name);
-            nodes[node]->configs[name] = std::unique_ptr<core::Config>(pconfig);
+            nodes[node]->configs[name] = cfg;
             return false;
         }
 
-        bool GraphBuilder::add_bkcfg(const std::string& name, uint64_t block, core::Config* pconfig)
+        bool GraphBuilder::add_bkcfg(const std::string& name, uint64_t block, const core::ConfigVal& cfg)
         {
             assert(!is_exported);
 
@@ -352,11 +352,11 @@ namespace nn
                 return error::runtime("Attempted to reference a non-existant block");
             if (blocks[block]->configs.contains(name))
                 return error::runtime("Attempted to overwrite block configuration '%'", name);
-            blocks[block]->configs[name] = std::unique_ptr<core::Config>(pconfig);
+            blocks[block]->configs[name] = cfg;
             return false;
         }
 
-        bool GraphBuilder::add_incfg(const std::string& name, uint64_t init, core::Config* pconfig)
+        bool GraphBuilder::add_incfg(const std::string& name, uint64_t init, const core::ConfigVal& cfg)
         {
             assert(!is_exported);
 
@@ -364,7 +364,7 @@ namespace nn
                 return error::runtime("Attempted to reference a non-existant weight initializer");
             if (inits[init]->configs.contains(name))
                 return error::runtime("Attempted to overwrite init configuration '%'", name);
-            inits[init]->configs[name] = std::unique_ptr<core::Config>(pconfig);
+            inits[init]->configs[name] = cfg;
             return false;
         }
 
@@ -740,7 +740,7 @@ namespace nn
             for (const auto& [name, config] : inits[i]->configs)
                 // I can't guarentee with the current bytecode specification that the inits won't be shared
                 // So to make sure that nothing weird happens I need to copy out each one of the configs rather than move them
-                init->configs[name] = std::unique_ptr<core::Config>(inits[i]->configs.at(name)->clone());
+                init->configs[name] = inits[i]->configs.at(name);  // copy assignment
             return false;
         }
 
@@ -1565,7 +1565,7 @@ namespace nn
         inline bool exec_ndcfg(CallStack& stack)
         {
             Obj node, name, type, obj;
-            core::Config* cfg;
+            core::ConfigVal cfg;
             return
                 stack.pop(name) ||
                 stack.pop(type) ||
@@ -1579,7 +1579,7 @@ namespace nn
         inline bool exec_bkcfg(CallStack& stack)
         {
             Obj block, name, type, obj;
-            core::Config* cfg;
+            core::ConfigVal cfg;
             return
                 stack.pop(name) ||
                 stack.pop(type) ||
@@ -1593,7 +1593,7 @@ namespace nn
         inline bool exec_incfg(CallStack& stack)
         {
             Obj init, name, type, obj;
-            core::Config* cfg;
+            core::ConfigVal cfg;
             return
                 stack.pop(name) ||
                 stack.pop(type) ||

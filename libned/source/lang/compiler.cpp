@@ -4658,7 +4658,20 @@ namespace nn
                         }, callee->type_array.elem);
                     break;
                 case TypeInfo::Type::TUPLE:
-                    return error::compiler(expr.node_info, "Internal error: tuple indexing has not been implemented");
+                    if (expr_arg.lhs->ty != ExprType::LIT_INT)
+                        return error::compiler(expr_arg.lhs->node_info, "Tuple indexing arguments must be known at compile time");
+                    if (expr_arg.lhs->expr_int < 0 || callee->type_tuple.elems.size() <= expr_arg.lhs->expr_int)
+                        return error::compiler(expr_arg.lhs->node_info, "Tuple index % is out of range", expr_arg.lhs->expr_int);
+                    ret = type_manager->duplicate(
+                        callee->cat,
+                        [&expr, callee, arg, callee_type](Scope& scope) -> bool {
+                            return
+                                callee->codegen(scope) ||
+                                arg->codegen(scope) ||  // This should compile into a new instruction
+                                callee_type->codegen(scope) ||
+                                body->add_instruction(instruction::Idx(expr.node_info)) ||
+                                scope.pop(2);
+                        }, callee->type_tuple.elems[expr_arg.lhs->expr_int]);
                 default:
                     return error::compiler(expr.node_info, "Unable to index into type %", callee->to_string());
                 }

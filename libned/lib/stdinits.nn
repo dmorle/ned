@@ -1,0 +1,5 @@
+init zeros
+init ones
+init normal<float mean, float stddev>
+init xavier_normal<int fan_in, int fan_out, float gain>
+init xavier_uniform<int fan_in, int fan_out, float gain>

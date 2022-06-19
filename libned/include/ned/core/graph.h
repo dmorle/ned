@@ -1,13 +1,13 @@
-#ifndef NED_GRAPH_H
-#define NED_GRAPH_H
+#ifndef NED_CORE_GRAPH_H
+#define NED_CORE_GRAPH_H
 
 #include <ned/core/config.h>
-#include <ned/core/setup.h>
 
 #include <map>
 #include <tuple>
 #include <vector>
 #include <string>
+#include <functional>
 
 namespace nn
 {
@@ -15,6 +15,19 @@ namespace nn
 
     namespace core
     {
+        struct Init
+        {
+            std::string name;
+            std::map<std::string, ConfigVal> configs;
+        };
+
+        struct InitImpl
+        {
+            std::map<std::string, ConfigType> signature;
+            std::function<void* (EdgeFty, const Init&, const EdgeInfo&)> init;
+        };
+        inline std::map<std::string, InitImpl> inits = {};
+
         struct Node;
         struct Edge
         {
@@ -30,7 +43,7 @@ namespace nn
         struct Node
         {
             std::string name;
-            std::map<std::string, std::unique_ptr<Config>> configs;
+            std::map<std::string, ConfigVal> configs;
             std::map<std::string, Edge*> inps;
             std::map<std::string, Edge*> outs;
             Block* parent = nullptr;
@@ -54,7 +67,7 @@ namespace nn
         struct Block
         {
             std::string name;
-            std::map<std::string, std::unique_ptr<Config>> configs;
+            std::map<std::string, ConfigVal> configs;
             std::map<std::string, Tensor> inps;
             std::map<std::string, Tensor> outs;
             std::map<std::string, Tensor> exports;  // Local to the block
@@ -74,7 +87,9 @@ namespace nn
             std::vector<std::string> eval_modes;
         };
 
-        void initialize_weights(Graph& graph);
+        bool init_weights(Graph& graph);
+        bool save_graph(const Graph& graph, std::vector<uint8_t>& out);
+        bool load_graph(Graph& graph, const std::vector<uint8_t>& inp);
     }
 }
 
