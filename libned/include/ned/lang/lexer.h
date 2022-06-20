@@ -97,7 +97,6 @@ namespace nn
             KW_AND,
             KW_OR,
             KW_NOT,
-            KW_LEN,
         };
 
         class Token;

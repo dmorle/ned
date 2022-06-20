@@ -124,8 +124,7 @@ namespace nn
             TUPLE,
             F16,
             F32,
-            F64,
-            LEN
+            F64
         };
 
         std::string to_string(ExprKW kw);
@@ -322,7 +321,10 @@ namespace nn
         {
             SIG signature;
             AstNodeInfo node_info;
+            
+            bool is_bytecode;
             std::vector<AstLine> body;
+            std::unique_ptr<TokenArray> tarr = nullptr;
         };
 
         using AstStruct = AstCodeBlock<AstCargSig >;

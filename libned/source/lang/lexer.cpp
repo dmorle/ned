@@ -197,8 +197,6 @@ namespace nn
                 return "keyword or";
             case TokenType::KW_NOT:
                 return "keyword not";
-            case TokenType::KW_LEN:
-                return "keyword len";
             default:
                 return "UNKNOWN TOKEN - LEXER BUG";
             }
@@ -360,8 +358,6 @@ namespace nn
                 return " or ";
             case TokenType::KW_NOT:
                 return " not ";
-            case TokenType::KW_LEN:
-                return " len";
             default:
                 return "unknown";
             }
@@ -971,9 +967,6 @@ namespace nn
                         continue;
                     case hash("not"):
                         tarr.push_back(TokenImp<TokenType::KW_NOT>(fname, line_num, col_num));
-                        continue;
-                    case hash("len"):
-                        tarr.push_back(TokenImp<TokenType::KW_LEN>(fname, line_num, col_num));
                         continue;
                     }
                     

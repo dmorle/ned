@@ -28,11 +28,11 @@ namespace nn
 			MdEdgeRef& operator=(const MdEdgeRef&) = default;
 			MdEdgeRef& operator=(MdEdgeRef&&) = default;
 
-			operator bool() const noexcept { return ptr; }
-			MdEdge* operator->() noexcept { return &graph->edges[ptr]; }
-			const MdEdge* operator->() const noexcept { return &graph->edges[ptr]; }
-			MdEdge& operator*() noexcept { return  graph->edges[ptr]; }
-			const MdEdge& operator*() const noexcept { return  graph->edges[ptr]; }
+			operator bool() const noexcept;
+			MdEdge* operator->() noexcept;
+			const MdEdge* operator->() const noexcept;
+			MdEdge& operator*() noexcept;
+			const MdEdge& operator*() const noexcept;
 
 		private:
 			MdGraph* graph;
@@ -51,11 +51,11 @@ namespace nn
 			MdNodeRef& operator=(const MdNodeRef&) = default;
 			MdNodeRef& operator=(MdNodeRef&&) = default;
 
-			operator bool() const noexcept { return ptr; }
-			MdNode* operator->() noexcept { return &graph->nodes[ptr]; }
-			const MdNode* operator->() const noexcept { return &graph->nodes[ptr]; }
-			MdNode& operator*() noexcept { return  graph->nodes[ptr]; }
-			const Node& operator*() const noexcept { return  graph->nodes[ptr]; }
+			operator bool() const noexcept;
+			MdNode* operator->() noexcept;
+			const MdNode* operator->() const noexcept;
+			MdNode& operator*() noexcept;
+			const MdNode& operator*() const noexcept;
 
 		private:
 			MdGraph* graph;

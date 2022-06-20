@@ -1,2 +1,38 @@
+fn enumerate<type T>(array<T> arr) -> array<tuple<int, T>>:
+    array<tuple<int, T>> result
+    for i in range(len(arr)):
+        result += [(i, arr[i]),]
+    return result
+
+fn len<type T>(array<T> arr) -> int:
+    :begin
+        dup 1
+        dup 3
+        arr
+        len
+        ret
+
+fn range(int n) -> array<int>:
+	i = 0
+	array<int> result
+	while i < n:
+		result += [i]
+		i += 1
+	return result
+
+fn zip<type T>(array<T> arr) -> array<T>:
+    return arr
+
+fn index<type T>(array<T> arr, int idx) -> T:
+	return arr[idx]
+
+fn concat<type T>(array<T> lhs, array<T> rhs) -> array<T>:
+	return lhs + rhs
+
 def main<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+	arr = concat([1, 2, 3], [4, 5, 6])
+	print str::arr
+	print str::index(arr, 0)
+	print str::len(arr)
+	print str::enumerate(arr)
 	print "Hello world"

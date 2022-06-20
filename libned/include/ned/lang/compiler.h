@@ -258,7 +258,6 @@ namespace nn
             bool check_xflt() const;  // whether the type can be converted into a float
             bool check_cpy() const;
             bool check_idx() const;
-            bool check_len() const;
 
             std::string encode() const;
             std::string to_string() const;
@@ -302,7 +301,7 @@ namespace nn
 
             TypeRef create_type        (TypeInfo::Category cat, CodegenCallback codegen, TypeRef base);
             TypeRef create_placeholder ();  // always virtual
-            TypeRef create_generic     (TypeInfo::Category cat, CodegenCallback codegen);
+            TypeRef create_generic     (TypeInfo::Category cat, CodegenCallback codegen, const std::string& name);
             TypeRef create_unpack      (CodegenCallback codegen, TypeRef elem);
             TypeRef create_fty         (TypeInfo::Category cat, CodegenCallback codegen);
             TypeRef create_bool        (TypeInfo::Category cat, CodegenCallback codegen);
@@ -644,7 +643,7 @@ namespace nn
         private:
             std::map<std::string, ValNode*> varg_nodes;
             std::vector<std::string> varg_stack;
-            std::vector<TypeRef> rets;
+            std::vector<TypeNode*> ret_nodes;
             const AstFn* ast_fn;
         };
 
@@ -674,7 +673,8 @@ namespace nn
         bool parse_cargs(const std::vector<AstExpr>& args, std::map<std::string, const AstExpr*>& cargs);
         bool arg_type(TypeRef& type, Scope& scope, const AstArgDecl& arg);
         bool match_elems(const std::vector<AstExpr>& lhs, const std::vector<TypeRef>& rhs, CodegenCallback& setup_fn, std::vector<CodegenCallback>& elem_fns);
-        bool match_carg_sig(Scope& scope, Scope& sig_scope, const std::vector<AstArgDecl>& sig, const std::vector<AstExpr>& args, std::map<std::string, TypeRef>& cargs);
+        bool match_carg_sig(Scope& scope, Scope& sig_scope, const std::vector<AstArgDecl>& sig, const std::vector<AstExpr>& args,
+            std::map<std::string, TypeRef>& cargs, std::map<std::string, TypeRef>& generics);
         bool match_def_sig(Scope& scope, Scope& sig_scope, const AstBlock& def,
             const std::vector<AstExpr>& param_cargs, const std::vector<TypeRef>& param_vargs,
             std::map<std::string, TypeRef>& cargs, std::vector<TypeRef>& vargs);

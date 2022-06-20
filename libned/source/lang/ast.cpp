@@ -2,6 +2,7 @@
 #include <ned/lang/ast.h>
 #include <ned/lang/lexer.h>
 #include <ned/lang/obj.h>
+#include <ned/lang/bytecode.h>
 
 #include <functional>
 #include <cassert>
@@ -589,10 +590,6 @@ namespace nn
                 return false;
             case TokenType::KW_F64:
                 ast_expr.expr_kw = ExprKW::F64;
-                ast_expr.ty = ExprType::KW;
-                return false;
-            case TokenType::KW_LEN:
-                ast_expr.expr_kw = ExprKW::LEN;
                 ast_expr.ty = ExprType::KW;
                 return false;
             default:
@@ -1479,6 +1476,19 @@ namespace nn
             for (i++; tarr[i]->ty == TokenType::INDENT; i++);  // one token past the last tab after the ':'
             if (tarr[i]->expect<TokenType::ENDL>())
                 return true;
+
+            // checking if the body is bytecode
+            for (i++; tarr[i]->is_whitespace(); i++);
+            if (tarr[i]->ty == TokenType::COLON)
+            {
+                ast_code_block.is_bytecode = true;
+                ast_code_block.tarr = std::make_unique<TokenArray>(tarr, i);
+                ast_code_block.signature = std::move(signature);
+                return false;
+            }
+
+            // not bytecode, just a normal body that will be compiled
+            ast_code_block.is_bytecode = false;
             if (parse_lines<AstLine, parse_line>(tarr, i, indent_level, ast_code_block.body))
                 return true;
             ast_code_block.signature = std::move(signature);  // All the signature structs are movable

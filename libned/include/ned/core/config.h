@@ -67,7 +67,7 @@ namespace nn
 
         private:
             void do_move(ConfigVal&& val) noexcept;
-            void do_copy(const ConfigVal& val) noexcept;
+            void do_copy(const ConfigVal& val);
         };
 
         struct ConfigType
@@ -108,7 +108,7 @@ namespace nn
 
         private:
             void do_move(ConfigType&& val) noexcept;
-            void do_copy(const ConfigType& val) noexcept;
+            void do_copy(const ConfigType& val);
         };
     }
 }

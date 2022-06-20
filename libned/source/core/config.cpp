@@ -49,6 +49,15 @@ namespace nn
             return ret;
         }
 
+        ConfigVal ConfigVal::make_fty(EdgeFty val)
+        {
+            ConfigVal ret;
+            new (&ret.val_fty) decltype(ret.val_fty)();
+            ret.ty = Type::FTY;
+            ret.val_fty = val;
+            return ret;
+        }
+
         ConfigVal ConfigVal::make_int(int64_t val)
         {
             ConfigVal ret;

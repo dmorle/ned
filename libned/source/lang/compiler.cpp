@@ -567,11 +567,6 @@ namespace nn
         {
             return false;
         }
-
-        bool TypeInfo::check_len() const
-        {
-            return ty == TypeInfo::Type::ARRAY || ty == TypeInfo::Type::TUPLE;
-        }
  
         std::string TypeInfo::encode() const
         {
@@ -667,7 +662,7 @@ namespace nn
                 return ss.str();
             }
             case TypeInfo::Type::LOOKUP:
-                return format("lookup(\"%\")", type_lookup.name);
+                return format("lookup '%'", type_lookup.name);
             case TypeInfo::Type::CARGBIND:
                 return "cargbind";
             case TypeInfo::Type::STRUCT:
@@ -685,7 +680,7 @@ namespace nn
             case TypeInfo::Type::DLTYPE:
                 return "dltype";
             case TypeInfo::Type::GENERIC:
-                return format("generic(\"%\")", type_generic.name);
+                return format("generic '%'", type_generic.name);
             case TypeInfo::Type::UNPACK:
                 return format("unpack<%>", type_array.elem->to_string());
             }
@@ -893,6 +888,20 @@ namespace nn
                     }, tmp);
                 break;
             }
+            case TypeInfo::Type::GENERIC:
+                tmp = type_manager->create_generic(TypeInfo::Category::VIRTUAL, nullptr, type_generic.name);
+                if (!tmp) return true;
+                // All generics should be on the stack at runtime
+                type = type_manager->create_type(
+                    TypeInfo::Category::CONST,
+                    [&node_info, name{ type_generic.name }](Scope& scope) -> bool {
+                        Scope::StackVar var;
+                        return
+                            scope.at(name, var) ||
+                            body->add_instruction(instruction::Dup(node_info, var.ptr)) ||
+                            scope.push();
+                    }, tmp);
+                break;
             default:
                 return error::compiler(node_info, "Unable to transform the type % into a runtime object", to_string());
             }
@@ -976,8 +985,18 @@ namespace nn
                 assert(false);
                 return TypeInfo::null;
             case TypeInfo::Type::TYPE:
-                tmp = duplicate(src->type_type.base);
-                if (!tmp) return TypeInfo::null;
+                if (src->type_type.base->ty == TypeInfo::Type::INVALID)
+                {
+                    // This is valid in the case of generics
+                    tmp->cat = TypeInfo::Category::VIRTUAL;
+                    tmp->codegen = nullptr;
+                }
+                else
+                {
+                    tmp = duplicate(src->type_type.base);
+                    if (!tmp)
+                        return TypeInfo::null;
+                }
                 new (&type->type_type) TypeInfoType{ tmp };
                 break;
             case TypeInfo::Type::PLACEHOLDER:
@@ -1071,10 +1090,11 @@ namespace nn
             return type;
         }
 
-        TypeRef TypeManager::create_generic(TypeInfo::Category cat, CodegenCallback codegen)
+        TypeRef TypeManager::create_generic(TypeInfo::Category cat, CodegenCallback codegen, const std::string& name)
         {
             TypeRef type = next();
             if (!type) return type;
+            new (&type->type_generic) TypeInfoGeneric{ name };
             type->ty = TypeInfo::Type::GENERIC;
             type->cat = cat;
             type->codegen = codegen;
@@ -1524,6 +1544,7 @@ namespace nn
             switch (ty)
             {
             case TypeNode::Type::INVALID:
+            case TypeNode::Type::TYPE:
             case TypeNode::Type::INIT:
             case TypeNode::Type::FTY:
             case TypeNode::Type::BOOL:
@@ -1557,6 +1578,7 @@ namespace nn
             switch (ty)
             {
             case TypeNode::Type::INVALID:
+            case TypeNode::Type::TYPE:
             case TypeNode::Type::INIT:
             case TypeNode::Type::FTY:
             case TypeNode::Type::BOOL:
@@ -1604,7 +1626,14 @@ namespace nn
             case TypeNode::Type::STRING:
                 return type_manager->create_string(TypeInfo::Category::VIRTUAL, nullptr);
             case TypeNode::Type::GENERIC:
-                return type_manager->create_generic(TypeInfo::Category::VIRTUAL, nullptr);
+                assert(type_val.val->ty == ValNode::Type::ARG_VAL);  // any generic types should be a reference to the cargs
+                if (type_val.val->val)
+                {
+                    // If the generic has been disambiguated, I can directly return the type
+                    assert(type_val.val->val->ty == TypeInfo::Type::TYPE);
+                    return type_manager->duplicate(TypeInfo::Category::VIRTUAL, nullptr, type_val.val->val->type_type.base);
+                }
+                return type_manager->create_generic(TypeInfo::Category::VIRTUAL, nullptr, type_val.val->val_arg.name);
             case TypeNode::Type::UNPACK:
                 error::compiler(node_info, "Internal error: not implemented");
                 return TypeRef();
@@ -1682,7 +1711,16 @@ namespace nn
                         node->ty = TypeNode::Type::ARRAY;
                         return create_type(scope, expr.expr_call.args[0], node->type_array.carg);
                     case ExprKW::TUPLE:
-                        return error::compiler(expr.node_info, "Internal error: not implemented");
+                        new (&node->type_tuple) TupleType();
+                        node->ty = TypeNode::Type::TUPLE;
+                        for (const AstExpr& arg_expr : expr.expr_call.args)
+                        {
+                            TypeNode* arg_node;
+                            if (create_type(scope, arg_expr, arg_node))
+                                return true;
+                            node->type_tuple.cargs.push_back(arg_node);
+                        }
+                        return false;
                     case ExprKW::F16:
                     case ExprKW::F32:
                     case ExprKW::F64:
@@ -1914,6 +1952,14 @@ namespace nn
             // Any time a node already has a value, it can be directly compared against the deduced value at runtime
             if (node.val)
             {
+                if (node.val->ty == TypeInfo::Type::TYPE)
+                {
+                    // Its a generic, so I can compare it at compile time instead of runtime
+                    if (node.val != val)
+                        return error::compiler(*node.node_info, "Type mismatch found during signature deduction");
+                    return false;
+                }
+
                 // Ensure at runtime that the provided value and the current value agree
                 if (!node.val->check_eq())
                     return error::compiler(*node.node_info, "Unable to compare the given type");
@@ -2923,29 +2969,13 @@ namespace nn
                 varg_stack.push_back(arg_decl.var_name);
             }
 
+            // rets are handled as type nodes that get deduced after the cargs and vargs get codegenned
             for (const AstExpr& expr : sig.signature.rets)
             {
-                TypeRef ret;
-                if (codegen_expr_single_ret<TypeInfo::AllowAll>(init_scope, expr, ret))
+                TypeNode* node;
+                if (create_type(init_scope, expr, node))
                     return true;
-                if (ret->ty == TypeInfo::Type::DLTYPE)
-                {
-                    // The null codegen callback will get overwritten during codegen
-                    ret = type_manager->create_tensor(TypeInfo::Category::DEFAULT, nullptr);
-                    if (!ret)
-                        return true;
-                }
-                else if (ret->ty == TypeInfo::Type::TYPE)
-                {
-                    // Overwritting the category of the return type to const.
-                    // Similar to DLTYPE, the null codegen callback will get overwritten during codegen
-                    ret = type_manager->duplicate(TypeInfo::Category::CONST, nullptr, ret);
-                    if (!ret)
-                        return true;
-                }
-                else
-                    return error::compiler(expr.node_info, "Return values from a function must be types");
-                rets.push_back(ret);
+                ret_nodes.push_back(node);
             }
 
             cg_ns = old_ns;  // Putting the old namespace back
@@ -2984,6 +3014,8 @@ namespace nn
             for (auto& [name, node] : varg_nodes)
                 if (node->is_root && codegen_root_arg(scope, *node))
                     return true;
+            for (TypeNode*& node : ret_nodes)
+                ;
 
             // codegening each of the cargs onto the stack
             for (const std::string& name : carg_stack)
@@ -3026,16 +3058,15 @@ namespace nn
 
             // cleaning the stack (+1 from ~block), and marking the return values to the stack
             for (size_t i = 0; i < carg_stack.size() + varg_stack.size() + 1; i++)
-                if (body->add_instruction(instruction::Pop(*node_info, this->rets.size())))
+                if (body->add_instruction(instruction::Pop(*node_info, ret_nodes.size())))
                     return true;
             if (scope.pop(carg_stack.size() + varg_stack.size()))
                 return true;
-            for (TypeRef& ret : this->rets)
+
+            for (TypeNode* node : ret_nodes)
             {
-                // In a fn, I don't nessisarily know the ret type, so get the type from the init
-                // and swap out the codegen function for a stack variable reference
                 std::string var_name = scope.generate_var_name();
-                CodegenCallback codegen = [node_info{ node_info }, var_name](Scope& scope) -> bool {
+                CodegenCallback codegen = [node_info{ node->node_info }, var_name](Scope& scope) -> bool {
                     Scope::StackVar var;
                     if (scope.at(var_name, var))
                         return error::compiler(*node_info, "Unable to resolve identifier %", var_name);
@@ -3043,18 +3074,13 @@ namespace nn
                         body->add_instruction(instruction::Dup(*node_info, var.ptr)) ||
                         scope.push();
                 };
-                TypeRef ret_type;
-                if (ret->ty == TypeInfo::Type::TYPE)
-                    ret_type = type_manager->duplicate(TypeInfo::Category::CONST, codegen, ret->type_type.base);
-                else
-                {
-                    assert(ret->ty == TypeInfo::Type::DLTYPE);
-                    ret_type = type_manager->create_tensor(TypeInfo::Category::DEFAULT, codegen);
-                }
+                TypeRef ret_type = node->as_type(*node->node_info);
                 if (!ret_type)
                     return true;
+                ret_type->cat = TypeInfo::Category::CONST;
+                ret_type->codegen = codegen;
                 rets.push_back(ret_type);
-                if (scope.push() || scope.add(var_name, ret, *node_info))
+                if (scope.push() || scope.add(var_name, ret_type, *node->node_info))
                     return true;
             }
             return false;
@@ -3287,7 +3313,35 @@ namespace nn
                         return true;
                 }
                 else if (explicit_type->ty == TypeInfo::Type::TYPE)
-                    explicit_type = type_manager->duplicate(TypeInfo::Category::CONST, codegen, explicit_type->type_type.base);
+                {
+                    TypeRef base;
+                    if (explicit_type->type_type.base->ty == TypeInfo::Type::TYPE)
+                    {
+                        // Its a generic type.  This is a special case where the base of the stack's type
+                        // needs to be constructed explicitly rather than from ret
+                        TypeRef tmp = type_manager->create_generic(TypeInfo::Category::VIRTUAL, nullptr, arg.var_name);
+                        if (!tmp)
+                            return true;
+                        // Any generic type args should be on the stack at runtime
+                        base = type_manager->create_type(
+                            TypeInfo::Category::CONST,
+                            [&arg](Scope& scope) -> bool {
+                                Scope::StackVar var;
+                                return
+                                    scope.at(arg.var_name, var) ||
+                                    body->add_instruction(instruction::Dup(arg.node_info, var.ptr)) ||
+                                    scope.push();
+                            }, tmp);
+                        if (!base)
+                            return true;
+                    }
+                    else
+                    {
+                        // general case where ret->type_type.base can be duplicated
+                        base = explicit_type->type_type.base;
+                    }
+                    explicit_type = type_manager->duplicate(TypeInfo::Category::CONST, codegen, base);
+                }
                 else
                     return error::compiler(arg.type_expr->node_info, "Type expression for parameter % did not resolve to a type.", arg.var_name);
                 
@@ -3344,19 +3398,51 @@ namespace nn
             return true;
         }
 
+        bool match_arg(const TypeRef& arg_type, const TypeRef& param_type, std::map<std::string, TypeRef>& generics)
+        {
+            switch (arg_type->ty)
+            {
+            case TypeInfo::Type::TYPE:
+                if (param_type->ty != TypeInfo::Type::TYPE)
+                    return true;
+                return match_arg(arg_type->type_type.base, param_type->type_type.base, generics);
+            case TypeInfo::Type::ARRAY:
+                if (param_type->ty != TypeInfo::Type::ARRAY)
+                    return true;
+                return match_arg(arg_type->type_array.elem, param_type->type_array.elem, generics);
+            case TypeInfo::Type::TUPLE:
+                if (arg_type->type_tuple.elems.size() != param_type->type_tuple.elems.size())
+                    return true;
+                for (size_t i = 0; i < arg_type->type_tuple.elems.size(); i++)
+                    if (match_arg(arg_type->type_tuple.elems[i], param_type->type_tuple.elems[i], generics))
+                        return true;
+                return false;
+            case TypeInfo::Type::STRUCT:
+                assert(false);
+                // TODO: implement structs
+                return false;
+            case TypeInfo::Type::GENERIC:
+                if (generics.contains(arg_type->type_generic.name))
+                    return generics.at(arg_type->type_generic.name) != param_type;
+                generics[arg_type->type_generic.name] = param_type;
+                return false;
+            }
+            return arg_type != param_type;
+        }
+
         bool match_carg_sig(Scope& scope, Scope& sig_scope,
             const std::vector<AstArgDecl>& sig, const std::vector<AstExpr>& args,
-            std::map<std::string, TypeRef>& cargs)
+            std::map<std::string, TypeRef>& cargs, std::map<std::string, TypeRef>& generics)
         {
             // Codegening the signature cargs to compare types against the call arguments
             // If the signature contains a variable naming conflict, it'll be caught during the scope add operation
             // This ensures that during the remaining logic, the signature will be valid
             for (const AstArgDecl& carg : sig)
             {
-                TypeRef ret;
-                if (codegen_expr_single_ret<TypeInfo::AllowAll>(sig_scope, *carg.type_expr, ret) ||
+                TypeRef arg;
+                if (arg_type(arg, sig_scope, carg) ||
                     sig_scope.push() ||
-                    sig_scope.add(carg.var_name, ret->type_type.base, carg.node_info)
+                    sig_scope.add(carg.var_name, arg, carg.node_info)
                     ) return true;
             }
 
@@ -3382,7 +3468,7 @@ namespace nn
                             // its a valid keyword argument, map it and move the position of sig_it to it + 1
                             if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, *arg_it->expr_binary.right, cargs[it->var_name]) ||
                                 sig_scope.at(it->var_name, var) ||
-                                var.type != cargs.at(it->var_name)
+                                match_arg(var.type, cargs.at(it->var_name), generics)
                                 ) return true;
                             sig_it = it + 1;
                             break;
@@ -3494,13 +3580,12 @@ namespace nn
                                 // is not allowed
                                 if ((*rets_it)->cat == TypeInfo::Category::VIRTUAL)
                                     return error::compiler(arg_it->node_info, "Arguments must be non-virtual");
-                                if (var.type != *rets_it)
+                                if (match_arg(var.type, *rets_it, generics))
                                 {
                                     // Found an argument which doesn't match the type of the packed signature element
                                     // This terminates the current argument, but leaves leftover passed values in rets
                                     // which could potentially come from half an expanded tuple.  This means that we
                                     // can't leverage the previous code for this.
-                                    error::pop_last(); // getting rid of the error codegen_expr_attempt_implicit generated
                                     TypeRef ret = type_manager->create_array(TypeInfo::Category::CONST, cb, var.type);
                                     if (!ret)
                                         return true;
@@ -3526,7 +3611,7 @@ namespace nn
                                             break;
 
                                         // The signature element wasn't packed, it's just a simple match
-                                        if (var.type != *rets_it)
+                                        if (match_arg(var.type, *rets_it, generics))
                                             return true;
                                         cargs[sig_it->var_name] = *rets_it;
                                     }
@@ -3547,7 +3632,7 @@ namespace nn
                             }
                             else
                             {
-                                if ((*rets_it)->type_array.elem == var.type)
+                                if (match_arg(var.type, (*rets_it)->type_array.elem, generics))
                                 {
                                     // Perfect match between the unpacked passed value and the signature type
                                     // This means that the lhs and rhs can directly be added
@@ -3585,7 +3670,8 @@ namespace nn
             std::map<std::string, TypeRef>& cargs, std::vector<TypeRef>& vargs)
         {
             // If the cargs don't fit, you must acquit
-            if (match_carg_sig(scope, sig_scope, def.signature.cargs, param_cargs, cargs))
+            std::map<std::string, TypeRef> generics;
+            if (match_carg_sig(scope, sig_scope, def.signature.cargs, param_cargs, cargs, generics))
                 return true;
             
             for (const AstArgDecl& varg : def.signature.vargs)
@@ -3604,7 +3690,8 @@ namespace nn
             const std::vector<AstExpr>& param_cargs, const std::vector<TypeRef>& param_vargs,
             std::map<std::string, TypeRef>& cargs, std::vector<TypeRef>& vargs)
         {
-            if (match_carg_sig(scope, sig_scope, intr.signature.cargs, param_cargs, cargs))
+            std::map<std::string, TypeRef> generics;
+            if (match_carg_sig(scope, sig_scope, intr.signature.cargs, param_cargs, cargs, generics))
                 return true;
 
             for (const AstArgDecl& varg : intr.signature.vargs)
@@ -3623,7 +3710,8 @@ namespace nn
             const std::vector<AstExpr>& param_cargs, const std::vector<TypeRef>& param_vargs,
             std::map<std::string, TypeRef>& cargs, std::vector<TypeRef>& vargs)
         {
-            if (match_carg_sig(scope, sig_scope, fn.signature.cargs, param_cargs, cargs))
+            std::map<std::string, TypeRef> generics;
+            if (match_carg_sig(scope, sig_scope, fn.signature.cargs, param_cargs, cargs, generics))
                 return true;
 
             for (const AstArgDecl& varg : fn.signature.vargs)
@@ -3633,6 +3721,7 @@ namespace nn
             if (fn.signature.vargs.size() != param_vargs.size())
                 return true;
 
+            // map of generic names to the first type they got matched against
             for (size_t i = 0; i < param_vargs.size(); i++)
             {
                 TypeRef type;
@@ -3640,7 +3729,7 @@ namespace nn
                     return true;
                 if (type->ty == TypeInfo::Type::TYPE)
                 {
-                    if (type->type_type.base != param_vargs[i])
+                    if (match_arg(type->type_type.base, param_vargs[i], generics))
                         return true;
                     continue;
                 }
@@ -4912,8 +5001,9 @@ namespace nn
                 for (const AstInit* init_elem : callee->type_lookup.lookup.inits)
                 {
                     std::map<std::string, TypeRef> cargs;
+                    std::map<std::string, TypeRef> generics;
                     Scope sig_scope{ nullptr };
-                    if (!match_carg_sig(scope, sig_scope, init_elem->signature.cargs, expr.expr_call.args, cargs))
+                    if (!match_carg_sig(scope, sig_scope, init_elem->signature.cargs, expr.expr_call.args, cargs, generics))
                         init_matches.push_back({ init_elem, std::move(cargs) });
                 }
                 if (init_matches.size() > 1)
@@ -4932,8 +5022,9 @@ namespace nn
                 for (const AstStruct* struct_elem : callee->type_lookup.lookup.structs)
                 {
                     std::map<std::string, TypeRef> cargs;
+                    std::map<std::string, TypeRef> generics;
                     Scope sig_scope{ nullptr };
-                    if (!match_carg_sig(scope, sig_scope, struct_elem->signature.cargs, expr.expr_call.args, cargs))
+                    if (!match_carg_sig(scope, sig_scope, struct_elem->signature.cargs, expr.expr_call.args, cargs, generics))
                         struct_matches.push_back({ struct_elem, std::move(cargs) });
                 }
                 if (init_matches.size() > 1)
@@ -5294,35 +5385,6 @@ namespace nn
 
         bool codegen_expr_vargs(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
         {
-            // Check if its a len() call
-            if (expr.expr_call.callee->ty == ExprType::KW && expr.expr_call.callee->expr_kw == ExprKW::LEN)
-            {
-                // its a length call
-                if (expr.expr_call.args.size() != 1)
-                    return error::compiler(expr.node_info, "len call requires exactly one argument");
-                TypeRef arg;
-                if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, expr.expr_call.args.front(), arg))
-                    return true;
-                if (!arg->check_len())
-                    return error::compiler(expr.node_info, "Unable to get the length of type %", arg->to_string());
-                TypeRef type;
-                if (arg->to_obj(expr.node_info, type))
-                    return true;
-                TypeRef ret = type_manager->create_int(
-                    TypeInfo::Category::CONST,
-                    [&expr, type, arg](Scope& scope) -> bool {
-                        return
-                            arg->codegen(scope) ||
-                            type->codegen(scope) ||
-                            body->add_instruction(instruction::Len(expr.node_info)) ||
-                            scope.pop();
-                    });
-                if (!ret)
-                    return true;
-                rets.push_back(ret);
-                return false;
-            }
-
             TypeRef callee;
             if (codegen_expr_callee(scope, *expr.expr_call.callee, callee))
                 return true;
@@ -5419,7 +5481,7 @@ namespace nn
                     fn_call->apply_args(expr.node_info, std::get<1>(fn_matches.front()), std::get<2>(fn_matches.front())) ||
                     fn_call->codegen(scope, rets);
             }
-            return error::compiler(expr.node_info, "Unable to find a suitable overload for the varg call");
+            return error::compiler(expr.node_info, "Unable to find a suitable overload for varg call to '%'", callee->type_lookup.name);
         }
 
         bool codegen_expr_fndecl(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
@@ -5442,6 +5504,7 @@ namespace nn
                 tmp = type_manager->create_type(TypeInfo::Category::VIRTUAL, nullptr, TypeRef());
                 if (!tmp) return true;
                 type = type_manager->create_type(TypeInfo::Category::VIRTUAL, nullptr, tmp);
+                break;
             case ExprKW::INIT:
                 // the default behaviour of an init declaration is to create an init with an empty name and no configs
                 tmp = type_manager->create_init(
@@ -6431,6 +6494,9 @@ namespace nn
 
         bool codegen_struct(const std::string& name, const AstStruct& ast_struct, const std::vector<std::string>& ns)
         {
+            if (ast_struct.is_bytecode)
+                return error::compiler(ast_struct.node_info, "the body of a struct must not be bytecode");
+
             body_type = BodyType::STRUCT;
             ByteCodeBody body{ ast_struct.node_info };
 
@@ -6462,11 +6528,19 @@ namespace nn
             type_manager = &fn_type_manager;
             cg_ns = ns;
 
-            Scope scope{ nullptr };
             std::string fn_name;
             if (proc_name_fn(fn_name, ns, ast_fn))
                 return true;
-            
+
+            // checking if the body of the function is raw bytecode
+            if (ast_fn.is_bytecode)
+            {
+                if (parsebc_body(*ast_fn.tarr, *bc, fn_body))
+                    return error::compiler(ast_fn.node_info, "Invalid bytecode found in fn body");
+                return bc->add_block(fn_name, fn_body);
+            }
+
+            Scope scope{ nullptr };
             for (const auto& arg : ast_fn.signature.cargs)
             {
                 TypeRef type;
@@ -6509,6 +6583,9 @@ namespace nn
 
         bool codegen_def(const std::string& name, const AstBlock& ast_def, const std::vector<std::string>& ns)
         {
+            if (ast_def.is_bytecode)
+                return error::compiler(ast_def.node_info, "the body of a def must not be bytecode");
+
             body_type = BodyType::DEF;
             body_sig.block_sig = &ast_def.signature;
             ByteCodeBody def_body{ ast_def.node_info };
@@ -6639,6 +6716,9 @@ namespace nn
 
         bool codegen_intr(const std::string& name, const AstBlock& ast_intr, const std::vector<std::string>& ns)
         {
+            if (ast_intr.is_bytecode)
+                return error::compiler(ast_intr.node_info, "the body of an intr must not be bytecode");
+
             body_type = BodyType::INTR;
             body_sig.block_sig = &ast_intr.signature;
             ByteCodeBody intr_body{ ast_intr.node_info };

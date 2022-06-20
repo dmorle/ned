@@ -1,5 +1,13 @@
 import mathtools
 
+fn len<type T>(array<T> arr) -> int:
+    :begin
+        dup 1
+        dup 3
+        arr
+        len
+        ret
+
 fn range(int n) -> array<int>:
     i = 0
     array<int> result
@@ -11,7 +19,7 @@ fn range(int n) -> array<int>:
 fn enumerate<type T>(array<T> arr) -> array<tuple<int, T>>:
     array<tuple<int, T>> result
     for i in range(len(arr)):
-        result += [(i, arr[i])]
+        result += [(i, arr[i]),]
     return result
 
 fn zip<type T>(array<T> arr) -> array<T>:
@@ -20,11 +28,11 @@ fn zip<type T>(array<T> arr) -> array<T>:
 fn zip<type T1, type T2>(array<T1> arr1, array<T2> arr2) -> array<tuple<T1, T2>>:
     array<tuple<T1, T2>> result
     for i in range(min(len(arr1), len(arr2))):
-        result += [(lhs[i], rhs[i])]
+        result += [(lhs[i], rhs[i]),]
     return result
 
 fn zip<type T1, type T2, type T3>(array<T1> arr1, array<T2> arr2, array<T3> arr3) -> array<tuple<T1, T2, T3>>:
     array<tuple<T1, T2, T3>> result
     for i in range(min(len(arr1), len(arr2), len(arr3))):
-        result += [(arr1[i], arr2[i], arr3[i])]
+        result += [(arr1[i], arr2[i], arr3[i]),]
     return result

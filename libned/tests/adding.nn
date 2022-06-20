@@ -1,3 +1,11 @@
+fn len<type T>(array<T> arr) -> int:
+    :begin
+        dup 1
+        dup 3
+        arr
+        len
+        ret
+
 fn range(int n) -> array<int>:
 	i = 0
 	array<int> result
