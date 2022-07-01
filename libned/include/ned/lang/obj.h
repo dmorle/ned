@@ -12,6 +12,8 @@ namespace nn
 {
     namespace lang
     {
+        union Obj;
+
         class TypeObj;
         using BoolObj = bool;
         using FtyObj = core::EdgeFty;

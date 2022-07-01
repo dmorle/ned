@@ -433,8 +433,6 @@ namespace nn
                 return error::syntax(tarr[0], "Unexpected token in leafmod expression");
             }
 
-            if (end == start)
-                return error::syntax(tarr[start], "Empty expression");
             std::unique_ptr<AstExpr> nlhs;
             AstExpr* pexpr;
             if (i == tarr.size())
@@ -449,6 +447,30 @@ namespace nn
                     .col_start = tarr[0]->col_num,
                     .col_end = tarr[tarr.size() - 1]->col_num
                 };
+            }
+
+            if (end == start)
+            {
+                // It could be an empty carg or varg call
+                AstExpr ret_expr;
+                switch (tarr[0]->ty)
+                {
+                case TokenType::ANGLE_O:
+                    new (&pexpr->expr_call) AstExprCall();
+                    pexpr->ty = ExprType::CARGS_CALL;
+                    pexpr->expr_call.callee = std::move(lhs);
+                    break;
+                case TokenType::ROUND_O:
+                    new (&pexpr->expr_call) AstExprCall();
+                    pexpr->ty = ExprType::VARGS_CALL;
+                    pexpr->expr_call.callee = std::move(lhs);
+                    break;
+                default:
+                    return error::syntax(tarr[start], "Empty expression");
+                }
+                if (i == tarr.size())
+                    return false;
+                return parse_leaf_mods({ tarr, i }, ast_expr, std::move(nlhs));
             }
 
             AstExpr ret_expr;  // helper for calls so that I leverge the tuple parsing code for this

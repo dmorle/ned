@@ -61,7 +61,8 @@ namespace nn
             struct NodeBuilder
             {
                 std::string name;
-                std::map<std::string, uint64_t> inps;
+                std::vector<std::string> inp_order;
+                std::map<std::string, std::vector<uint64_t>> inps;
                 std::map<std::string, uint64_t> outs;
                 std::map<std::string, core::ConfigVal> configs;
                 uint64_t parent = 0;
@@ -164,6 +165,7 @@ namespace nn
             bool export_tensor(uint64_t i);
             bool export_block(core::Block& block, uint64_t i);
             bool bind_block(core::Block& block, uint64_t i);
+            bool export_io(core::Graph& graph, const std::string& prefix, uint64_t block);
         };
 
         class CallStack

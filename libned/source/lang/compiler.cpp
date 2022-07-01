@@ -1196,11 +1196,11 @@ namespace nn
             return type;
         }
 
-        TypeRef TypeManager::create_cargbind(CodeModule::LookupResult lookup, const std::vector<AstExpr>& cargs)
+        TypeRef TypeManager::create_cargbind(std::string name, CodeModule::LookupResult lookup, const std::vector<AstExpr>& cargs)
         {
             TypeRef type = next();
             if (!type) return type;
-            new (&type->type_cargbind) TypeInfoCargBind{ lookup, cargs };
+            new (&type->type_cargbind) TypeInfoCargBind{ name, lookup, cargs };
             type->ty = TypeInfo::Type::CARGBIND;
             type->cat = TypeInfo::Category::VIRTUAL;
             type->codegen = nullptr;
@@ -3420,7 +3420,7 @@ namespace nn
             case TypeInfo::Type::STRUCT:
                 assert(false);
                 // TODO: implement structs
-                return false;
+                return true;
             case TypeInfo::Type::GENERIC:
                 if (generics.contains(arg_type->type_generic.name))
                     return generics.at(arg_type->type_generic.name) != param_type;
@@ -3533,8 +3533,11 @@ namespace nn
                         if (sig_scope.at(sig_it->var_name, var) ||
                             var.type->to_obj(sig_it->node_info, ety)
                             ) return true;
+                        // Callback for generating the packed argument which gets added to as parameters get captured
                         CodegenCallback cb = [&node_info{ arg_it->node_info }](Scope& scope) {
-                            return body->add_instruction(instruction::Agg(node_info, 0));
+                            return
+                                body->add_instruction(instruction::Agg(node_info, 0)) ||
+                                scope.push();
                         };
                         while (true)
                         {
@@ -3627,26 +3630,27 @@ namespace nn
                                         rhs(scope) ||
                                         ety->codegen(scope) ||
                                         body->add_instruction(instruction::Arr(node_info)) ||
-                                        body->add_instruction(instruction::Add(node_info));
+                                        body->add_instruction(instruction::Add(node_info)) ||
+                                        scope.pop(2);
                                 };
                             }
                             else
                             {
-                                if (match_arg(var.type, (*rets_it)->type_array.elem, generics))
+                                // The passed parameter was packed and the signature element was as well
+                                if (!match_arg(var.type->type_array.elem, (*rets_it)->type_array.elem, generics))
                                 {
                                     // Perfect match between the unpacked passed value and the signature type
                                     // This means that the lhs and rhs can directly be added
                                     TypeRef ret = type_manager->create_array(
                                         TypeInfo::Category::CONST,
                                         [lhs{ cb }, rhs{ (*rets_it)->codegen }, ety, &node_info{ arg_it->node_info }](Scope& scope) {
-                                        return
-                                            lhs(scope) ||
-                                            rhs(scope) ||
-                                            ety->codegen(scope) ||
-                                            body->add_instruction(instruction::Arr(node_info)) ||
-                                            body->add_instruction(instruction::Add(node_info));
-                                    },
-                                        var.type);
+                                            return
+                                                lhs(scope) ||
+                                                rhs(scope) ||
+                                                ety->codegen(scope) ||  // This will be an array type
+                                                body->add_instruction(instruction::Add(node_info)) ||
+                                                scope.pop(2);
+                                        }, var.type->type_array.elem);
                                     if (!ret)
                                         return true;
                                     cargs[sig_it->var_name] = ret;
@@ -3678,7 +3682,7 @@ namespace nn
                 if (varg.is_packed)
                     return error::compiler(varg.node_info, "Internal error: packed vargs has not been implemented");
 
-            if (def.signature.vargs.size() == vargs.size())
+            if (def.signature.vargs.size() == param_vargs.size())
             {
                 vargs = param_vargs;
                 return false;
@@ -3698,7 +3702,7 @@ namespace nn
                 if (varg.is_packed)
                     return error::compiler(varg.node_info, "Internal error: packed vargs has not been implemented");
 
-            if (intr.signature.vargs.size() == vargs.size())
+            if (intr.signature.vargs.size() == param_vargs.size())
             {
                 vargs = param_vargs;
                 return false;
@@ -3819,7 +3823,7 @@ namespace nn
                 return error::compiler(expr.node_info, "Expected a def or fn as the lhs of a carg");
             // Bind the cargs to the lookup and allow the codegen_expr_vargs to resolve the proc.
             // This is nessisary since overloading based on vargs is allowed
-            ret = type_manager->create_cargbind(callee->type_lookup.lookup, expr.expr_call.args);
+            ret = type_manager->create_cargbind(callee->type_lookup.name, callee->type_lookup.lookup, expr.expr_call.args);
             return !ret;
         }
 
@@ -5406,18 +5410,31 @@ namespace nn
             }
 
             std::vector<AstExpr> default_cargs = {};
-            const std::vector<AstExpr>* param_cargs = &default_cargs;
+            std::string* name;
+            CodeModule::LookupResult* lookup;
+            const std::vector<AstExpr>* param_cargs;
 
             // Only raw lookup results and carg binds are allowed here, nothing else should get called
-            if (callee->ty == TypeInfo::Type::CARGBIND)
+            if (callee->ty == TypeInfo::Type::LOOKUP)
+            {
+                name = &callee->type_lookup.name;
+                lookup = &callee->type_lookup.lookup;
+                param_cargs = &default_cargs;
+            }
+            else if (callee->ty == TypeInfo::Type::CARGBIND)
+            {
+                name = &callee->type_cargbind.name;
+                lookup = &callee->type_cargbind.lookup;
                 param_cargs = &callee->type_cargbind.cargs;
-            else if (callee->ty != TypeInfo::Type::LOOKUP)
+            }
+            else
                 return error::compiler(expr.node_info, "Unable to call the given type");
+            
 
             if (check_def)
             {
                 std::vector<std::tuple<const AstBlock*, std::map<std::string, TypeRef>, std::vector<TypeRef>>> def_matches;
-                for (const AstBlock* def : callee->type_lookup.lookup.defs)
+                for (const AstBlock* def : lookup->defs)
                 {
                     std::map<std::string, TypeRef> cargs;
                     std::vector<TypeRef> vargs;
@@ -5426,11 +5443,11 @@ namespace nn
                         def_matches.push_back({ def, std::move(cargs), std::move(vargs) });
                 }
                 if (def_matches.size() > 1)
-                    return error::compiler(expr.node_info, "Reference to def '%' is ambiguous", callee->type_lookup.name);
+                    return error::compiler(expr.node_info, "Reference to def '%' is ambiguous", *name);
                 if (def_matches.size() == 1)
                 {
                     // Perfect match, return it
-                    std::unique_ptr<DefCall> def_call = std::make_unique<DefCall>(callee->type_lookup.lookup.ns);
+                    std::unique_ptr<DefCall> def_call = std::make_unique<DefCall>(lookup->ns);
                     return
                         def_call->init(*std::get<0>(def_matches.front())) ||
                         def_call->apply_args(expr.node_info, std::get<1>(def_matches.front()), std::get<2>(def_matches.front())) ||
@@ -5440,7 +5457,7 @@ namespace nn
             if (check_intr)
             {
                 std::vector<std::tuple<const AstBlock*, std::map<std::string, TypeRef>, std::vector<TypeRef>>> intr_matches;
-                for (const AstBlock* intr : callee->type_lookup.lookup.intrs)
+                for (const AstBlock* intr : lookup->intrs)
                 {
                     std::map<std::string, TypeRef> cargs;
                     std::vector<TypeRef> vargs;
@@ -5449,11 +5466,11 @@ namespace nn
                         intr_matches.push_back({ intr, std::move(cargs), std::move(vargs) });
                 }
                 if (intr_matches.size() > 1)
-                    return error::compiler(expr.node_info, "Reference to intr '%' is ambiguous", callee->type_lookup.name);
+                    return error::compiler(expr.node_info, "Reference to intr '%' is ambiguous", *name);
                 if (intr_matches.size() == 1)
                 {
                     // Perfect match, return it
-                    std::unique_ptr<IntrCall> intr_call = std::make_unique<IntrCall>(callee->type_lookup.lookup.ns);
+                    std::unique_ptr<IntrCall> intr_call = std::make_unique<IntrCall>(lookup->ns);
                     return
                         intr_call->init(*std::get<0>(intr_matches.front())) ||
                         intr_call->apply_args(expr.node_info, std::get<1>(intr_matches.front()), std::get<2>(intr_matches.front())) ||
@@ -5462,7 +5479,7 @@ namespace nn
             }
             // It doesn't match a def nor an intr, try for a function
             std::vector<std::tuple<const AstFn*, std::map<std::string, TypeRef>, std::vector<TypeRef>>> fn_matches;
-            for (const AstFn* fn : callee->type_lookup.lookup.fns)
+            for (const AstFn* fn : lookup->fns)
             {
                 std::map<std::string, TypeRef> cargs;
                 std::vector<TypeRef> vargs;
@@ -5471,17 +5488,17 @@ namespace nn
                     fn_matches.push_back({ fn, std::move(cargs), std::move(vargs) });
             }
             if (fn_matches.size() > 1)
-                return error::compiler(expr.node_info, "Reference to fn '%' is ambiguous", callee->type_lookup.name);
+                return error::compiler(expr.node_info, "Reference to fn '%' is ambiguous", *name);
             if (fn_matches.size() == 1)
             {
                 // Perfect match, return it
-                std::unique_ptr<FnCall> fn_call = std::make_unique<FnCall>(callee->type_lookup.lookup.ns);
+                std::unique_ptr<FnCall> fn_call = std::make_unique<FnCall>(lookup->ns);
                 return
                     fn_call->init(*std::get<0>(fn_matches.front())) ||
                     fn_call->apply_args(expr.node_info, std::get<1>(fn_matches.front()), std::get<2>(fn_matches.front())) ||
                     fn_call->codegen(scope, rets);
             }
-            return error::compiler(expr.node_info, "Unable to find a suitable overload for varg call to '%'", callee->type_lookup.name);
+            return error::compiler(expr.node_info, "Unable to find a suitable overload for varg call to '%'", *name);
         }
 
         bool codegen_expr_fndecl(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)

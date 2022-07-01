@@ -120,6 +120,7 @@ namespace nn
 
         struct TypeInfoCargBind
         {
+            std::string name;
             CodeModule::LookupResult lookup;
             const std::vector<AstExpr>& cargs;
         };
@@ -312,7 +313,7 @@ namespace nn
             TypeRef create_tuple       (TypeInfo::Category cat, CodegenCallback codegen, std::vector<TypeRef> elems);
             
             TypeRef create_lookup      (std::string name, CodeModule::LookupResult lookup);  // always virtual'
-            TypeRef create_cargbind    (CodeModule::LookupResult lookup, const std::vector<AstExpr>& cargs); // always virtual
+            TypeRef create_cargbind    (std::string name, CodeModule::LookupResult lookup, const std::vector<AstExpr>& cargs); // always virtual
             TypeRef create_struct      (TypeInfo::Category cat, CodegenCallback codegen);
             TypeRef create_init        (TypeInfo::Category cat, CodegenCallback codegen);
             

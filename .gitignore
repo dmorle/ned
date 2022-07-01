@@ -1,5 +1,7 @@
 out/
+build/
 .vs/
+.vscode/
 x64/
 onnxtest/
 libnn-env/

@@ -118,6 +118,7 @@ namespace nn
             bool add_obj_str    (size_t& addr, const StrObj& val);
 
             bool add_block(const std::string& name, const ByteCodeBody& body);
+            bool del_block(const std::string& name);
             bool has_proc(const std::string& name);
             bool add_static_ref(const TokenImp<TokenType::IDN>* label, size_t& addr);  // add static Obj{.ptr} to data_segment
             bool add_static_ref(const AstNodeInfo& info, const std::string& label, size_t& addr);

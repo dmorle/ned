@@ -95,3 +95,25 @@ def model<fty fp, int *shape>(fp<*shape> lhs) -> out:
 	result = fp<*shape>::(fp<-1>::lhs + fp<-1>::rhs)
 	print "Exiting def model"
 	return result
+
+# Figuring out optimizers
+
+intr const_val<float val, fty fp, int *shape>() -> val:
+	print "const_val"
+    return fp<*shape> out
+
+intr __mul__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+	print "__mul__"
+    return fp<*shape> out
+
+intr sync<str name, fty fp, int *shape>(fp<*shape> val) -> val:
+	print "sync"
+	return fp<*shape> out
+
+def SGD<float lr, fty fp, int *shape>() -> weight:
+	fp<*shape> weight
+	print "declared weight"
+	val = const_val<lr, fp, *shape>()
+	print "got val"
+	weight.forward = sync<"step">(val * weight.backward)
+	return weight

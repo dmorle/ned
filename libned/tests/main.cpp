@@ -7,6 +7,8 @@
 #include <ned/lang/bytecode.h>
 #include <ned/lang/interp.h>
 #include <ned/lang/compiler.h>
+#include <ned/core/graph.h>
+#include <ned/core/reduce.h>
 
 using namespace nn;
 using namespace lang;
@@ -119,7 +121,7 @@ int main(void)
             return 0;
         }
 
-        std::ofstream ofs{ TESTS_DIR"adding.bcnn" };
+        std::ofstream ofs{ TESTS_DIR"bcdump/adding.bcnn" };
         ofs << bc.to_string() << std::endl;
 
         ByteCode byte_code;
@@ -132,6 +134,66 @@ int main(void)
 
         core::Graph graph;
         if (builder.export_graph(graph))
+        {
+            error::print();
+            return 0;
+        }
+
+        // Attaching an SGD optimizer
+        std::vector<GraphMod> opt;
+        for (const auto& [name, param] : graph.weights)
+        {
+            // replacing proc main with a new one for the optimizer
+            bc.del_block("main");
+            TypeManager manager{};
+            info.init(&manager);
+            assert(param.forward->info == param.backward->info);
+            
+            // For testing, I'm just gonna assume that info.create_* doesn't fail
+            TypeRef lr = info.create_float(1e-3);
+            TypeRef fp = info.create_fty(param.forward->info.fty);
+            std::vector<TypeRef> elems;
+            for (size_t dim : param.forward->info.dims)
+                elems.push_back(info.create_int(dim));
+            TypeRef shape = info.create_array(elems);
+            if (info.entry_setup("SGD", { { "lr", lr }, {"fp", fp}, {"shape", shape}}))
+            {
+                error::print();
+                return 0;
+            }
+
+            std::ofstream ofs{ TESTS_DIR"bcdump/adding_sgd.bcnn" };
+            ofs << bc.to_string() << std::endl;
+            
+            ByteCode byte_code;
+            GraphBuilder sgd_builder;
+            if (bc.export_module(byte_code) || exec(stack, heap, sgd_builder, byte_code, "main"))
+            {
+                error::print();
+                return 0;
+            }
+
+            core::Graph sgd;
+            if (sgd_builder.export_graph(sgd))
+            {
+                error::print();
+                return 0;
+            }
+
+            opt.push_back({{
+                .inp_map = {{{InpRef::Type::WEIGHT, name}, {OutRef::Type::OUTPUT, "weight"}}},
+                .out_map = {}
+            }, sgd});
+        }
+
+        if (attach_graph(graph, "training", opt))
+        {
+            error::print();
+            return 0;
+        }
+
+        core::MdGraph md_graph{ "" };
+        if (md_graph.init(graph))
         {
             error::print();
             return 0;

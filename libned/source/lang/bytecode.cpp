@@ -208,6 +208,13 @@ namespace nn
             return false;
         }
 
+        bool ByteCodeModule::del_block(const std::string& name)
+        {
+            if (procs.contains(name))
+                procs.erase(name);
+            return false;
+        }
+
         bool ByteCodeModule::has_proc(const std::string& name)
         {
             return procs.contains(name);

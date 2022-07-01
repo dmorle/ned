@@ -16,63 +16,22 @@ namespace nn
 		struct MdNode;
 		class MdGraph;
 
-		class MdEdgeRef
-		{
-			friend class MdGraph;
-
-			MdEdgeRef(MdGraph* graph, size_t ptr) : graph(graph), ptr(ptr) {}
-		public:
-			MdEdgeRef(MdGraph* graph) : graph(graph), ptr(0) {}
-			MdEdgeRef(const MdEdgeRef&) = default;
-			MdEdgeRef(MdEdgeRef&&) = default;
-			MdEdgeRef& operator=(const MdEdgeRef&) = default;
-			MdEdgeRef& operator=(MdEdgeRef&&) = default;
-
-			operator bool() const noexcept;
-			MdEdge* operator->() noexcept;
-			const MdEdge* operator->() const noexcept;
-			MdEdge& operator*() noexcept;
-			const MdEdge& operator*() const noexcept;
-
-		private:
-			MdGraph* graph;
-			size_t ptr;
-		};
-
-		class MdNodeRef
-		{
-			friend class MdGraph;
-
-			MdNodeRef(MdGraph* graph, size_t ptr) : graph(graph), ptr(ptr) {}
-		public:
-			MdNodeRef(MdGraph* graph) : graph(graph), ptr(0) {}
-			MdNodeRef(const MdNodeRef&) = default;
-			MdNodeRef(MdNodeRef&&) = default;
-			MdNodeRef& operator=(const MdNodeRef&) = default;
-			MdNodeRef& operator=(MdNodeRef&&) = default;
-
-			operator bool() const noexcept;
-			MdNode* operator->() noexcept;
-			const MdNode* operator->() const noexcept;
-			MdNode& operator*() noexcept;
-			const MdNode& operator*() const noexcept;
-
-		private:
-			MdGraph* graph;
-			size_t ptr;
-		};
-
 		struct EdgeView
 		{
-			MdEdgeRef edge;
-			size_t elem_offset;  // The element offset in memory of the edge view
-			size_t nelems;  // The number of elements in the edge view
+			struct Axis
+			{
+				size_t stride;
+				size_t start;
+				size_t end;
+				int step;
+			};
 
-			std::vector<size_t> shape;
-			std::vector<size_t> strides;
-
-			static EdgeView identity(MdEdge* pedge);
+			size_t offset;
+			std::vector<Axis> axes;
 		};
+
+		struct MdNodeRef { size_t val; operator bool() { return val; } };
+		struct MdEdgeRef { size_t val; operator bool() { return val; } };
 
 		struct MdEdge
 		{
@@ -81,26 +40,25 @@ namespace nn
 			std::vector<size_t> shape;
 
 			// the edge's connections
-			MdNode* inp;
-			std::vector<MdNode*> outs;
+			MdNodeRef inp;
+			std::vector<MdNodeRef> outs;
 
 			// fields used for memory layout
 			size_t mem_offset;
+			
+			// The weight info if its the forward edge of a model weight.  Otherwise null
+			void* data = nullptr;
 		};
+
+		EdgeView identity_edge_view(const MdEdge& edge);
 
 		struct MdNode
 		{
 			std::string name;
 			std::map<std::string, ConfigVal> configs;
 
-			std::vector<EdgeView> inps;
-			std::vector<EdgeView> outs;
-		};
-
-		struct MdTensor
-		{
-			MdEdgeRef forward;
-			MdEdgeRef backward;
+			std::vector<std::pair<MdEdgeRef, EdgeView>> inps;
+			std::vector<MdEdgeRef> outs;
 		};
 
 		struct MdParameter
@@ -117,7 +75,7 @@ namespace nn
 			using RedOp = std::function<void(MdGraph&, MdNodeRef)>;
 
 		public:
-			MdGraph() {}
+			MdGraph(const std::string& exec_md) : exec_md(exec_md) {}
 
 			// Generates the MdGraph and does automatic pruning
 			bool init(Graph& graph);
@@ -128,20 +86,38 @@ namespace nn
 			MdEdgeRef make_edge();
 			MdNodeRef make_node();
 
+			MdEdge& get(MdEdgeRef ref) noexcept;
+			const MdEdge& get(MdEdgeRef ref) const noexcept;
+			MdNode& get(MdNodeRef ref) noexcept;
+			const MdNode& get(MdNodeRef ref) const noexcept;
+
 		private:
-			// Used by init for mapping the opaque pointers in the graph's nodes and edges
-			bool alloc_edge(const Edge& edge);
-			bool alloc_node(const Node& node);  
+			// Only going backwards through the graph to initialize all the edges and nodes
+			bool init_edge(const Edge& edge);
+			bool init_node(const Node& node);
+
+			// DFS through the graph again, this time binding the outputs of edges and nodes
+			bool bind_edge(const Edge& edge);
+			bool bind_node(const Node& node);
+
+			bool check_mode(const std::string& mode);
+
+			void* as_ptr(MdEdgeRef ref) const noexcept;
+			void* as_ptr(MdNodeRef ref) const noexcept;
+			MdEdgeRef edge_ptr(void* ptr) const noexcept;
+			MdNodeRef node_ptr(void* ptr) const noexcept;
+
+			std::string exec_md;
 
 			// memory management stuff
 			std::vector<MdEdge> edges = { MdEdge() };
 			std::vector<MdNode> nodes = { MdNode() };
 
 			// References to edges in the graph
-			std::map<std::string, MdTensor> inps;
-			std::map<std::string, MdTensor> outs;
-			std::map<std::string, MdTensor> exps;
-			std::map<std::string, MdParameter> exts;
+			std::map<std::string, MdEdgeRef> inps;
+			std::map<std::string, MdEdgeRef> outs;
+			std::map<std::string, MdEdgeRef> exps;
+			std::map<std::string, MdEdgeRef> exts;
 		};
 	}
 }

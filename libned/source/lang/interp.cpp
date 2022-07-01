@@ -237,7 +237,7 @@ namespace nn
                 for (const auto& conn : conns)
                 {
                     assert(nodes[conn.node]->inps.contains(conn.name));
-                    nodes[conn.node]->inps[conn.name] = lhs_edge;
+                    nodes[conn.node]->inps[conn.name].push_back(lhs_edge);
                     edges[lhs_edge]->md_outs[md].push_back(conn);  // dupicates will be handled during the export
                 }
 
@@ -406,7 +406,10 @@ namespace nn
                 return error::runtime("Attempted to reference a non-existant edge");
             if (nodes[node]->inps.contains(name))
                 return error::runtime("Attempted to bind node input '%' multiple times", name);
-            nodes[node]->inps[name] = edge;
+            NodeBuilder* builder = nodes[node];
+            if (std::find(builder->inp_order.begin(), builder->inp_order.end(), name) == builder->inp_order.end())
+                builder->inp_order.push_back(name);
+            builder->inps[name].push_back(edge);
             edges[edge]->md_outs[current_mode()].push_back({ node, name });
             return false;
         }
@@ -593,9 +596,17 @@ namespace nn
                 if (bind_edge(tensors[tensor]->bwd_edge))
                     return true;
 
-
             // Then attach the blocks to the nodes and edges
             if (bind_block(graph.model, root))
+                return true;
+
+            // Search through each of the blocks recursively to get all of the
+            // inputs, outputs, exports, and model weights
+            for (const auto& [name, tensor] : blocks[root]->inps)
+                graph.inps[name] = tensors[tensor]->tensor;
+            for (const auto& [name, tensor] : blocks[root]->outs)
+                graph.outs[name] = tensors[tensor]->tensor;
+            if (export_io(graph, "", root))
                 return true;
 
             is_exported = true;
@@ -669,15 +680,19 @@ namespace nn
             node->parent = blocks[nodes[i]->parent]->block;
 
             // Exporting the feeding edges and binding the inputs
-            for (const auto& [name, edge_id] : nodes[i]->inps)
+            for (const auto& [name, edge_ids] : nodes[i]->inps)
             {
-                core::Edge* edge;
-                if (export_edge(edge, edge_id))
+                for (uint64_t edge_id : edge_ids)
                 {
-                    delete node;
-                    return true;
+                    core::Edge* edge;
+                    if (export_edge(edge, edge_id))
+                    {
+                        delete node;
+                        return true;
+                    }
+                    node->inps[name].push_back(edge);
                 }
-                node->inps[name] = edge;
+                node->inp_order.push_back(name);
             }
 
             // Configurations
@@ -692,13 +707,13 @@ namespace nn
             // Binding the outputs
             for (const auto& [name, conns] : edges[i]->md_outs)
             {
-                std::vector<core::Edge::Connector> real_conns;
+                std::vector<core::Edge::OutConnector> real_conns;
                 for (const auto& [node, conn_name] : conns)
                 {
                     if (!node_exists(node))
                         return error::graph("Found an invalid node during graph exporting");
                     assert(nodes[node]->node);  // Everything should be exported at this point
-                    real_conns.push_back({ nodes[node]->node, conn_name });
+                    real_conns.push_back({ nodes[node]->node, conn_name, real_conns.size() });
                 }
                 edges[i]->edge->md_outs[name] = std::move(real_conns);
             }
@@ -723,9 +738,10 @@ namespace nn
             }
 
             // Recursively bind the feeding edges
-            for (const auto& [name, edge] : nodes[i]->inps)
-                if (bind_edge(edge))
-                    return true;
+            for (const auto& [name, edges] : nodes[i]->inps)
+                for (uint64_t edge : edges)
+                    if (bind_edge(edge))
+                        return true;
 
             return false;
         }
@@ -874,6 +890,18 @@ namespace nn
                 block.exports[name] = tensors[tensor]->tensor;
             for (const auto& [name, tensor] : blocks[i]->exts)
                 block.weights[name] = tensors[tensor]->param;
+            return false;
+        }
+
+        bool GraphBuilder::export_io(core::Graph& graph, const std::string& prefix, uint64_t block)
+        {
+            for (const auto& [name, tensor] : blocks[block]->exps)
+                graph.exports[prefix + name] = tensors[tensor]->tensor;
+            for (const auto& [name, tensor] : blocks[block]->exts)
+                graph.weights[prefix + name] = tensors[tensor]->param;
+            for (const auto& [name, sub_block] : blocks[block]->sub_blocks)
+                if (export_io(graph, prefix + name + ".", sub_block))
+                    return true;
             return false;
         }
 

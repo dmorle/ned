@@ -11,8 +11,6 @@
 
 namespace nn
 {
-    namespace lang { union Obj; }
-
     namespace core
     {
         struct Init
@@ -31,11 +29,12 @@ namespace nn
         struct Node;
         struct Edge
         {
-            struct Connector { Node* node = nullptr; std::string name; };
+            struct InpConnector { Node* node = nullptr; std::string name; };
+            struct OutConnector { Node* node = nullptr; std::string name; size_t idx = 0; };
 
             EdgeInfo info;
-            std::map<std::string, Connector> md_inps;
-            std::map<std::string, std::vector<Connector>> md_outs;
+            std::map<std::string, InpConnector> md_inps;
+            std::map<std::string, std::vector<OutConnector>> md_outs;
             mutable void* opaque = nullptr;
         };
 
@@ -44,7 +43,8 @@ namespace nn
         {
             std::string name;
             std::map<std::string, ConfigVal> configs;
-            std::map<std::string, Edge*> inps;
+            std::vector<std::string> inp_order;
+            std::unordered_map<std::string, std::vector<Edge*>> inps;
             std::map<std::string, Edge*> outs;
             Block* parent = nullptr;
             mutable void* opaque = nullptr;
@@ -87,9 +87,50 @@ namespace nn
             std::vector<std::string> eval_modes;
         };
 
+        struct InpRef
+        {
+            enum class Type
+            {
+                INPUT,
+                WEIGHT
+            } ty;
+            std::string name;
+
+            auto operator<=>(const InpRef&) const = default;
+        };
+
+        struct OutRef
+        {
+            enum class Type
+            {
+                OUTPUT,
+                EXPORT
+            } ty;
+            std::string name;
+
+            auto operator<=>(const OutRef&) const = default;
+        };
+
+        struct GraphMod
+        {
+            struct IOMap
+            {
+                std::map<InpRef, OutRef> inp_map;  // Mapping of mod outputs to graph inputs
+                std::map<OutRef, InpRef> out_map;  // Mapping of graph outputs to mod inputs
+            };
+
+            IOMap io_map;
+            Graph graph;
+        };
+
+        bool copy_graph(Graph& out, const Graph& graph);
+
         bool init_weights(Graph& graph);
         bool save_graph(const Graph& graph, std::vector<uint8_t>& out);
         bool load_graph(Graph& graph, const std::vector<uint8_t>& inp);
+
+        // mods gets destroyed, and its contents get added to graph
+        bool attach_graph(Graph& graph, const std::string& name, std::vector<GraphMod>& mods);
     }
 }
 
