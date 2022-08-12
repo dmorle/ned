@@ -23,31 +23,34 @@ namespace nn
 				size_t stride;
 				size_t start;
 				size_t end;
+				// applied on top of stride
+				// negative values means to index from the end to the start
 				int step;
 			};
 
-			size_t offset;
 			std::vector<Axis> axes;
 		};
 
-		struct MdNodeRef { size_t val; operator bool() { return val; } };
-		struct MdEdgeRef { size_t val; operator bool() { return val; } };
+		struct MdNodeRef { size_t val = 0; operator bool() { return val; } };
+		struct MdEdgeRef { size_t val = 0; operator bool() { return val; } };
+
+		struct MdEdgeConnector { MdEdgeRef ref; EdgeView view; };
+		struct MdNodeConnector { MdNodeRef ref; size_t idx; };
 
 		struct MdEdge
 		{
 			// describing the edge
-			EdgeFty fp;
+			EdgeFty fp = EdgeFty::F32;
 			std::vector<size_t> shape;
 
 			// the edge's connections
-			MdNodeRef inp;
-			std::vector<MdNodeRef> outs;
-
-			// fields used for memory layout
-			size_t mem_offset;
+			MdNodeConnector inp = { 0 };
+			std::vector<MdNodeConnector> outs;
 			
 			// The weight info if its the forward edge of a model weight.  Otherwise null
 			void* data = nullptr;
+
+			mutable void* opaque;
 		};
 
 		EdgeView identity_edge_view(const MdEdge& edge);
@@ -57,8 +60,10 @@ namespace nn
 			std::string name;
 			std::map<std::string, ConfigVal> configs;
 
-			std::vector<std::pair<MdEdgeRef, EdgeView>> inps;
-			std::vector<MdEdgeRef> outs;
+			std::vector<MdEdgeConnector> inps;
+			std::vector<MdEdgeConnector> outs;
+
+			mutable void* opaque;
 		};
 
 		struct MdParameter
@@ -68,11 +73,12 @@ namespace nn
 			void* data = nullptr;
 		};
 
+		using RedOp = std::function<void(MdGraph&, MdNodeRef)>;
+
 		class MdGraph
 		{
-			friend class MdEdgeRef;
-			friend class MdNodeRef;
-			using RedOp = std::function<void(MdGraph&, MdNodeRef)>;
+			friend struct MdEdgeRef;
+			friend struct MdNodeRef;
 
 		public:
 			MdGraph(const std::string& exec_md) : exec_md(exec_md) {}
@@ -81,7 +87,7 @@ namespace nn
 			bool init(Graph& graph);
 
 			// Does a pass over the graph applying each of the reductions as it goes
-			bool run_pass(const std::vector<MdGraph&, RedOp>& ops);
+			bool run_pass(const std::vector<RedOp>& ops);
 
 			MdEdgeRef make_edge();
 			MdNodeRef make_node();
@@ -90,6 +96,20 @@ namespace nn
 			const MdEdge& get(MdEdgeRef ref) const noexcept;
 			MdNode& get(MdNodeRef ref) noexcept;
 			const MdNode& get(MdNodeRef ref) const noexcept;
+
+			template<typename T = void*>
+			T& opaque(MdEdgeRef ref) noexcept
+			{
+				static_assert(sizeof(T) == 8);
+				return *reinterpret_cast<T*>(&edges[ref.val].opaque);
+			}
+			
+			template<typename T = void*>
+			T& opaque(MdNodeRef ref) noexcept
+			{
+				static_assert(sizeof(T) == 8);
+				return *reinterpret_cast<T*>(&nodes[ref.val].opaque);
+			}
 
 		private:
 			// Only going backwards through the graph to initialize all the edges and nodes
@@ -113,6 +133,7 @@ namespace nn
 			std::vector<MdEdge> edges = { MdEdge() };
 			std::vector<MdNode> nodes = { MdNode() };
 
+		public:
 			// References to edges in the graph
 			std::map<std::string, MdEdgeRef> inps;
 			std::map<std::string, MdEdgeRef> outs;

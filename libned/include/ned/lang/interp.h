@@ -62,6 +62,7 @@ namespace nn
             {
                 std::string name;
                 std::vector<std::string> inp_order;
+                std::vector<std::string> out_order;
                 std::map<std::string, std::vector<uint64_t>> inps;
                 std::map<std::string, uint64_t> outs;
                 std::map<std::string, core::ConfigVal> configs;

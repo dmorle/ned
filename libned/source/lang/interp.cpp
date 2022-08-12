@@ -404,8 +404,8 @@ namespace nn
                 return error::runtime("Attempted to reference a non-existant node");
             if (!edge_exists(edge))
                 return error::runtime("Attempted to reference a non-existant edge");
-            if (nodes[node]->inps.contains(name))
-                return error::runtime("Attempted to bind node input '%' multiple times", name);
+            // Don't check for nodes[node]->inps.contains(name) here, cause binding to the same
+            // node input multiple times is allowed since that's how variadic inputs are created
             NodeBuilder* builder = nodes[node];
             if (std::find(builder->inp_order.begin(), builder->inp_order.end(), name) == builder->inp_order.end())
                 builder->inp_order.push_back(name);
@@ -427,6 +427,7 @@ namespace nn
             std::string md = current_mode();
             if (edges[edge]->md_inps.contains(md))
                 return error::runtime("Attempted to bind an edge input multiple times");
+            nodes[node]->out_order.push_back(name);
             nodes[node]->outs[name] = edge;
             edges[edge]->md_inps[md] = { node, name };
             return false;

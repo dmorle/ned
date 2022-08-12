@@ -1,7 +1,6 @@
 ﻿cmake_minimum_required (VERSION 3.12)
 
-# project ("ned" LANGUAGES CXX CUDA)
-project ("ned" LANGUAGES CXX)
+project ("ned" LANGUAGES CXX CUDA)
 
 if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
   set(CMAKE_CUDA_ARCHITECTURES 75)
@@ -24,4 +23,4 @@ endif ()
 add_subdirectory ("libned")
 # add_subdirectory ("pyned")
 # add_subdirectory ("cppned")
-# add_subdirectory ("backends")
+add_subdirectory ("backends")

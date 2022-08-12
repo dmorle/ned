@@ -58,7 +58,10 @@ namespace nn
                 std::vector<ConfigVal> val_list;
             };
 
+#pragma warning( push )
+#pragma warning( disable : 26495 )
             ConfigVal() {}
+#pragma warning ( pop )
             ConfigVal(const ConfigVal& val);
             ConfigVal(ConfigVal&& val) noexcept;
             ConfigVal& operator=(const ConfigVal& val);

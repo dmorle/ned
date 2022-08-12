@@ -29,8 +29,11 @@ namespace nn
         struct Node;
         struct Edge
         {
-            struct InpConnector { Node* node = nullptr; std::string name; };
-            struct OutConnector { Node* node = nullptr; std::string name; size_t idx = 0; };
+            struct InpConnector { Node* node = nullptr; std::string name; };                  // node to edge
+            struct OutConnector { Node* node = nullptr; std::string name; size_t idx = 0; };  // edge to node
+            
+            // InpConnector doesn't need idx cause currently ned doesn't support variadic node outputs.
+            // During mode collpase, the idx can be determined from the output order of the feeding node.
 
             EdgeInfo info;
             std::map<std::string, InpConnector> md_inps;
@@ -43,9 +46,12 @@ namespace nn
         {
             std::string name;
             std::map<std::string, ConfigVal> configs;
+            // During mode collapse, node inputs and outputs are purely positional,
+            // so the node needs to keep track of the order of the keyword inputs/outputs
             std::vector<std::string> inp_order;
+            std::vector<std::string> out_order;
             std::unordered_map<std::string, std::vector<Edge*>> inps;
-            std::map<std::string, Edge*> outs;
+            std::unordered_map<std::string, Edge*> outs;
             Block* parent = nullptr;
             mutable void* opaque = nullptr;
         };

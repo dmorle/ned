@@ -106,8 +106,8 @@ intr __mul__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
 	print "__mul__"
     return fp<*shape> out
 
-intr sync<str name, fty fp, int *shape>(fp<*shape> val) -> val:
-	print "sync"
+intr __sync<str name, fty fp, int *shape>(fp<*shape> val) -> val:
+	print "__sync"
 	return fp<*shape> out
 
 def SGD<float lr, fty fp, int *shape>() -> weight:
@@ -115,5 +115,5 @@ def SGD<float lr, fty fp, int *shape>() -> weight:
 	print "declared weight"
 	val = const_val<lr, fp, *shape>()
 	print "got val"
-	weight.forward = sync<"step">(val * weight.backward)
+	weight.forward = __sync<"step">(val * weight.backward)
 	return weight

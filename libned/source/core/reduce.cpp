@@ -89,23 +89,38 @@ namespace nn
             for (const auto& [mode, conn] : edge.md_inps)
                 if (check_mode(mode))
                 {
-                    if (get(edge_ref).inp)
+                    // Checking if multiple input connections exist for the execution mode.
+                    // If this is the case, the feeding node is ambiguous, so its an error
+                    if (get(edge_ref).inp.ref)
                         return error::graph("Unable to resolve edge input for given execution mode");
                     
                     if (conn.node->opaque)
                     {
                         // Already initialized, just attach it to the edge and continue checking
-                        get(edge_ref).inp = node_ptr(conn.node->opaque);
+                        get(edge_ref).inp.ref = node_ptr(conn.node->opaque);
                     }
                     else
                     {
                         // Initialize the node, then dfs on it
-                        get(edge_ref).inp = make_node();
-                        conn.node->opaque = as_ptr(get(edge_ref).inp);
+                        get(edge_ref).inp.ref = make_node();
+                        conn.node->opaque = as_ptr(get(edge_ref).inp.ref);
                         if (init_node(*conn.node))
                             return true;
                     }
+
+                    // Figuring out the output index of the node which feeds the edge
+                    // It can be determined by directly analysing out_order here since node outputs cannot be variadic
+                    size_t idx = 0;
+                    for (; idx < conn.node->out_order.size(); idx++)
+                        if (conn.node->out_order[idx] == conn.name)
+                            break;
+                    if (idx == conn.node->out_order.size())
+                        return error::graph("Internal error: node ouput % does not exist in the output order", conn.name);
+                    get(edge_ref).inp.idx = idx;
                 }
+
+            // Don't need to ensure that get(edge_ref).inp.ref is initialized, cause it's
+            // allowed in certain cases (externs) for edges to not have any inputs
             return false;
         }
 
@@ -142,7 +157,7 @@ namespace nn
                         // Initialize it, then dfs on it
                         MdEdgeRef md_edge = make_edge();
                         get(node_ref).inps.push_back({ md_edge, identity_edge_view(get(md_edge)) });
-                        edge->opaque = as_ptr(std::get<0>(get(node_ref).inps.back()));
+                        edge->opaque = as_ptr(get(node_ref).inps.back().ref);
                         if (init_edge(*edge))
                             return true;
                     }
@@ -161,15 +176,35 @@ namespace nn
             if (get(edge_ref).outs.size())
                 return false;
 
-            // It wasn't already bound. So do the binding, then dfs
+            // It wasn't already bound. So first do the binding, then dfs
             for (const auto& [mode, conns] : edge.md_outs)
                 for (const auto& conn : conns)
                     if (conn.node->opaque)
                     {
-                        // Only connecting to nodes that weren't pruned during the init
-                        // The outputs are unordered, so it this shouldn't be an issue
-                        get(edge_ref).outs.push_back(node_ptr(conn.node->opaque));
+                        // Only connecting to nodes that weren't pruned during the init.
+                        // The outputs of edges are unordered, so the iteration order won't be an issue.
+                        
+                        // Determining the node input index.  This is more challenging than determining the
+                        // node output index cause you can't only use the inp_order.  This is because
+                        // node inputs can be variadic, which in the graph means Node::inps is mapping from
+                        // parameter names to a list of Edges.
+                        size_t param_idx = 0;
+                        auto it = conn.node->inp_order.begin();
+                        for (; it != conn.node->inp_order.end(); it++)
+                        {
+                            const std::string& name = *it;
+                            if (name == conn.name)
+                                break;
+                            // It should be impossible for name to not exist in conn.node->inps
+                            param_idx += conn.node->inps.at(name).size();
+                        }
+                        if (it == conn.node->inp_order.end())
+                            return error::graph("Internal error: node input % does not exist in the input order", conn.name);
+                        // param_idx is the base positional offset of the parameter in the node inputs
+                        // and conn.idx is the offset in the parameter (always 0 for non-variadic parameters)
+                        get(edge_ref).outs.push_back({ node_ptr(conn.node->opaque), param_idx + conn.idx });
                     }
+            // Doing the DFS part
             for (const auto& [mode, conn] : edge.md_inps)
                 if (conn.node->opaque)
                 {
@@ -192,7 +227,8 @@ namespace nn
                 if (edge->opaque)
                 {
                     // Similar to the edges, the node outputs are unordered
-                    get(node_ref).outs.push_back(edge_ptr(edge->opaque));
+                    MdEdgeRef edge_ref = edge_ptr(edge->opaque);
+                    get(node_ref).outs.push_back({ edge_ref, identity_edge_view(get(edge_ref)) });
                 }
             for (const auto& name : node.inp_order)
                 for (const auto& edge : node.inps.at(name))
