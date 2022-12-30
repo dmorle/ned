@@ -1,5 +1,7 @@
 #include <ned/core/config.h>
 
+#include <cassert>
+
 namespace nn
 {
     namespace core
@@ -44,7 +46,7 @@ namespace nn
         {
             ConfigVal ret;
             new (&ret.val_bool) decltype(ret.val_bool)();
-            ret.ty = Type::BOOL;
+            ret.ty = Tag::BOOL;
             ret.val_bool = val;
             return ret;
         }
@@ -53,7 +55,7 @@ namespace nn
         {
             ConfigVal ret;
             new (&ret.val_fty) decltype(ret.val_fty)();
-            ret.ty = Type::FTY;
+            ret.ty = Tag::FTY;
             ret.val_fty = val;
             return ret;
         }
@@ -62,7 +64,7 @@ namespace nn
         {
             ConfigVal ret;
             new (&ret.val_int) decltype(ret.val_int)();
-            ret.ty = Type::INT;
+            ret.ty = Tag::INT;
             ret.val_int = val;
             return ret;
         }
@@ -71,7 +73,7 @@ namespace nn
         {
             ConfigVal ret;
             new (&ret.val_float) decltype(ret.val_float)();
-            ret.ty = Type::FLOAT;
+            ret.ty = Tag::FLOAT;
             ret.val_float = val;
             return ret;
         }
@@ -80,7 +82,7 @@ namespace nn
         {
             ConfigVal ret;
             new (&ret.val_str) decltype(ret.val_str)();
-            ret.ty = Type::FLOAT;
+            ret.ty = Tag::STRING;
             ret.val_str = val;
             return ret;
         }
@@ -89,7 +91,7 @@ namespace nn
         {
             ConfigVal ret;
             new (&ret.val_list) decltype(ret.val_list)();
-            ret.ty = Type::FLOAT;
+            ret.ty = Tag::LIST;
             ret.val_list = val;
             return ret;
         }
@@ -126,24 +128,24 @@ namespace nn
         {
             switch (ty)
             {
-            case Type::INVALID:
+            case Tag::INVALID:
                 break;
-            case Type::BOOL:
+            case Tag::BOOL:
                 val_bool.~decltype(val_bool)();
                 break;
-            case Type::FTY:
+            case Tag::FTY:
                 val_fty.~decltype(val_fty)();
                 break;
-            case Type::INT:
+            case Tag::INT:
                 val_int.~decltype(val_int)();
                 break;
-            case Type::FLOAT:
+            case Tag::FLOAT:
                 val_float.~decltype(val_float)();
                 break;
-            case Type::STRING:
+            case Tag::STRING:
                 val_str.~decltype(val_str)();
                 break;
-            case Type::LIST:
+            case Tag::LIST:
                 val_list.~decltype(val_list)();
                 break;
             }
@@ -155,24 +157,24 @@ namespace nn
 
             switch (ty)
             {
-            case Type::INVALID:
+            case Tag::INVALID:
                 break;
-            case Type::BOOL:
+            case Tag::BOOL:
                 new (&val_bool) decltype(val_bool)(val.val_bool);
                 break;
-            case Type::FTY:
+            case Tag::FTY:
                 new (&val_fty) decltype(val_fty)(val.val_fty);
                 break;
-            case Type::INT:
+            case Tag::INT:
                 new (&val_int) decltype(val_int)(val.val_int);
                 break;
-            case Type::FLOAT:
+            case Tag::FLOAT:
                 new (&val_float) decltype(val_float)(val.val_float);
                 break;
-            case Type::STRING:
+            case Tag::STRING:
                 new (&val_str) decltype(val_str)(val.val_str);
                 break;
-            case Type::LIST:
+            case Tag::LIST:
                 new (&val_list) decltype(val_list)(val.val_list);
                 break;
             }
@@ -181,28 +183,28 @@ namespace nn
         void ConfigVal::do_move(ConfigVal&& val) noexcept
         {
             ty = val.ty;
-            val.ty = Type::INVALID;
+            val.ty = Tag::INVALID;
 
             switch (ty)
             {
-            case Type::INVALID:
+            case Tag::INVALID:
                 break;
-            case Type::BOOL:
+            case Tag::BOOL:
                 new (&val_bool) decltype(val_bool)(std::move(val.val_bool));
                 break;
-            case Type::FTY:
+            case Tag::FTY:
                 new (&val_fty) decltype(val_fty)(std::move(val.val_fty));
                 break;
-            case Type::INT:
+            case Tag::INT:
                 new (&val_int) decltype(val_int)(std::move(val.val_int));
                 break;
-            case Type::FLOAT:
+            case Tag::FLOAT:
                 new (&val_float) decltype(val_float)(std::move(val.val_float));
                 break;
-            case Type::STRING:
+            case Tag::STRING:
                 new (&val_str) decltype(val_str)(std::move(val.val_str));
                 break;
-            case Type::LIST:
+            case Tag::LIST:
                 new (&val_list) decltype(val_list)(std::move(val.val_list));
                 break;
             }
@@ -211,53 +213,53 @@ namespace nn
         ConfigType ConfigType::make_bool()
         {
             ConfigType ret;
-            ret.ty = Type::BOOL;
+            ret.ty = Tag::BOOL;
             return ret;
         }
 
         ConfigType ConfigType::make_fty()
         {
             ConfigType ret;
-            ret.ty = Type::FTY;
+            ret.ty = Tag::FTY;
             return ret;
         }
 
         ConfigType ConfigType::make_int()
         {
             ConfigType ret;
-            ret.ty = Type::INT;
+            ret.ty = Tag::INT;
             return ret;
         }
 
         ConfigType ConfigType::make_float()
         {
             ConfigType ret;
-            ret.ty = Type::FLOAT;
+            ret.ty = Tag::FLOAT;
             return ret;
         }
 
         ConfigType ConfigType::make_str()
         {
             ConfigType ret;
-            ret.ty = Type::STRING;
+            ret.ty = Tag::STR;
             return ret;
         }
 
-        ConfigType ConfigType::make_array(const ConfigType& val)
+        ConfigType ConfigType::make_arr(const ConfigType& val)
         {
             ConfigType ret;
             new (&ret.type_arr) decltype(ret.type_arr)();
-            ret.ty = Type::ARRAY;
-            *ret.type_arr = val;
+            ret.ty = Tag::ARR;
+            ret.type_arr = std::make_unique<ConfigType>(val);
             return ret;
         }
 
-        ConfigType ConfigType::make_tuple(const std::vector<ConfigType>& val)
+        ConfigType ConfigType::make_agg(const std::vector<ConfigType>& val)
         {
             ConfigType ret;
-            new (&ret.type_tuple) decltype(ret.type_tuple)();
-            ret.ty = Type::TUPLE;
-            ret.type_tuple = val;
+            new (&ret.type_agg) decltype(ret.type_agg)();
+            ret.ty = Tag::AGG;
+            ret.type_agg = val;
             return ret;
         }
 
@@ -293,18 +295,18 @@ namespace nn
         {
             switch (ty)
             {
-            case Type::INVALID:
-            case Type::BOOL:
-            case Type::FTY:
-            case Type::INT:
-            case Type::FLOAT:
-            case Type::STRING:
+            case Tag::INVALID:
+            case Tag::BOOL:
+            case Tag::FTY:
+            case Tag::INT:
+            case Tag::FLOAT:
+            case Tag::STR:
                 break;
-            case Type::ARRAY:
+            case Tag::ARR:
                 type_arr.~decltype(type_arr)();
                 break;
-            case Type::TUPLE:
-                type_tuple.~decltype(type_tuple)();
+            case Tag::AGG:
+                type_agg.~decltype(type_agg)();
                 break;
             }
         }
@@ -315,18 +317,18 @@ namespace nn
 
             switch (ty)
             {
-            case Type::INVALID:
-            case Type::BOOL:
-            case Type::FTY:
-            case Type::INT:
-            case Type::FLOAT:
-            case Type::STRING:
+            case Tag::INVALID:
+            case Tag::BOOL:
+            case Tag::FTY:
+            case Tag::INT:
+            case Tag::FLOAT:
+            case Tag::STR:
                 break;
-            case Type::ARRAY:
+            case Tag::ARR:
                 new (&type_arr) decltype(type_arr)(std::make_unique<ConfigType>(*val.type_arr));
                 break;
-            case Type::TUPLE:
-                new (&type_tuple) decltype(type_tuple)(val.type_tuple);
+            case Tag::AGG:
+                new (&type_agg) decltype(type_agg)(val.type_agg);
                 break;
             }
         }
@@ -334,24 +336,57 @@ namespace nn
         void ConfigType::do_move(ConfigType&& val) noexcept
         {
             ty = val.ty;
-            val.ty = Type::INVALID;
+            val.ty = Tag::INVALID;
 
             switch (ty)
             {
-            case Type::INVALID:
-            case Type::BOOL:
-            case Type::FTY:
-            case Type::INT:
-            case Type::FLOAT:
-            case Type::STRING:
+            case Tag::INVALID:
+            case Tag::BOOL:
+            case Tag::FTY:
+            case Tag::INT:
+            case Tag::FLOAT:
+            case Tag::STR:
                 break;
-            case Type::ARRAY:
+            case Tag::ARR:
                 new (&type_arr) decltype(type_arr)(std::move(val.type_arr));
                 break;
-            case Type::TUPLE:
-                new (&type_tuple) decltype(type_tuple)(std::move(val.type_tuple));
+            case Tag::AGG:
+                new (&type_agg) decltype(type_agg)(std::move(val.type_agg));
                 break;
             }
         }
+
+#pragma warning(push)
+#pragma warning(disable: 5232)  // warning: == is recursive (I already know, it was designed that way...)
+        bool operator==(const ConfigType& lhs, const ConfigType& rhs)
+        {
+            if (lhs.ty != rhs.ty)
+                return false;
+
+            switch (lhs.ty)
+            {
+            case ConfigType::Tag::INVALID:
+                return false;
+            case ConfigType::Tag::BOOL:
+            case ConfigType::Tag::FTY:
+            case ConfigType::Tag::INT:
+            case ConfigType::Tag::FLOAT:
+            case ConfigType::Tag::STR:
+                // All non-recursive data types
+                return true;
+            case ConfigType::Tag::ARR:
+                return *lhs.type_arr == *rhs.type_arr;
+            case ConfigType::Tag::AGG:
+                if (lhs.type_agg.size() != rhs.type_agg.size())
+                    return false;
+                for (size_t i = 0; i < lhs.type_agg.size(); i++)
+                    if (lhs.type_agg[i] != rhs.type_agg[i])
+                        return false;
+                return true;
+            }
+            assert(false);
+            return false;
+        }
+#pragma warning(pop)
     }
 }

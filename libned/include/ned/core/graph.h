@@ -16,7 +16,7 @@ namespace nn
         struct Init
         {
             std::string name;
-            std::map<std::string, ConfigVal> configs;
+            std::map<std::string, Config> configs;
         };
 
         struct InitImpl
@@ -45,7 +45,7 @@ namespace nn
         struct Node
         {
             std::string name;
-            std::map<std::string, ConfigVal> configs;
+            std::map<std::string, Config> configs;
             // During mode collapse, node inputs and outputs are purely positional,
             // so the node needs to keep track of the order of the keyword inputs/outputs
             std::vector<std::string> inp_order;
@@ -73,7 +73,7 @@ namespace nn
         struct Block
         {
             std::string name;
-            std::map<std::string, ConfigVal> configs;
+            std::map<std::string, Config> configs;
             std::map<std::string, Tensor> inps;
             std::map<std::string, Tensor> outs;
             std::map<std::string, Tensor> exports;  // Local to the block

@@ -58,7 +58,7 @@ namespace nn
 		struct MdNode
 		{
 			std::string name;
-			std::map<std::string, ConfigVal> configs;
+			std::map<std::string, Config> configs;
 
 			std::vector<MdEdgeConnector> inps;
 			std::vector<MdEdgeConnector> outs;
@@ -97,6 +97,9 @@ namespace nn
 			MdNode& get(MdNodeRef ref) noexcept;
 			const MdNode& get(MdNodeRef ref) const noexcept;
 
+			// Helper function for retrieving the opaque field of an MdEdge object and
+			// casting it to the type provided in the template argument.
+			// By default it gets cast to void*
 			template<typename T = void*>
 			T& opaque(MdEdgeRef ref) noexcept
 			{
@@ -104,6 +107,9 @@ namespace nn
 				return *reinterpret_cast<T*>(&edges[ref.val].opaque);
 			}
 			
+			// Helper function for retrieving the opaque field of an MdNode object and
+			// casting it to the type provided in the template argument.
+			// By default, it gets cast to void*
 			template<typename T = void*>
 			T& opaque(MdNodeRef ref) noexcept
 			{

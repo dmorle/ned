@@ -44,7 +44,7 @@ namespace nn
             // At this point in the graph representation, the focus is on execution rather than representation.
             // As a result, if any inputs or model weights are not required to produce the model's outputs,
             // those portions of the model will not get translated.
-            // Also from this translation, this will automatically provide graph trimming for free since
+            // Also, this translation will automatically provide graph trimming for free since
             // any nodes/edges in the graph which aren't required to compute the outputs won't show up in the dfs.
             // Note that for model training, optimizers will connect the bwd edges of weights to their fwd edges
             // This will cause the forward output edges to be dependant on the backwards edges

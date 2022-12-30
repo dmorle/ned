@@ -13,13 +13,12 @@ endif()
 
 if (MSVC)
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-        set(CMAKE_CXX_FLAGS_DEBUG "/MTd /Zi /Od /RTC1")
+        set(CMAKE_CXX_FLAGS_DEBUG "/MDd /Zi /Od /RTC1")
     else ()
         set(CMAKE_CXX_FLAGS_DEBUG "/MT /Zi /Od /OPT:NOREF /DEBUG:FULL /RTC1")
     endif ()
 endif ()
 
-# Include sub-projects.
 add_subdirectory ("libned")
 # add_subdirectory ("pyned")
 # add_subdirectory ("cppned")

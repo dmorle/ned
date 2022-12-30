@@ -1,0 +1,12 @@
+intr __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+	return fp<*shape> out
+
+def __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+	fp<*shape> out
+	out.forward = lhs.forward + rhs.forward
+	lhs.backward = out.backward
+	rhs.backward = out.backward
+	return out
+
+def model<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+    return lhs + rhs

@@ -1,0 +1,4 @@
+bcdump/
+*.obj
+*.lib
+*.dll

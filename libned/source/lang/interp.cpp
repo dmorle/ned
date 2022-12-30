@@ -332,7 +332,7 @@ namespace nn
             return heap.create_obj_bool(obj, node_exists(edges[edge]->md_inps.at(current_mode()).node));
         }
 
-        bool GraphBuilder::add_ndcfg(const std::string& name, uint64_t node, const core::ConfigVal& cfg)
+        bool GraphBuilder::add_ndcfg(const std::string& name, uint64_t node, const core::Config& cfg)
         {
             assert(!is_exported);
 
@@ -344,7 +344,7 @@ namespace nn
             return false;
         }
 
-        bool GraphBuilder::add_bkcfg(const std::string& name, uint64_t block, const core::ConfigVal& cfg)
+        bool GraphBuilder::add_bkcfg(const std::string& name, uint64_t block, const core::Config& cfg)
         {
             assert(!is_exported);
 
@@ -356,7 +356,7 @@ namespace nn
             return false;
         }
 
-        bool GraphBuilder::add_incfg(const std::string& name, uint64_t init, const core::ConfigVal& cfg)
+        bool GraphBuilder::add_incfg(const std::string& name, uint64_t init, const core::Config& cfg)
         {
             assert(!is_exported);
 
@@ -736,6 +736,7 @@ namespace nn
                     return true;
                 assert(edges[edge]->edge);  // Everything should be exported at this point
                 nodes[i]->node->outs[name] = edges[edge]->edge;
+                nodes[i]->node->out_order.push_back(name);
             }
 
             // Recursively bind the feeding edges
@@ -1594,42 +1595,48 @@ namespace nn
         inline bool exec_ndcfg(CallStack& stack)
         {
             Obj node, name, type, obj;
-            core::ConfigVal cfg;
+            core::ConfigVal cfg_val;
+            core::ConfigType cfg_type;
             return
                 stack.pop(name) ||
                 stack.pop(type) ||
                 stack.pop(obj) ||
                 stack.pop(node) ||
-                type.type_obj->cfg(cfg, obj) ||
-                pbuilder->add_ndcfg(*name.str_obj, node.ptr, cfg) ||
+                type.type_obj->cfg_val(cfg_val, obj) ||
+                type.type_obj->cfg_type(cfg_type) ||
+                pbuilder->add_ndcfg(*name.str_obj, node.ptr, { cfg_val, cfg_type }) ||
                 stack.push(node);
         }
 
         inline bool exec_bkcfg(CallStack& stack)
         {
             Obj block, name, type, obj;
-            core::ConfigVal cfg;
+            core::ConfigVal cfg_val;
+            core::ConfigType cfg_type;
             return
                 stack.pop(name) ||
                 stack.pop(type) ||
                 stack.pop(obj) ||
                 stack.pop(block) ||
-                type.type_obj->cfg(cfg, obj) ||
-                pbuilder->add_bkcfg(*name.str_obj, block.ptr, cfg) ||
+                type.type_obj->cfg_val(cfg_val, obj) ||
+                type.type_obj->cfg_type(cfg_type) ||
+                pbuilder->add_bkcfg(*name.str_obj, block.ptr, { cfg_val, cfg_type }) ||
                 stack.push(block);
         }
 
         inline bool exec_incfg(CallStack& stack)
         {
             Obj init, name, type, obj;
-            core::ConfigVal cfg;
+            core::ConfigVal cfg_val;
+            core::ConfigType cfg_type;
             return
                 stack.pop(name) ||
                 stack.pop(type) ||
                 stack.pop(obj) ||
                 stack.pop(init) ||
-                type.type_obj->cfg(cfg, obj) ||
-                pbuilder->add_incfg(*name.str_obj, init.ptr, cfg) ||
+                type.type_obj->cfg_val(cfg_val, obj) ||
+                type.type_obj->cfg_type(cfg_type) ||
+                pbuilder->add_incfg(*name.str_obj, init.ptr, { cfg_val, cfg_type }) ||
                 stack.push(init);
         }
 

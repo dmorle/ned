@@ -36,7 +36,7 @@ namespace nn
             static ConfigVal make_str(const std::string& val);
             static ConfigVal make_list(const std::vector<ConfigVal>& val);
 
-            enum class Type
+            enum class Tag
             {
                 INVALID,
                 FTY,
@@ -46,7 +46,7 @@ namespace nn
                 STRING,
                 LIST
             }
-            ty = Type::INVALID;
+            ty = Tag::INVALID;
 
             union
             {
@@ -80,26 +80,26 @@ namespace nn
             static ConfigType make_int();
             static ConfigType make_float();
             static ConfigType make_str();
-            static ConfigType make_array(const ConfigType& val);
-            static ConfigType make_tuple(const std::vector<ConfigType>& val);
+            static ConfigType make_arr(const ConfigType& elem_type);
+            static ConfigType make_agg(const std::vector<ConfigType>& elem_types);
 
-            enum class Type
+            enum class Tag
             {
                 INVALID,
                 BOOL,
                 FTY,
                 INT,
                 FLOAT,
-                STRING,
-                ARRAY,
-                TUPLE
+                STR,
+                ARR,
+                AGG
             }
-            ty = Type::INVALID;
+            ty = Tag::INVALID;
 
             union
             {
                 std::unique_ptr<ConfigType> type_arr;
-                std::vector<ConfigType>     type_tuple;
+                std::vector<ConfigType>     type_agg;
             };
 
             ConfigType() {}
@@ -113,6 +113,14 @@ namespace nn
             void do_move(ConfigType&& val) noexcept;
             void do_copy(const ConfigType& val);
         };
+
+        struct Config
+        {
+            ConfigVal val;
+            ConfigType type;
+        };
+
+        bool operator==(const ConfigType& lhs, const ConfigType& rhs);
     }
 }
 

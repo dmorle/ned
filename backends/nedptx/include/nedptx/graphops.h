@@ -14,6 +14,8 @@
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/Target/TargetMachine.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/TargetSelect.h>
 
 #pragma warning( pop )
 
@@ -21,12 +23,27 @@
 
 namespace npx
 {
+	struct OpDesc
+	{
+		bool supports_inplace = false;
+		bool pointwise_output = false;
+		bool pointwise_input = false;
+	};
+
+	constexpr size_t op = sizeof(OpDesc);
+
 	class Op
 	{
 	public:
 		virtual size_t nthreads() = 0;
 
 		bool run_hardware_test(llvm::LLVMContext& ctx);
+		virtual bool compile(llvm::LLVMContext& ctx, llvm::IRBuilder<>& builder,
+			llvm::Function* caller, llvm::Function* kernel) = 0;
+
+		virtual OpDesc describe();
+		
+		std::string name;
 
 	protected:
 		virtual void compile_hardware_test(llvm::LLVMContext& ctx) = 0;

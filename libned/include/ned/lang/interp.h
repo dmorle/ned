@@ -65,7 +65,7 @@ namespace nn
                 std::vector<std::string> out_order;
                 std::map<std::string, std::vector<uint64_t>> inps;
                 std::map<std::string, uint64_t> outs;
-                std::map<std::string, core::ConfigVal> configs;
+                std::map<std::string, core::Config> configs;
                 uint64_t parent = 0;
                 
                 // used only for exporting
@@ -75,7 +75,7 @@ namespace nn
             struct InitBuilder
             {
                 std::string name;
-                std::map<std::string, core::ConfigVal> configs;
+                std::map<std::string, core::Config> configs;
             };
 
             struct BlockBuilder
@@ -88,7 +88,7 @@ namespace nn
                 uint64_t parent = 0;  // 0 if it is the root block or it is uninitialized
                 std::map<std::string, uint64_t> sub_blocks;
                 std::map<std::string, uint64_t> sub_nodes;
-                std::map<std::string, core::ConfigVal> configs;
+                std::map<std::string, core::Config> configs;
                 
                 // used only for exporting
                 core::Block* block;
@@ -141,9 +141,9 @@ namespace nn
             bool get_efty(Obj& obj, ProgramHeap& heap, uint64_t edge);
             bool get_einp(Obj& obj, ProgramHeap& heap, uint64_t edge);
 
-            bool add_ndcfg(const std::string& name, uint64_t node, const core::ConfigVal& cfg);
-            bool add_bkcfg(const std::string& name, uint64_t block, const core::ConfigVal& cfg);
-            bool add_incfg(const std::string& name, uint64_t init, const core::ConfigVal& cfg);
+            bool add_ndcfg(const std::string& name, uint64_t node, const core::Config& cfg);
+            bool add_bkcfg(const std::string& name, uint64_t block, const core::Config& cfg);
+            bool add_incfg(const std::string& name, uint64_t init, const core::Config& cfg);
 
             bool set_ndprt(uint64_t node, uint64_t parent_block);
             bool set_ndinp(const std::string& name, uint64_t node, uint64_t edge);
