@@ -80,6 +80,22 @@ namespace nn
             return ret;
         }
 
+        std::vector<MdNodeRef> MdGraph::list_nodes()
+        {
+            std::vector<MdNodeRef> ret{ nodes.size() - 1 };
+            for (size_t i = 1; i < nodes.size(); i++)
+                ret[i - 1].val = i;
+            return ret;
+        }
+
+        std::vector<MdEdgeRef> MdGraph::list_edges()
+        {
+            std::vector<MdEdgeRef> ret{ edges.size() - 1 };
+            for (size_t i = 1; i < edges.size(); i++)
+                ret[i - 1].val = i;
+            return ret;
+        }
+
         bool MdGraph::init_edge(const Edge& edge)
         {
             MdEdgeRef edge_ref = edge_ptr(edge.opaque);

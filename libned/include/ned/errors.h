@@ -8,6 +8,8 @@
 #endif
 
 #include <string>
+#include <vector>
+#include <sstream>
 
 namespace nn
 {
@@ -26,6 +28,15 @@ namespace std
     std::string to_string(const char* val);
     std::string to_string(bool val);
     std::string to_string(::nn::lang::TypeRef type);
+    template<typename T>
+    std::string to_string(const std::vector<T>& vec)
+    {
+        std::stringstream ss;
+        for (size_t i = 0; i < vec.size() - 1; i++)
+            ss << std::to_string(vec[i]) << ", ";
+        ss << std::to_string(vec.back());
+        return ss.str();
+    }
 }
 
 namespace nn

@@ -12,12 +12,6 @@ namespace nvm
         size_t n_locks = 0;  // Nodes lock their input edges
     };
 
-    struct NodeData  // POD
-    {
-        llvm::Function* forward_func = nullptr;
-        llvm::Function* backward_func = nullptr;
-    };
-
     class GraphCompiler
     {
     public:
@@ -36,15 +30,28 @@ namespace nvm
         bool init_edge(nn::core::MdEdgeRef edge);
         bool init_node(nn::core::MdNodeRef node);
 
-        void compile_edge_io(const std::map<std::string, nn::core::MdEdgeRef>& edges, const std::string& name);
-        bool compile_edge(nn::core::MdEdgeRef edge, std::vector<llvm::Function*>& funcs);
-        bool compile_node(nn::core::MdNodeRef node, std::vector<llvm::Function*>& funcs);
-
+        void compile_edge(nn::core::MdEdgeRef edge);
+        bool compile_node(
+            nn::core::MdNodeRef node,
+            std::vector<llvm::Function*>& funcs,
+            std::vector<std::string>& sync_deps,
+            size_t sync_id);
+        void compile_edge_io(
+            const std::map<std::string, nn::core::MdEdgeRef>& edges,
+            const std::string& name);
+        void compile_run_sync(const std::map<std::string, llvm::Function*>& sync_funcs);
+        llvm::Function* compile_sync_fn(
+            const std::string& name,
+            const std::vector<llvm::Function*>& funcs,
+            const std::vector<nn::core::MdNodeRef>& node_refs);
         bool compile_dll();
+        bool assert_sync_node_sig(const nn::core::MdNode& node);
         
         std::pair<llvm::ArrayType*, llvm::Constant*> get_litstr(const std::string& str);
         std::string get_unique_global_name(const std::string& prefix);
         EdgeData& get_edge_data(nn::core::MdEdgeRef edge);
+
+        static constexpr char sync_node_name[] = "sync";
 
         llvm::LLVMContext ctx = llvm::LLVMContext();
         llvm::Module mod = llvm::Module("mod", ctx);
@@ -52,9 +59,8 @@ namespace nvm
         nn::core::MdGraph* pgraph = nullptr;
 
         std::vector<EdgeData> edge_data = { {} };  // null element at position 0
-        std::vector<NodeData> node_data = { {} };  // null element at position 0
-
         std::map<std::string, size_t> node_name_counts;
+        std::vector<std::string> sync_names = { "" };
 
         // Runtime helper functions
         llvm::Function* compile_memcpy();

@@ -1,12 +1,40 @@
-intr __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+intr __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> sum:
 	return fp<*shape> out
 
-def __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+def __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> sum:
 	fp<*shape> out
 	out.forward = lhs.forward + rhs.forward
 	lhs.backward = out.backward
 	rhs.backward = out.backward
 	return out
 
-def model<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
-    return lhs + rhs
+intr transpose<fty fp, int M, int N>(fp<M, N> inp) -> out:
+    return fp<N, M> out
+
+def transpose<fty fp, int M, int N>(fp<M, N> inp) -> out:
+	fp<M, N> out
+	out.forward = transpose(inp.forward)
+	inp.backward = transpose(out.backward)
+	return out
+
+intr matmul<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> prod:
+	return fp<M, N> prod
+
+def matmul<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> out:
+	fp<M, N> out
+	out.forward = matmul(lhs.forward, rhs.forward)
+	lhs.backward = matmul(out.backward, transpose(rhs.forward))
+	rhs.backward = matmul(transpose(lhs.forward), out.backward)
+	return out
+
+def add_model<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+	return lhs + rhs
+
+def tr_model<fty fp, int M, int N>(fp<M, N> inp) -> out:
+	return transpose(inp)
+
+def mm_model<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> out:
+    return matmul(lhs, rhs)
+
+def lin_model<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs, fp<M, N> bias) -> out:
+    return matmul(lhs, rhs) + bias

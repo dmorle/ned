@@ -31,8 +31,8 @@ namespace nn
 			std::vector<Axis> axes;
 		};
 
-		struct MdNodeRef { size_t val = 0; operator bool() { return val; } };
-		struct MdEdgeRef { size_t val = 0; operator bool() { return val; } };
+		struct MdNodeRef { size_t val = 0; operator bool() const { return val; } };
+		struct MdEdgeRef { size_t val = 0; operator bool() const { return val; } };
 
 		struct MdEdgeConnector { MdEdgeRef ref; EdgeView view; };
 		struct MdNodeConnector { MdNodeRef ref; size_t idx; };
@@ -96,6 +96,9 @@ namespace nn
 			const MdEdge& get(MdEdgeRef ref) const noexcept;
 			MdNode& get(MdNodeRef ref) noexcept;
 			const MdNode& get(MdNodeRef ref) const noexcept;
+
+			std::vector<MdNodeRef> list_nodes();
+			std::vector<MdEdgeRef> list_edges();
 
 			// Helper function for retrieving the opaque field of an MdEdge object and
 			// casting it to the type provided in the template argument.

@@ -59,3 +59,21 @@ entry:
     call void @nvm_memcpy(i8* %dst, i8* %cast, i32 16)
     ret void
 }
+
+@_fltused = constant i32 0
+
+define dllexport void @matmulk0(float* %out) {
+entry:
+    br label %loop
+
+loop:
+    %idx = phi i32 [0, %entry], [%nidx, %loop]
+    %ptr = getelementptr float, float* %out, i32 %idx
+    store float 0.0, ptr %ptr
+    %nidx = add i32 %idx, 1
+    %cond = icmp eq i32 %nidx, 4
+    br i1 %cond, label %end, label %loop
+
+end:
+    ret void
+}

@@ -14,7 +14,8 @@ namespace nvm
 
 		bool init(const std::string& fname);
 
-		void step();
+		void run();
+		bool run_sync(const std::string& sync_name);
 		template<typename T> bool get_inp(const std::string& inp_name, T* buf) {
 			return get_inp_impl(inp_name, (uint8_t*)buf); }
 		template<typename T> bool set_inp(const std::string& inp_name, T* buf) {
@@ -26,10 +27,10 @@ namespace nvm
 
 	private:
 		nn::util::Library* lib = nullptr;
-		std::function<void()> step_fn;
+		std::function<void()> run_fn;
+		std::function<uint32_t(const char*)> run_sync_fn;
 		std::function<uint32_t(const char*, uint8_t*)> get_inp_fn;
-		uint32_t(*set_inp_fn)(const char*, uint8_t*);
-		//std::function<uint32_t(const char*, uint8_t*)> set_inp_fn;
+		std::function<uint32_t(const char*, uint8_t*)> set_inp_fn;
 		std::function<uint32_t(const char*, uint8_t*)> get_out_fn;
 		std::function<uint32_t(const char*, uint8_t*)> set_out_fn;
 

@@ -12,15 +12,37 @@ extern nvm::error_fn_t error;
 
 NVM_INIT(error_fn, nodes);
 
-class AddImpl :
+struct AddImpl :
 	public nvm::ImplBase<AddImpl>
 {
-public:
 	static bool compile(const nvm::NodeCtx& node_ctx, nvm::CompCtx& llvm_ctx);
 
 	static const std::vector<std::pair<std::string, nn::core::ConfigType>> cargs;
-	static constexpr size_t varg_inps = 2;
+	static constexpr size_t vargs = 2;
+	static constexpr size_t rets = 1;
 	static constexpr char name[] = "__add__";
+};
+
+struct TransposeImpl :
+	public nvm::ImplBase<TransposeImpl>
+{
+	static bool compile(const nvm::NodeCtx& node_ctx, nvm::CompCtx& llvm_ctx);
+
+	static const std::vector<std::pair<std::string, nn::core::ConfigType>> cargs;
+	static constexpr size_t vargs = 1;
+	static constexpr size_t rets = 1;
+	static constexpr char name[] = "transpose";
+};
+
+struct MatmulImpl :
+	public nvm::ImplBase<MatmulImpl>
+{
+	static bool compile(const nvm::NodeCtx& node_ctx, nvm::CompCtx& llvm_ctx);
+
+	static const std::vector<std::pair<std::string, nn::core::ConfigType>> cargs;
+	static constexpr size_t vargs = 2;
+	static constexpr size_t rets = 1;
+	static constexpr char name[] = "matmul";
 };
 
 #endif

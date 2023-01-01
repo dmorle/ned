@@ -48,7 +48,7 @@ llvm_map_components_to_libnames(
     debuginfod
     debuginfodwarf
     debuginfogsym
-    debuginfologicalview
+    #debuginfologicalview
     debuginfomsf
     debuginfopdb
     demangle
@@ -61,7 +61,7 @@ llvm_map_components_to_libnames(
     exegesisx86
     extensions
     filecheck
-    frontendhlsl
+    #frontendhlsl
     frontendopenacc
     frontendopenmp
     fuzzercli
@@ -72,7 +72,7 @@ llvm_map_components_to_libnames(
     interfacestub
     interpreter
     ipo
-    irprinter
+    #irprinter
     irreader
     jitlink
     libdriver
@@ -104,7 +104,7 @@ llvm_map_components_to_libnames(
     tablegen
     tablegenglobalisel
     target
-    targetparser
+    #targetparser
     textapi
     transformutils
     vectorize

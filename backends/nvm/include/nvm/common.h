@@ -12,7 +12,6 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/BitCode/BitcodeWriter.h>
-#include <llvm/IRPrinter/IRPrintingPasses.h>
 
 #pragma warning(pop)
 
@@ -70,6 +69,7 @@ namespace nvm
     };
 
     llvm::Type* get_fptype(llvm::LLVMContext& ctx, nn::core::EdgeFty fty);
+    llvm::Value* get_fpval(llvm::LLVMContext& ctx, nn::core::EdgeFty fty, double val);
 
     void find_plugins(std::map<std::string, std::vector<NodeImpl>>& node_map, std::vector<nn::util::Library*>& libs);
 
@@ -81,8 +81,10 @@ namespace nvm
     {
         const auto& node = node_ctx.graph->get(node_ctx.node);
 
-        // Checking the varg input and output counts
-        if (node.inps.size() != T::varg_inps)
+        // Checking the varg and ret counts
+        if (node.inps.size() != T::vargs)
+            return false;
+        if (node.outs.size() != T::rets)
             return false;
 
         // Checking to make sure all the required cargs are there

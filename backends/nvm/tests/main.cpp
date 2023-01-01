@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <functional>
 
 #include <ned/errors.h>
 #include <ned/lang/lexer.h>
@@ -29,114 +30,232 @@ void print_vec(T* vec, size_t sz)
     std::cout << vec[sz - 1] << std::endl;
 }
 
-int main()
+template<typename T>
+void print_mrx(T* vec, size_t m, size_t n)
+{
+    for (size_t i = 0; i < m; i++)
+    {
+        for (size_t j = 0; j < n - 1; j++)
+        {
+            T e = vec[i * n + j];
+            std::cout << e << ", ";
+        }
+        std::cout << vec[i * n + n - 1] << std::endl;
+    }
+}
+
+bool generate_graph(core::Graph& graph, std::function<bool(ModuleInfo&)> setup)
 {
     TokenArray tarr;
     if (lex_file(TESTS_DIR"test.nn", tarr))
-    {
-        error::print();
-        return 1;
-    }
+        return true;
 
     AstModule ast;
     if (parse_module(tarr, ast))
-    {
-        error::print();
-        return 1;
-    }
+        return true;
 
     ProgramHeap heap;
     ByteCodeModule bc{ heap };
     ModuleInfo info;
     if (codegen_module(bc, info, ast, {}))
-    {
-        error::print();
-        return 1;
-    }
+        return true;
 
     TypeManager manager{};
     info.init(&manager);
-    TypeRef N = info.create_int(2);
-    TypeRef M = info.create_int(2);
-    if (!N || !M)
-    {
-        error::print();
-        return 1;
-    }
-    TypeRef fp = info.create_fty(core::EdgeFty::F32);
-    TypeRef shape = info.create_array({ N, M });
-    if (!fp || !shape || info.entry_setup("model", { {"fp", fp}, {"shape", shape} }))
-    {
-        error::print();
-        return 1;
-    }
+    if (setup(info))
+        return true;
 
     std::ofstream ofs{ TESTS_DIR"bcdump/test.bcnn" };
     ofs << bc.to_string() << std::endl;
 
     ByteCode byte_code;
     GraphBuilder builder;
-    if (bc.export_module(byte_code) || exec(stack, heap, builder, byte_code, "main"))
-    {
-        error::print();
-        return 1;
-    }
+    return
+        bc.export_module(byte_code) ||
+        exec(stack, heap, builder, byte_code, "main") ||
+        builder.export_graph(graph);
+}
 
-    core::Graph graph;
-    if (builder.export_graph(graph))
-    {
-        error::print();
-        return 1;
-    }
-
+bool compile_graph(core::Graph& graph, nvm::Runtime& runtime)
+{
     core::MdGraph md_graph("");
     if (md_graph.init(graph))
-    {
-        error::print();
-        return 1;
-    }
+        return true;
 
     nvm::GraphCompiler graph_comp;
     if (graph_comp.init(md_graph))
-    {
-        error::print();
-        return 1;
-    }
+        return true;
 
     if (graph_comp.compile())
-    {
-        error::print();
-        return 1;
-    }
+        return true;
+    return runtime.init("test.dll");
+}
 
-    float lhs[4] = { 1, 2, 3, 4 };
-    float rhs[4] = { 2, 2, 2, 2 };
-    float out[4] = {};
-
+bool vecadd_test()
+{
+    core::Graph graph;
+    auto setup_fn = [](ModuleInfo& info) -> bool {
+        TypeRef N = info.create_int(3);
+        if (!N)
+            return true;
+        TypeRef fp = info.create_fty(core::EdgeFty::F32);
+        TypeRef shape = info.create_array({ N });
+        if (!fp || !shape)
+            return true;
+        return info.entry_setup("add_model", { {"fp", fp}, {"shape", shape} });
+    };
+    if (generate_graph(graph, setup_fn))
+        return true;
     nvm::Runtime runtime;
-    if (runtime.init("test.dll"))
-    {
-        error::print();
-        return 1;
-    }
+    if (compile_graph(graph, runtime))
+        return true;
+
+    float lhs[3] = { 1, 2, 3 };
+    float rhs[3] = { 2, 2, 2 };
+    float out[3] = {};
 
     if (runtime.set_inp("lhs", (uint8_t*)lhs) ||
-        runtime.set_inp("rhs", (uint8_t*)rhs))
-    {
-        error::print();
-        return 1;
-    }
+        runtime.set_inp("rhs", (uint8_t*)rhs)
+        ) return true;
 
-    runtime.step();
+    runtime.run();
     if (runtime.get_out("out", (uint8_t*)out))
+        return true;
+
+    std::cout << "Vector Addition test:" << std::endl;
+    std::cout << "lhs" << std::endl;
+    print_vec(lhs, 3);
+    std::cout << "rhs" << std::endl;
+    print_vec(rhs, 3);
+    std::cout << "out" << std::endl;
+    print_vec(out, 3);
+
+    return false;
+}
+
+bool transpose_test()
+{
+    core::Graph graph;
+    auto setup_fn = [](ModuleInfo& info) -> bool {
+        TypeRef fp = info.create_fty(core::EdgeFty::F32);
+        TypeRef sz = info.create_int(2);
+        if (!fp || !sz)
+            return true;
+        return info.entry_setup("tr_model", { {"fp", fp}, {"M", sz}, {"N", sz} });
+    };
+    if (generate_graph(graph, setup_fn))
+        return true;
+    nvm::Runtime runtime;
+    if (compile_graph(graph, runtime))
+        return true;
+
+    float inp[4] = { 1, 2, 1, 2 };
+    float out[4] = {};
+
+    if (runtime.set_inp("inp", (uint8_t*)inp))
+        return true;
+
+    runtime.run();
+    if (runtime.get_out("out", (uint8_t*)out))
+        return true;
+
+    std::cout << "Transpose test:" << std::endl;
+    std::cout << "inp" << std::endl;
+    print_mrx(inp, 2, 2);
+    std::cout << "out" << std::endl;
+    print_mrx(out, 2, 2);
+
+    return false;
+}
+
+bool matmul_test()
+{
+    core::Graph graph;
+    auto setup_fn = [](ModuleInfo& info) -> bool {
+        TypeRef fp = info.create_fty(core::EdgeFty::F32);
+        TypeRef sz = info.create_int(2);
+        if (!fp || !sz)
+            return true;
+        return info.entry_setup("mm_model", { {"fp", fp}, {"M", sz}, {"K", sz}, {"N", sz} });
+    };
+    if (generate_graph(graph, setup_fn))
+        return true;
+    nvm::Runtime runtime;
+    if (compile_graph(graph, runtime))
+        return true;
+
+    float lhs[4] = { 1, 2, 1, 2 };
+    float rhs[4] = { 0, 1, 1, 0 };
+    float out[4] = {};
+
+    if (runtime.set_inp("lhs", (uint8_t*)lhs) ||
+        runtime.set_inp("rhs", (uint8_t*)rhs)
+        ) return true;
+
+    runtime.run();
+    if (runtime.get_out("out", (uint8_t*)out))
+        return true;
+
+    std::cout << "Matmul test:" << std::endl;
+    std::cout << "lhs" << std::endl;
+    print_mrx(lhs, 2, 2);
+    std::cout << "rhs" << std::endl;
+    print_mrx(rhs, 2, 2);
+    std::cout << "out" << std::endl;
+    print_mrx(out, 2, 2);
+
+    return false;
+}
+
+bool linear_test()
+{
+    core::Graph graph;
+    auto setup_fn = [](ModuleInfo& info) -> bool {
+        TypeRef fp = info.create_fty(core::EdgeFty::F32);
+        TypeRef sz = info.create_int(2);
+        if (!fp || !sz)
+            return true;
+        return info.entry_setup("lin_model", { {"fp", fp}, {"M", sz}, {"K", sz}, {"N", sz} });
+    };
+    if (generate_graph(graph, setup_fn))
+        return true;
+    nvm::Runtime runtime;
+    if (compile_graph(graph, runtime))
+        return true;
+
+    float lhs[4] = { 1, 2, 1, 2 };
+    float rhs[4] = { 0, 1, 1, 0 };
+    float bias[4] = { 1, 1, 2, 2 };
+    float out[4] = {};
+
+    if (runtime.set_inp("lhs", (uint8_t*)lhs) ||
+        runtime.set_inp("rhs", (uint8_t*)rhs) ||
+        runtime.set_inp("bias", (uint8_t*)bias)
+        ) return true;
+
+    runtime.run();
+    if (runtime.get_out("out", (uint8_t*)out))
+        return true;
+
+    std::cout << "Linear test:" << std::endl;
+    std::cout << "lhs" << std::endl;
+    print_mrx(lhs, 2, 2);
+    std::cout << "rhs" << std::endl;
+    print_mrx(rhs, 2, 2);
+    std::cout << "bias" << std::endl;
+    print_mrx(bias, 2, 2);
+    std::cout << "out" << std::endl;
+    print_mrx(out, 2, 2);
+
+    return false;
+}
+
+int main()
+{
+    if (matmul_test())
     {
         error::print();
         return 1;
     }
-
-    print_vec(lhs, 4);
-    print_vec(rhs, 4);
-    print_vec(out, 4);
-
     return 0;
 }

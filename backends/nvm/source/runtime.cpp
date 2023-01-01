@@ -19,11 +19,13 @@ namespace nvm
 	{
 		if (util::lib_new(lib, fname))
 			return error::graph("Unable to load runtime graph %", fname);
-		if (util::lib_load_symbol(lib, "step", step_fn))
-			return error::graph("Unable to load step function from %", fname);
+		if (util::lib_load_symbol(lib, "run", run_fn))
+			return error::graph("Unable to load run function from %", fname);
+		if (util::lib_load_symbol(lib, "run_sync", run_sync_fn))
+			return error::graph("Unable to load run_sync function from %", fname);
 		if (util::lib_load_symbol(lib, "get_inp", get_inp_fn))
 			return error::graph("Unable to load get_inp function from %", fname);
-		if (util::lib_load_symbol(lib, "set_inp", *(void**)&set_inp_fn))
+		if (util::lib_load_symbol(lib, "set_inp", set_inp_fn))
 			return error::graph("Unable to load set_inp function from %", fname);
 		if (util::lib_load_symbol(lib, "get_out", get_out_fn))
 			return error::graph("Unable to load get_out function from %", fname);
@@ -33,9 +35,17 @@ namespace nvm
 		return false;
 	}
 
-	void Runtime::step()
+	void Runtime::run()
 	{
-		step_fn();
+		run_fn();
+	}
+
+	bool Runtime::run_sync(const std::string& sync_name)
+	{
+		uint32_t ret = run_sync_fn(sync_name.c_str());
+		if (ret)
+			return error::graph("Unable to find sync %", sync_name);
+		return false;
 	}
 
 	bool Runtime::get_inp_impl(const std::string& inp_name, uint8_t* buf)
