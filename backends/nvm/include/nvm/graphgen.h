@@ -5,11 +5,47 @@
 
 namespace nvm
 {
+
+    struct StaticData
+    {
+        enum class Type
+        {
+            INPUT,
+            OUTPUT,
+            EXPORT,
+            EXTERN
+        } ty;
+
+        std::string name = "";
+    };
+
     struct EdgeData  // POD
     {
         bool is_static = false;
+        StaticData static_data;
         llvm::GlobalVariable* var = nullptr;
         size_t n_locks = 0;  // Nodes lock their input edges
+    };
+
+    void mark_inp_edge(EdgeData& edge_data, const std::string& name);
+    void mark_out_edge(EdgeData& edge_data, const std::string& name);
+    void mark_exp_edge(EdgeData& edge_data, const std::string& name);
+    void mark_ext_edge(EdgeData& edge_data, const std::string& name);
+
+    struct DepInfo
+    {
+        enum class Type
+        {
+            SYNC,
+            INPUT,
+            OUTPUT,
+            EXPORT,
+            EXTERN
+        } ty;
+
+        std::string name;
+
+        static DepInfo from_static_data(const StaticData& static_edge_data);
     };
 
     class GraphCompiler
@@ -31,10 +67,15 @@ namespace nvm
         bool init_node(nn::core::MdNodeRef node);
 
         void compile_edge(nn::core::MdEdgeRef edge);
-        bool compile_node(
+        bool compile_sync_node(
             nn::core::MdNodeRef node,
             std::vector<llvm::Function*>& funcs,
-            std::vector<std::string>& sync_deps,
+            std::vector<DepInfo>& sync_deps,
+            size_t sync_id);
+        bool compile_normal_node(
+            nn::core::MdNodeRef node,
+            std::vector<llvm::Function*>& funcs,
+            std::vector<DepInfo>& sync_deps,
             size_t sync_id);
         void compile_edge_io(
             const std::map<std::string, nn::core::MdEdgeRef>& edges,

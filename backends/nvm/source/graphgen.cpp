@@ -13,6 +13,48 @@
 namespace nvm
 {
 
+    void mark_inp_edge(EdgeData& edge_data, const std::string& name)
+    {
+        edge_data.is_static = true;
+        edge_data.static_data = { StaticData::Type::INPUT, name };
+    }
+
+    void mark_out_edge(EdgeData& edge_data, const std::string& name)
+    {
+        edge_data.is_static = true;
+        edge_data.static_data = { StaticData::Type::OUTPUT, name };
+    }
+
+    void mark_exp_edge(EdgeData& edge_data, const std::string& name)
+    {
+        edge_data.is_static = true;
+        edge_data.static_data = { StaticData::Type::EXPORT, name };
+    }
+
+    void mark_ext_edge(EdgeData& edge_data, const std::string& name)
+    {
+        edge_data.is_static = true;
+        edge_data.static_data = { StaticData::Type::EXTERN, name };
+    }
+
+    DepInfo DepInfo::from_static_data(const StaticData& static_data)
+    {
+        switch (static_data.ty)
+        {
+        case StaticData::Type::INPUT:
+            return { DepInfo::Type::INPUT, static_data.name };
+        case StaticData::Type::OUTPUT:
+            return { DepInfo::Type::OUTPUT, static_data.name };
+        case StaticData::Type::EXPORT:
+            return { DepInfo::Type::EXPORT, static_data.name };
+        case StaticData::Type::EXTERN:
+            return { DepInfo::Type::EXTERN, static_data.name };
+        default:
+            assert(false);
+            return {};
+        }
+    }
+
     GraphCompiler::GraphCompiler() {}
 
     GraphCompiler::~GraphCompiler()
@@ -39,16 +81,16 @@ namespace nvm
         // inputs, outputs, externs, and exports are all static
         for (const auto& [name, edge] : graph.inps)
             if (graph.opaque(edge))
-                edge_data[graph.opaque<size_t>(edge)].is_static = true;
+                mark_inp_edge(edge_data[graph.opaque<size_t>(edge)], name);
         for (const auto& [name, edge] : graph.outs)
             if (graph.opaque(edge))
-                edge_data[graph.opaque<size_t>(edge)].is_static = true;
+                mark_out_edge(edge_data[graph.opaque<size_t>(edge)], name);
         for (const auto& [name, edge] : graph.exps)
             if (graph.opaque(edge))
-                edge_data[graph.opaque<size_t>(edge)].is_static = true;
+                mark_exp_edge(edge_data[graph.opaque<size_t>(edge)], name);
         for (const auto& [name, edge] : graph.exts)
             if (graph.opaque(edge))
-                edge_data[graph.opaque<size_t>(edge)].is_static = true;
+                mark_ext_edge(edge_data[graph.opaque<size_t>(edge)], name);
 
         // finding the plugins needed for compilation
         find_plugins(node_map, plugin_libs);
@@ -115,7 +157,7 @@ namespace nvm
         }
 
         // Compiling each of the syncs
-        std::map<std::string, std::vector<std::string>> sync_deps;
+        std::map<std::string, std::vector<DepInfo>> sync_deps;
         std::map<std::string, llvm::Function*> sync_funcs;
         for (const auto& [name, node_refs] : sync_map)
         {
@@ -129,7 +171,7 @@ namespace nvm
             // valid execution order
             std::vector<llvm::Function*> funcs;
             for (core::MdNodeRef node_ref : node_refs)
-                if (compile_node(node_ref, funcs, sync_deps[name], sync_id))
+                if (compile_sync_node(node_ref, funcs, sync_deps[name], sync_id))
                     return true;
             
             // Generating the code needed to run the current sync.
@@ -147,7 +189,7 @@ namespace nvm
         // Instead, it will be run by calling the "run" function, which will
         // always guarenteed to be there by the abi.
         std::vector<core::MdNodeRef> run_node_refs;
-        std::vector<std::string> run_deps;
+        std::vector<DepInfo> run_deps;
         for (const auto& [name, edge_ref] : pgraph->outs)
         {
             const core::MdEdge& edge = pgraph->get(edge_ref);
@@ -156,7 +198,20 @@ namespace nvm
             
             const core::MdNode& node = pgraph->get(edge.inp.ref);
             if (node.name == "sync")  // Skipping sync nodes - just add them to the run dependancies
-                run_deps.push_back(node.configs.at("name").val.val_str);
+                run_deps.push_back({ DepInfo::Type::SYNC, node.configs.at("name").val.val_str });
+            else
+                run_node_refs.push_back(edge.inp.ref);
+        }
+        // Exports also get computed on a run call
+        for (const auto& [name, edge_ref] : pgraph->exps)
+        {
+            const core::MdEdge& edge = pgraph->get(edge_ref);
+            if (!edge.inp.ref)  // Checking if the edge has a feeding node
+                continue;
+
+            const core::MdNode& node = pgraph->get(edge.inp.ref);
+            if (node.name == "sync")  // Skipping sync nodes - just add them to the run dependancies
+                run_deps.push_back({ DepInfo::Type::SYNC, node.configs.at("name").val.val_str });
             else
                 run_node_refs.push_back(edge.inp.ref);
         }
@@ -167,7 +222,7 @@ namespace nvm
         sync_names.push_back("~run~");
         std::vector<llvm::Function*> run_funcs;
         for (core::MdNodeRef node_ref : run_node_refs)
-            if (compile_node(node_ref, run_funcs, run_deps, run_sync_id))
+            if (compile_sync_node(node_ref, run_funcs, run_deps, run_sync_id))
                 return true;
 
         // Compiling the run function itself
@@ -185,6 +240,8 @@ namespace nvm
         // Generating the edge io functions
         compile_edge_io(pgraph->inps, "inp");
         compile_edge_io(pgraph->outs, "out");
+        compile_edge_io(pgraph->exps, "exp");
+        compile_edge_io(pgraph->exts, "ext");
 
         // TODO: figure out how to communicate sync dependancies over the abi
 
@@ -211,15 +268,15 @@ namespace nvm
         assert(data.var);
     }
 
-    bool GraphCompiler::compile_node(
+    bool GraphCompiler::compile_sync_node(
         nn::core::MdNodeRef node_ref,
         std::vector<llvm::Function*>& funcs,
-        std::vector<std::string>& sync_deps,
+        std::vector<DepInfo>& sync_deps,
         size_t sync_id)
     {
         using namespace nn;
         const core::MdNode& node = pgraph->get(node_ref);
-        
+
         // Checking if the node has already been compiled
         size_t existing_sync_id = pgraph->opaque<size_t>(node_ref);
         if (existing_sync_id != 0)
@@ -240,21 +297,45 @@ namespace nvm
         // corresponding run_sync_* function
         for (const auto& [edge_ref, edge_view] : node.inps)
         {
+            const auto& edge_data = get_edge_data(edge_ref);
+            if (edge_data.is_static)
+            {
+                // Stopping at any static nodes since for the output static edge types
+                // There's already the "run" function which is used to construct them,
+                // and for input static edge types, well they're inputs...
+                sync_deps.push_back(DepInfo::from_static_data(edge_data.static_data));
+                continue;
+            }
             core::MdNodeRef inp_node_ref = pgraph->get(edge_ref).inp.ref;
             if (!inp_node_ref)  // Checking if the edge had any feeding node at all
                 continue;
-            const core::MdNode& inp_node = pgraph->get(node_ref);
+            const core::MdNode& inp_node = pgraph->get(inp_node_ref);
             if (inp_node.name == sync_node_name)
             {
                 // Skipping sync nodes, but adding them as a dependancy of the current sync
-                sync_deps.push_back(inp_node.configs.at("name").val.val_str);
+                sync_deps.push_back({ DepInfo::Type::SYNC , inp_node.configs.at("name").val.val_str });
                 continue;
             }
-            if (compile_node(inp_node_ref, funcs, sync_deps, sync_id))
+            if (compile_normal_node(inp_node_ref, funcs, sync_deps, sync_id))
                 return true;
         }
+        
+        return false;
+    }
+
+    bool GraphCompiler::compile_normal_node(
+        nn::core::MdNodeRef node_ref,
+        std::vector<llvm::Function*>& funcs,
+        std::vector<DepInfo>& sync_deps,
+        size_t sync_id)
+    {
+        // Compiling a normal node is just like compiling a sync node,
+        // except you actually need to generate code for running the computation
+        if (compile_sync_node(node_ref, funcs, sync_deps, sync_id))
+            return true;
 
         // Finding the appropriate overload for the node
+        const nn::core::MdNode& node = pgraph->get(node_ref);
         if (!node_map.contains(node.name))
             return nn::error::graph("Unable to find any overloads for node name %", node.name);
         NodeCtx node_ctx = { node_ref, pgraph };
@@ -266,7 +347,7 @@ namespace nvm
                 break;
             }
         if (!node_match)
-            return nn::error::graph("Unable to find a matching over load for node %", node.name);
+            return nn::error::graph("Unable to find a matching overload for node %", node.name);
 
         // Creating the llvm function
         size_t idx = node_name_counts[node.name]++;

@@ -16,6 +16,8 @@ NVM_INIT(error_fn, nodes)
 {
 	error = error_fn;
 	add_node(       AddImpl );
+	add_node(       MulImpl );
+	add_node(  ConstValImpl );
 	add_node( TransposeImpl );
 	add_node(    MatmulImpl );
 	return false;
@@ -24,6 +26,30 @@ NVM_INIT(error_fn, nodes)
 const std::vector<std::pair<std::string, nn::core::ConfigType>> AddImpl::cargs = {
 	{ "fp", nn::core::ConfigType::make_fty() },
 	{ "shape", nn::core::ConfigType::make_arr(nn::core::ConfigType::make_int()) }
+};
+
+const std::vector<std::pair<std::string, nn::core::ConfigType>> MulImpl::cargs = {
+    { "fp", nn::core::ConfigType::make_fty() },
+    { "shape", nn::core::ConfigType::make_arr(nn::core::ConfigType::make_int()) }
+};
+
+const std::vector<std::pair<std::string, nn::core::ConfigType>> ConstValImpl::cargs = {
+    { "val", nn::core::ConfigType::make_float() },
+    { "fp", nn::core::ConfigType::make_fty() },
+    { "shape", nn::core::ConfigType::make_arr(nn::core::ConfigType::make_int()) }
+};
+
+const std::vector<std::pair<std::string, nn::core::ConfigType>> TransposeImpl::cargs = {
+    { "fp", nn::core::ConfigType::make_fty() },
+    {  "M", nn::core::ConfigType::make_int() },
+    {  "N", nn::core::ConfigType::make_int() }
+};
+
+const std::vector<std::pair<std::string, nn::core::ConfigType>> MatmulImpl::cargs = {
+    { "fp", nn::core::ConfigType::make_fty() },
+    {  "M", nn::core::ConfigType::make_int() },
+    {  "K", nn::core::ConfigType::make_int() },
+    {  "N", nn::core::ConfigType::make_int() }
 };
 
 bool AddImpl::compile(const nvm::NodeCtx& node_ctx, nvm::CompCtx& llvm_ctx)
@@ -84,11 +110,120 @@ bool AddImpl::compile(const nvm::NodeCtx& node_ctx, nvm::CompCtx& llvm_ctx)
     return false;
 }
 
-const std::vector<std::pair<std::string, nn::core::ConfigType>> TransposeImpl::cargs = {
-    { "fp", nn::core::ConfigType::make_fty() },
-    {  "M", nn::core::ConfigType::make_int() },
-    {  "N", nn::core::ConfigType::make_int() }
-};
+bool MulImpl::compile(const nvm::NodeCtx& node_ctx, nvm::CompCtx& llvm_ctx)
+{
+    // TODO: handle edge views
+    auto& node = node_ctx.graph->get(node_ctx.node);
+    assert(node.inps.size() == 2);
+    assert(node.outs.size() == 1);
+    auto& ctx = llvm_ctx.mod->getContext();
+    auto& builder = *llvm_ctx.builder;
+    llvm::GlobalVariable* lvec = llvm_ctx.comp->inp_edge(node, 0).var;
+    llvm::GlobalVariable* rvec = llvm_ctx.comp->inp_edge(node, 1).var;
+    llvm::GlobalVariable* ovec = llvm_ctx.comp->out_edge(node, 0).var;
+
+    size_t sz = 1;
+    for (auto& e : node.configs.at("shape").val.val_list)
+    {
+        assert(e.ty == nn::core::ConfigVal::Tag::INT);
+        sz *= e.val_int;
+    }
+
+    llvm::BasicBlock* entry = llvm::BasicBlock::Create(ctx, "entry", llvm_ctx.func);
+    llvm::BasicBlock* loop = llvm::BasicBlock::Create(ctx, "loop", llvm_ctx.func);
+    llvm::BasicBlock* end = llvm::BasicBlock::Create(ctx, "end", llvm_ctx.func);
+
+    llvm::Type* int_ty = llvm::Type::getInt32Ty(ctx);
+    llvm::Value* zero_val = llvm::ConstantInt::get(int_ty, 0);
+    llvm::Value* end_val = llvm::ConstantInt::get(int_ty, sz);
+    llvm::Value* step_val = llvm::ConstantInt::get(int_ty, 1);
+
+    builder.SetInsertPoint(entry);
+    builder.CreateBr(loop);
+
+    builder.SetInsertPoint(loop);
+    llvm::PHINode* idx_val = builder.CreatePHI(int_ty, 2, "idx");
+
+    // start doing the vector addition
+    llvm::Type* fp_type = nvm::get_fptype(ctx, node.configs.at("fp").val.val_fty);
+    llvm::Value* lptr_val = builder.CreateGEP(fp_type, lvec, { idx_val }, "lptr");
+    llvm::Value* rptr_val = builder.CreateGEP(fp_type, rvec, { idx_val }, "rptr");
+    llvm::Value* optr_val = builder.CreateGEP(fp_type, ovec, { idx_val }, "optr");
+
+    llvm::Value* lval_val = builder.CreateLoad(fp_type, lptr_val, "lval");
+    llvm::Value* rval_val = builder.CreateLoad(fp_type, rptr_val, "rval");
+    llvm::Value* oval_val = builder.CreateFMul(lval_val, rval_val, "oval");
+    builder.CreateStore(oval_val, optr_val);
+    // finished the vector addition
+
+    llvm::Value* next_val = builder.CreateAdd(idx_val, step_val, "next");
+    llvm::Value* done_val = builder.CreateICmpEQ(next_val, end_val, "done");
+    builder.CreateCondBr(done_val, end, loop);
+
+    builder.SetInsertPoint(end);
+    builder.CreateRetVoid();
+
+    idx_val->addIncoming(zero_val, entry);
+    idx_val->addIncoming(next_val, loop);
+    return false;
+}
+
+bool ConstValImpl::compile(const nvm::NodeCtx& node_ctx, nvm::CompCtx& llvm_ctx)
+{
+    // TODO: handle edge views
+    auto& node = node_ctx.graph->get(node_ctx.node);
+    assert(node.inps.size() == 0);
+    assert(node.outs.size() == 1);
+    auto& ctx = llvm_ctx.mod->getContext();
+    auto& builder = *llvm_ctx.builder;
+    double const_val = node.configs.at("val").val.val_float;
+    nn::core::EdgeFty fp = node.configs.at("fp").val.val_fty;
+    
+    size_t sz = 1;
+    for (auto& e : node.configs.at("shape").val.val_list)
+    {
+        assert(e.ty == nn::core::ConfigVal::Tag::INT);
+        sz *= e.val_int;
+    }
+
+    llvm::Value* out_val = llvm_ctx.comp->out_edge(node, 0).var;
+
+    llvm::Type* fp_ty = nvm::get_fptype(ctx, fp);
+    llvm::Type* i32_ty = llvm::Type::getInt32Ty(ctx);
+    llvm::Type* i64_ty = llvm::Type::getInt64Ty(ctx);
+    llvm::Type* f64_ty = llvm::Type::getDoubleTy(ctx);
+    llvm::Value* zero_val = llvm::ConstantInt::get(i32_ty, 0);
+    llvm::Value* step_val = llvm::ConstantInt::get(i32_ty, 1);
+    llvm::Value* end_val = llvm::ConstantInt::get(i32_ty, sz);
+
+    llvm::BasicBlock* entry = llvm::BasicBlock::Create(ctx, "entry", llvm_ctx.func);
+    llvm::BasicBlock* loop = llvm::BasicBlock::Create(ctx, "loop", llvm_ctx.func);
+    llvm::BasicBlock* end = llvm::BasicBlock::Create(ctx, "end", llvm_ctx.func);
+
+    builder.SetInsertPoint(entry);
+    llvm::Value* i64_val = llvm::ConstantInt::get(i64_ty, *(int64_t*)&const_val);
+    llvm::Value* f64_val = builder.CreateBitCast(i64_val, f64_ty);
+    llvm::Value* fp_val = builder.CreateFPCast(f64_val, fp_ty);
+    builder.CreateBr(loop);
+
+    builder.SetInsertPoint(loop);
+    llvm::PHINode* idx = builder.CreatePHI(i32_ty, 2, "idx");
+
+    llvm::Value* ptr = builder.CreateGEP(fp_ty, out_val, { idx }, "ptr");
+    builder.CreateStore(fp_val, ptr);
+
+    llvm::Value* nidx = builder.CreateAdd(idx, step_val, "nidx");
+    llvm::Value* cond = builder.CreateICmpEQ(nidx, end_val, "cond");
+    builder.CreateCondBr(cond, end, loop);
+
+    builder.SetInsertPoint(end);
+    builder.CreateRetVoid();
+
+    idx->addIncoming(zero_val, entry);
+    idx->addIncoming(nidx, loop);
+
+    return false;
+}
 
 bool TransposeImpl::compile(const nvm::NodeCtx& node_ctx, nvm::CompCtx& llvm_ctx)
 {
@@ -167,13 +302,6 @@ bool TransposeImpl::compile(const nvm::NodeCtx& node_ctx, nvm::CompCtx& llvm_ctx
     
     return false;
 }
-
-const std::vector<std::pair<std::string, nn::core::ConfigType>> MatmulImpl::cargs = {
-    { "fp", nn::core::ConfigType::make_fty() },
-    {  "M", nn::core::ConfigType::make_int() },
-    {  "K", nn::core::ConfigType::make_int() },
-    {  "N", nn::core::ConfigType::make_int() }
-};
 
 bool MatmulImpl::compile(const nvm::NodeCtx& node_ctx, nvm::CompCtx& llvm_ctx)
 {

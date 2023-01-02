@@ -5738,8 +5738,7 @@ namespace nn
                             body->add_instruction(instruction::Ini(expr.node_info)) ||
                             scope.push();
                     }));
-                if (!rets.back())
-                    return true;
+                return !rets.back();
             }
 
             // No init matches were found, look for struct matches

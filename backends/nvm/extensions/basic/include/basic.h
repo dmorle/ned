@@ -23,6 +23,28 @@ struct AddImpl :
 	static constexpr char name[] = "__add__";
 };
 
+struct MulImpl :
+	public nvm::ImplBase<MulImpl>
+{
+	static bool compile(const nvm::NodeCtx& node_ctx, nvm::CompCtx& llvm_ctx);
+
+	static const std::vector<std::pair<std::string, nn::core::ConfigType>> cargs;
+	static constexpr size_t vargs = 2;
+	static constexpr size_t rets = 1;
+	static constexpr char name[] = "__mul__";
+};
+
+struct ConstValImpl :
+	public nvm::ImplBase<ConstValImpl>
+{
+	static bool compile(const nvm::NodeCtx& node_ctx, nvm::CompCtx& llvm_ctx);
+
+	static const std::vector<std::pair<std::string, nn::core::ConfigType>> cargs;
+	static constexpr size_t vargs = 0;
+	static constexpr size_t rets = 1;
+	static constexpr char name[] = "const_val";
+};
+
 struct TransposeImpl :
 	public nvm::ImplBase<TransposeImpl>
 {

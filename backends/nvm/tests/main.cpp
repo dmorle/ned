@@ -250,9 +250,59 @@ bool linear_test()
     return false;
 }
 
+bool optimizer_test()
+{
+    auto setup_fn = [](ModuleInfo& info) -> bool {
+        TypeRef fp = info.create_fty(core::EdgeFty::F32);
+        TypeRef sz = info.create_int(2);
+        if (!fp || !sz)
+            return true;
+        return info.entry_setup("opt_model", { {"fp", fp}, {"N", sz}, {"inp_sz", sz}, {"out_sz", sz} });
+    };
+    core::Graph graph;
+    if (generate_graph(graph, setup_fn))
+        return true;
+
+    std::vector<core::GraphMod> opt;
+    for (const auto& [name, param] : graph.weights)
+    {
+        auto sgd_setup_fn = [&](ModuleInfo& info) -> bool {
+            TypeRef lr = info.create_float(1e-3);
+            TypeRef fp = info.create_fty(param.forward->info.fty);
+            if (!lr || !fp)
+                return true;
+            std::vector<TypeRef> elems;
+            for (size_t dim : param.forward->info.dims)
+            {
+                elems.push_back(info.create_int(dim));
+                if (!elems.back())
+                    return true;
+            }
+            TypeRef shape = info.create_array(elems);
+            if (!shape)
+                return true;
+            return info.entry_setup("SGD", { { "lr", lr }, {"fp", fp}, {"shape", shape} });
+        };
+        core::Graph sgd;
+        if (generate_graph(sgd, sgd_setup_fn))
+            return true;
+        opt.push_back({ {
+            .inp_map = {{{core::InpRef::Type::WEIGHT, name}, {core::OutRef::Type::OUTPUT, "weight"}}},
+            .out_map = {}
+        }, sgd });
+    }
+
+    if (attach_graph(graph, "training", opt))
+        return true;
+    nvm::Runtime runtime;
+    if (compile_graph(graph, runtime))
+        return true;
+    return false;
+}
+
 int main()
 {
-    if (matmul_test())
+    if (optimizer_test())
     {
         error::print();
         return 1;

@@ -44,6 +44,26 @@ namespace nn
             }
         }
 
+        uint64_t GraphBuilder::edge_lookup(uint64_t edge)
+        {
+            // following the links while pushing the pointers forward one slot
+            // to make future look-ups faster
+            EdgeBuilder* curr_edge_builder = edges[edge];
+            if (!curr_edge_builder->is_merged)
+                return edge;
+            edge = curr_edge_builder->tgt_edge;
+            EdgeBuilder* prev_edge_builder = curr_edge_builder;
+            curr_edge_builder = edges[edge];
+            while (curr_edge_builder->is_merged)
+            {
+                edge = curr_edge_builder->tgt_edge;
+                prev_edge_builder->tgt_edge = edge;
+                prev_edge_builder = curr_edge_builder;
+                curr_edge_builder = edges[edge];
+            }
+            return edge;
+        }
+
         inline bool GraphBuilder::edge_exists(uint64_t edge)
         {
             return edge * (edge < edges.size());
@@ -161,6 +181,7 @@ namespace nn
                 return error::runtime("Attempted to reference a non-existant tensor");
             if (!edge_exists(edge))
                 return error::runtime("Attempted to reference a non-existant edge");
+            edge = edge_lookup(edge);
             if (tensors[tensor]->bwd_edge)
             {
                 // Make sure the shape and fty match
@@ -185,6 +206,7 @@ namespace nn
                 return error::runtime("Attempted to reference a non-existant tensor");
             if (!edge_exists(edge))
                 return error::runtime("Attempted to reference a non-existant edge");
+            edge = edge_lookup(edge);
             if (tensors[tensor]->fwd_edge)
             {
                 // Make sure the shape and fty match
@@ -217,12 +239,19 @@ namespace nn
         bool GraphBuilder::mrg(uint64_t lhs_edge, uint64_t rhs_edge)
         {
             assert(!is_exported);
+            // Merging rhs into lhs
 
             if (!edge_exists(lhs_edge) || !edge_exists(rhs_edge))
                 return error::runtime("Attempted to reference a non-existant edge object");
+            lhs_edge = edge_lookup(lhs_edge);
+            rhs_edge = edge_lookup(rhs_edge);
+            EdgeBuilder* old_edge = edges[rhs_edge];
+            EdgeBuilder* new_edge = edges[lhs_edge];
+            assert(!old_edge->is_merged);
+            assert(!new_edge->is_merged);
 
             // Merging the edge inputs
-            for (const auto& [md, conn] : edges[rhs_edge]->md_inps)
+            for (const auto& [md, conn] : old_edge->md_inps)
             {
                 if (edges[lhs_edge]->md_inps.contains(md))
                     return error::runtime("Attempted to merge two edges when both had bound inputs");
@@ -230,23 +259,27 @@ namespace nn
                 nodes[conn.node]->outs[conn.name] = lhs_edge;
                 edges[lhs_edge]->md_inps[md] = conn;
             }
-            edges[rhs_edge]->md_inps.clear();
 
             // Merging the edge outputs
             for (const auto& [md, conns] : edges[rhs_edge]->md_outs)
                 for (const auto& conn : conns)
                 {
                     assert(nodes[conn.node]->inps.contains(conn.name));
-                    nodes[conn.node]->inps[conn.name].push_back(lhs_edge);
+                    auto& node_inps = nodes[conn.node]->inps.at(conn.name);
+                    size_t idx = 0;
+                    for (; idx < node_inps.size(); idx++)
+                        if (node_inps[idx] == rhs_edge)
+                        {
+                            node_inps[idx] = lhs_edge;
+                            break;
+                        }
+                    assert(idx != node_inps.size());  // If the node isn't referencing the rhs_edge, that's a bug
                     edges[lhs_edge]->md_outs[md].push_back(conn);  // dupicates will be handled during the export
                 }
 
-            EdgeBuilder* old_edge = edges[rhs_edge];
-            // redirecting any edges that were pointing at the old edge to now point at the merged edge
-            for (size_t i = 1; i < edges.size(); i++)
-                if (edges[i] == old_edge)
-                    edges[i] = edges[lhs_edge];
-            delete old_edge;
+            old_edge->is_merged = true;
+            old_edge->tgt_edge = lhs_edge;
+
             return false;
         }
 
@@ -300,6 +333,7 @@ namespace nn
 
             if (!edge_exists(edge))
                 return error::runtime("Attempted toreference a non-existant edge object");
+            edge = edge_lookup(edge);
 
             std::vector<Obj> agg_obj;
             for (size_t dim : edges[edge]->info.dims)
@@ -318,6 +352,7 @@ namespace nn
 
             if (!edge_exists(edge))
                 return error::runtime("Attempted to reference a non-existant edge object");
+            edge = edge_lookup(edge);
             
             return heap.create_obj_fty(obj, edges[edge]->info.fty);
         }
@@ -328,6 +363,7 @@ namespace nn
 
             if (!edge_exists(edge))
                 return error::runtime("Attempted to reference a non-existant edge object");
+            edge = edge_lookup(edge);
 
             return heap.create_obj_bool(obj, node_exists(edges[edge]->md_inps.at(current_mode()).node));
         }
@@ -404,6 +440,7 @@ namespace nn
                 return error::runtime("Attempted to reference a non-existant node");
             if (!edge_exists(edge))
                 return error::runtime("Attempted to reference a non-existant edge");
+            edge = edge_lookup(edge);
             // Don't check for nodes[node]->inps.contains(name) here, cause binding to the same
             // node input multiple times is allowed since that's how variadic inputs are created
             NodeBuilder* builder = nodes[node];
@@ -422,6 +459,7 @@ namespace nn
                 return error::runtime("Attempted to reference a non-existant node");
             if (!edge_exists(edge))
                 return error::runtime("Attempted to reference a non-existant edge");
+            edge = edge_lookup(edge);
             if (nodes[node]->outs.contains(name))
                 return error::runtime("Attempted to bind node output '%' multiple times", name);
             std::string md = current_mode();
@@ -558,43 +596,17 @@ namespace nn
             if (export_block(graph.model, root))
                 return true;
 
-            // Export the nodes and edges from the outputs to the inputs
-            // Because of the backward references in the graph, I can't do it all in one DFS.
-            // Instead, I first do a DFS where the edges and nodes get created and the forward references are made.
-            // Then, on a second DFS, I can do the reverse references since everything will already be initialized.
-            
-            // Exporting the edges/nodes and making the forward references
-            // root block output tensors' forward edges
-            // export_edge is responsible for binding the edge to the tensor - no memory leaks here
-            core::Edge* edge;
-            for (const auto& [name, tensor] : blocks[root]->outs)
-                if (export_edge(edge, tensors[tensor]->fwd_edge))
+            // Initializing edges[i]->edge and binding the edges to the tensors
+            for (uint64_t i = 1; i < edges.size(); i++)
+                if (!edges[i]->is_merged && export_edge(edges[i]))
                     return true;
-            // explicitly exported tensors
-            for (const auto& [name, tensor] : blocks[root]->exps)
-                if (export_edge(edge, tensors[tensor]->fwd_edge))
+            // Initializing nodes[i]->node, binding the edges to the nodes, and binding the nodes to the blocks
+            for (uint64_t i = 1; i < nodes.size(); i++)
+                if (export_node(nodes[i]))
                     return true;
-            // root block input tensors' backward edges
-            for (const auto& [name, tensor] : blocks[root]->inps)
-                if (export_edge(edge, tensors[tensor]->bwd_edge))
-                    return true;
-            // model weights
-            for (const auto& [name, tensor] : blocks[root]->exts)
-                if (export_edge(edge, tensors[tensor]->bwd_edge))
-                    return true;
-
-            // Second DFS, adding the reverse references
-            for (const auto& [name, tensor] : blocks[root]->outs)
-                if (bind_edge(tensors[tensor]->fwd_edge))
-                    return true;
-            for (const auto& [name, tensor] : blocks[root]->exps)
-                if (bind_edge(tensors[tensor]->fwd_edge))
-                    return true;
-            for (const auto& [name, tensor] : blocks[root]->inps)
-                if (bind_edge(tensors[tensor]->bwd_edge))
-                    return true;
-            for (const auto& [name, tensor] : blocks[root]->exts)
-                if (bind_edge(tensors[tensor]->bwd_edge))
+            // Binding the nodes to the edges
+            for (uint64_t i = 1; i < edges.size(); i++)
+                if (!edges[i]->is_merged && bind_edge(edges[i]))
                     return true;
 
             // Then attach the blocks to the nodes and edges
@@ -614,99 +626,79 @@ namespace nn
             return false;
         }
 
-        bool GraphBuilder::export_edge(core::Edge*& edge, uint64_t i)
+        bool GraphBuilder::export_edge(EdgeBuilder* edge)
         {
-            if (!edge_exists(i))
-                return error::graph("Found an invalid edge during graph exporting");
-            if (edges[i]->edge)
-            {
-                // already exported
-                edge = edges[i]->edge;
-                return false;
-            }
-            edge = new core::Edge();
-            edges[i]->edge = edge;
+            edge->edge = new core::Edge();
             
             // Binding the edge to any tensors that referenced it
-            for (const auto [id, fwd_edge] : edges[i]->tensors)
+            for (const auto [id, fwd_edge] : edge->tensors)
             {
                 assert(tensor_exists(id));
                 assert(tensors[id]->ty != TensorBuilder::NON_EXPORTED);
                 // Doesn't matter if its a tensor or parameter, both have a forward and backward edge
                 // And the unions used have the same layout for the edges.
                 if (fwd_edge)
-                    tensors[id]->tensor.forward = edge;
+                    tensors[id]->tensor.forward = edge->edge;
                 else
-                    tensors[id]->tensor.backward = edge;
-            }
-            
-            // Exporting the feeding nodes and binding the inputs
-            for (const auto& [name, conn] : edges[i]->md_inps)
-            {
-                core::Node* node;
-                if (export_node(node, conn.node))
-                {
-                    delete edge;
-                    return true;
-                }
-                edge->md_inps[name] = { node, conn.name };
+                    tensors[id]->tensor.backward = edge->edge;
             }
 
             // Copying the edge info (fp and shape)
-            edge->info = edges[i]->info;
+            edge->edge->info = edge->info;
             return false;
         }
 
-        bool GraphBuilder::export_node(core::Node*& node, uint64_t i)
+        bool GraphBuilder::export_node(NodeBuilder* node)
         {
-            if (!node_exists(i))
-                return error::graph("Found an invalid node during graph exporting");
-            if (nodes[i]->node)
-            {
-                // already exported
-                node = nodes[i]->node;
-                return false;
-            }
-            node = new core::Node();
-            nodes[i]->node = node;
+            node->node = new core::Node();
 
             // Binding the node to the parent block
-            if (!block_exists(nodes[i]->parent))
-            {
-                delete node;
-                return true;
-            }
-            assert(blocks[nodes[i]->parent]->block);  // The blocks should all be exported at this point
-            blocks[nodes[i]->parent]->block->sub_nodes[nodes[i]->name] = node;
-            node->parent = blocks[nodes[i]->parent]->block;
+            if (!block_exists(node->parent))
+                return error::graph("Found invalid block during graph exporting");
+            assert(blocks[node->parent]->block);  // The blocks should all be exported at this point
+            blocks[node->parent]->block->sub_nodes[node->name] = node->node;
+            node->node->parent = blocks[node->parent]->block;
 
-            // Exporting the feeding edges and binding the inputs
-            for (const auto& [name, edge_ids] : nodes[i]->inps)
+            // Binding the node inputs
+            for (const auto& [name, edge_ids] : node->inps)
             {
                 for (uint64_t edge_id : edge_ids)
                 {
-                    core::Edge* edge;
-                    if (export_edge(edge, edge_id))
-                    {
-                        delete node;
-                        return true;
-                    }
-                    node->inps[name].push_back(edge);
+                    if (!edge_exists(edge_id))
+                        return error::graph("Found an invalid edge during graph exporting");
+                    node->node->inps[name].push_back(edges[edge_id]->edge);
                 }
-                node->inp_order.push_back(name);
+                node->node->inp_order.push_back(name);
+            }
+
+            // Binding the node outputs
+            for (const auto& [name, edge_id] : node->outs)
+            {
+                if (!edge_exists(edge_id))
+                    return error::graph("Found an invalid edge during graph exporting");
+                node->node->outs[name] = edges[edge_id]->edge;
+                node->node->out_order.push_back(name);
             }
 
             // Configurations
-            node->name = nodes[i]->name;
-            for (auto& [name, cfg] : nodes[i]->configs)
-                node->configs[name] = std::move(cfg);
+            node->node->name = node->name;
+            for (auto& [name, cfg] : node->configs)
+                node->node->configs[name] = std::move(cfg);
             return false;
         }
 
-        bool GraphBuilder::bind_edge(uint64_t i)
+        bool GraphBuilder::bind_edge(EdgeBuilder* edge)
         {
+            // Binding the inputs
+            for (const auto& [md, conn] : edge->md_inps)
+            {
+                if (!node_exists(conn.node))
+                    return error::graph("Found an invalid node during graph exporting");
+                edge->edge->md_inps[md] = { nodes[conn.node]->node, conn.name };
+            }
+
             // Binding the outputs
-            for (const auto& [name, conns] : edges[i]->md_outs)
+            for (const auto& [name, conns] : edge->md_outs)
             {
                 std::vector<core::Edge::OutConnector> real_conns;
                 for (const auto& [node, conn_name] : conns)
@@ -716,34 +708,8 @@ namespace nn
                     assert(nodes[node]->node);  // Everything should be exported at this point
                     real_conns.push_back({ nodes[node]->node, conn_name, real_conns.size() });
                 }
-                edges[i]->edge->md_outs[name] = std::move(real_conns);
+                edge->edge->md_outs[name] = std::move(real_conns);
             }
-
-            // Recursively bind the feeding nodes
-            for (const auto& [name, conn] : edges[i]->md_inps)
-                if (bind_node(conn.node))
-                    return true;
-
-            return false;
-        }
-
-        bool GraphBuilder::bind_node(uint64_t i)
-        {
-            // Binding the outputs
-            for (const auto& [name, edge] : nodes[i]->outs)
-            {
-                if (!edge_exists(edge))
-                    return true;
-                assert(edges[edge]->edge);  // Everything should be exported at this point
-                nodes[i]->node->outs[name] = edges[edge]->edge;
-                nodes[i]->node->out_order.push_back(name);
-            }
-
-            // Recursively bind the feeding edges
-            for (const auto& [name, edges] : nodes[i]->inps)
-                for (uint64_t edge : edges)
-                    if (bind_edge(edge))
-                        return true;
 
             return false;
         }
@@ -771,6 +737,8 @@ namespace nn
                 return false;
             if (!edge_exists(tensors[i]->fwd_edge) || !edge_exists(tensors[i]->bwd_edge))
                 return error::graph("Found a tensor with a missing forward or backward edge");
+            tensors[i]->fwd_edge = edge_lookup(tensors[i]->fwd_edge);
+            tensors[i]->bwd_edge = edge_lookup(tensors[i]->bwd_edge);
 
             // Telling the edges about which tensor they belong to
             edges[tensors[i]->fwd_edge]->tensors.push_back({ i, true });

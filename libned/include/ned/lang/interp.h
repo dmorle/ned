@@ -27,6 +27,9 @@ namespace nn
                 core::EdgeInfo info;
                 std::map<std::string, Connector> md_inps;
                 std::map<std::string, std::vector<Connector>> md_outs;
+
+                bool is_merged = false;
+                uint64_t tgt_edge = 0;
                 
                 // feilds used for exporting
                 core::Edge* edge;
@@ -105,6 +108,7 @@ namespace nn
             std::vector<TensorBuilder*> tensors = { nullptr };
             std::vector<BlockBuilder*>  blocks  = { nullptr };
 
+            uint64_t edge_lookup(uint64_t edge);
             inline bool edge_exists(uint64_t edge);
             inline bool node_exists(uint64_t node);
             inline bool init_exists(uint64_t init);
@@ -158,10 +162,9 @@ namespace nn
             bool export_graph(core::Graph& graph);
 
         private:
-            bool export_edge(core::Edge*& edge, uint64_t i);  // Exports edges from the outputs to the inputs
-            bool export_node(core::Node*& node, uint64_t i);  // Exports nodes from the outputs to the inputs
-            bool bind_edge(uint64_t i);
-            bool bind_node(uint64_t i);
+            bool export_edge(EdgeBuilder* edge);
+            bool export_node(NodeBuilder* node);
+            bool bind_edge(EdgeBuilder* edge);
             bool export_init(core::Init*& init, uint64_t i);
             bool export_tensor(uint64_t i);
             bool export_block(core::Block& block, uint64_t i);
