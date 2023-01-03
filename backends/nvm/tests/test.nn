@@ -82,3 +82,22 @@ def SGD<float lr, fty fp, int *shape>() -> weight:
 	val = const_val<lr, fp, *shape>()
 	weight.forward = sync<"step">(weight.forward + val * weight.backward)
 	return weight
+
+namespace nvm:
+	union Instruction
+		int Fadd
+		str Fsub
+
+	fn foo(ref Instruction i):
+		i.Fadd = 5
+		print str::i.Fsub
+
+	struct Block:
+		array<Instruction> instructions
+
+	struct Var:
+
+	namespace instr:
+		fn fadd(ref Block block, const Var lhs, const Var rhs)
+
+	fn add_instruction(ref Block block, const instr)

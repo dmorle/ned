@@ -55,6 +55,11 @@ namespace nn
         static LoopContext* loop_ctx = nullptr;
         static std::string* ret_label = nullptr;
 
+        // Expression context
+
+        // when set to true, struct and union types get resolved to a lazy type
+        bool lazy_types = false;
+
         // Function implementations
 
         template<typename T>
@@ -262,6 +267,9 @@ namespace nn
                 break;
             case TypeInfo::Type::STRUCT:
                 type_struct.~TypeInfoStruct();
+                break;
+            case TypeInfo::Type::LAZYSTRUCT:
+                type_lazystruct.~TypeInfoLazyStruct();
                 break;
             case TypeInfo::Type::INIT:
             case TypeInfo::Type::NODE:
@@ -666,7 +674,9 @@ namespace nn
             case TypeInfo::Type::CARGBIND:
                 return "cargbind";
             case TypeInfo::Type::STRUCT:
-                return "TODO: implement structs";
+                return format("struct %", type_struct.ast->signature.name);
+            case TypeInfo::Type::LAZYSTRUCT:
+                return format("lazy struct %", type_struct.ast->signature.name);
             case TypeInfo::Type::INIT:
                 return "init";
             case TypeInfo::Type::NODE:
@@ -888,8 +898,61 @@ namespace nn
                     }, tmp);
                 break;
             }
+            case TypeInfo::Type::STRUCT:
+            {
+                std::vector<TypeRef> elem_types;
+                for (const auto& e : type_struct.elems)
+                {
+                    TypeRef elem_type;
+                    if (e.second->to_obj(node_info, elem_type))
+                        return true;
+                    elem_types.push_back(elem_type);
+                }
+                tmp = type_manager->create_struct(
+                    TypeInfo::Category::DEFAULT,
+                    [&node_info](Scope& scope) -> bool {
+                        return
+                            body->add_instruction(instruction::Agg(node_info, 0)) ||
+                            scope.push();
+                    }, type_struct.ast, type_struct.elems);
+                if (!tmp) return true;
+                type = type_manager->create_type(
+                    TypeInfo::Category::CONST,
+                    [&node_info, elem_types](Scope& scope) -> bool {
+                        for (TypeRef elem_type : elem_types)
+                            if (elem_type->codegen(scope))
+                                return true;
+                        if (body->add_instruction(instruction::Aty(node_info, elem_types.size())))
+                            return true;
+                        if (elem_types.size() == 0)
+                            return scope.push();
+                        return scope.pop(elem_types.size() - 1);
+                    }, tmp);
+                break;
+            }
+            case TypeInfo::Type::LAZYSTRUCT:
+                tmp = type_manager->create_lazystruct(type_lazystruct.ast, type_lazystruct.cargs);
+                if (!tmp) return true;
+                type = type_manager->create_type(
+                    TypeInfo::Category::CONST,
+                    [&node_info](Scope& scope) -> bool {
+                        return
+                            body->add_instruction(instruction::Aty(node_info, 0)) ||
+                            scope.push();
+                    }, tmp);
+                break;
             case TypeInfo::Type::GENERIC:
-                tmp = type_manager->create_generic(TypeInfo::Category::VIRTUAL, nullptr, type_generic.name);
+                tmp = type_manager->create_generic(
+                    TypeInfo::Category::DEFAULT,
+                    [&node_info, name{ type_generic.name }](Scope& scope) -> bool {
+                        Scope::StackVar var;
+                        // Any generic type args should be on the stack at runtime
+                        return
+                            scope.at(name, var) ||
+                            body->add_instruction(instruction::Dup(node_info, var.ptr)) ||
+                            body->add_instruction(instruction::Inst(node_info)) ||
+                            scope.push();
+                    }, type_generic.name);
                 if (!tmp) return true;
                 // All generics should be on the stack at runtime
                 type = type_manager->create_type(
@@ -903,9 +966,19 @@ namespace nn
                     }, tmp);
                 break;
             default:
-                return error::compiler(node_info, "Unable to transform the type % into a runtime object", to_string());
+                return error::compiler(node_info, "Unable to transform type<%> into a runtime object", to_string());
             }
             return !type;
+        }
+
+        bool wake_up(const AstNodeInfo& node_info, TypeRef src, TypeRef& dst)
+        {
+            if (src->ty == TypeInfo::Type::LAZYSTRUCT)
+            {
+                return error::compiler(node_info, "Internal error: the wake_up protocol is unavailable right now");
+            }
+            dst = src;
+            return false;
         }
 
         bool operator==(const TypeRef& lhs, const TypeRef& rhs)
@@ -932,9 +1005,10 @@ namespace nn
                         return false;
                 return true;
             case TypeInfo::Type::STRUCT:
-                assert(false);
-                // TODO: implement structs
-                return false;
+                if (lhs->type_struct.ast != rhs->type_struct.ast)
+                    return false;
+                // TODO: don't be lazy and check the elem types - you know for generics and stuff
+                return true;
             case TypeInfo::Type::GENERIC:
                 return lhs->type_generic.name == rhs->type_generic.name;
             }
@@ -983,6 +1057,7 @@ namespace nn
             {
             case TypeInfo::Type::INVALID:
                 assert(false);
+                error::general("Internal error: invalid typeinfo enum found during type duplication");
                 return TypeInfo::null;
             case TypeInfo::Type::TYPE:
                 if (src->type_type.base->ty == TypeInfo::Type::INVALID)
@@ -1028,8 +1103,16 @@ namespace nn
                 new (&type->type_cargbind) TypeInfoCargBind(src->type_cargbind);
                 break;
             case TypeInfo::Type::STRUCT:
-                // TODO: implement structs
-                return TypeInfo::null;
+                new (&type->type_struct) TypeInfoStruct();
+                type->ty = TypeInfo::Type::STRUCT;
+                type->type_struct.ast = src->type_struct.ast;
+                for (const auto& [elem_name, elem_type] : src->type_struct.elems)
+                {
+                    tmp = duplicate(elem_type);
+                    if (!tmp) return TypeInfo::null;
+                    type->type_struct.elems.push_back({ elem_name, tmp });
+                }
+                break;
             case TypeInfo::Type::INIT:
             case TypeInfo::Type::NODE:
             case TypeInfo::Type::BLOCK:
@@ -1062,6 +1145,7 @@ namespace nn
                 break;
             default:
                 assert(false);
+                error::general("Internal error: typeinfo enum out of range during type duplication");
                 return TypeInfo::null;
             }
             type->ty = src->ty;
@@ -1207,10 +1291,26 @@ namespace nn
             return type;
         }
 
-        TypeRef TypeManager::create_struct(TypeInfo::Category cat, CodegenCallback codegen)
+        TypeRef TypeManager::create_lazystruct(const AstStruct* ast, const std::map<std::string, TypeRef>& cargs)
         {
-            error::general("Internal error: not implemented");
-            return TypeInfo::null;
+            TypeRef type = next();
+            if (!type) return type;
+            new (&type->type_lazystruct) TypeInfoLazyStruct{ ast, cargs };
+            type->ty = TypeInfo::Type::LAZYSTRUCT;
+            type->cat = TypeInfo::Category::VIRTUAL;
+            type->codegen = nullptr;
+            return type;
+        }
+
+        TypeRef TypeManager::create_struct(TypeInfo::Category cat, CodegenCallback codegen, const AstStruct* ast, const std::vector<std::pair<std::string, TypeRef>>& elems)
+        {
+            TypeRef type = next();
+            if (!type) return type;
+            new (&type->type_struct) TypeInfoStruct{ ast, elems };
+            type->ty = TypeInfo::Type::STRUCT;
+            type->cat = cat;
+            type->codegen = codegen;
+            return type;
         }
 
         TypeRef TypeManager::create_init(TypeInfo::Category cat, CodegenCallback codegen)
@@ -1387,10 +1487,16 @@ namespace nn
 
         ProcCall::~ProcCall()
         {
-            for (size_t i = 0; i < val_buflen; i++)
-                val_buf[i].~ValNode();
-            for (size_t i = 0; i < type_buflen; i++)
-                type_buf[i].~TypeNode();
+            // Apparently, c++ calls the dtor on all the elements in a c-array, so this was double deleteing stuff.
+            // What's the point of std::array then??? bruh...
+            // It's also less efficient to do that here since I don't need to call the dtor on all the elements,
+            // only the ones in use, so I'll probably end up circumventing c++'s nonsense anyway.
+            // The only reason I haven't done that yet is cause having the compiler know the type of the array
+            // is super nice when debugging
+            //for (size_t i = 0; i < val_buflen; i++)
+            //    val_buf[i].~ValNode();
+            //for (size_t i = 0; i < type_buflen; i++)
+            //    type_buf[i].~TypeNode();
         }
 
         ProcCall::ValNode::ValNode(ProcCall::ValNode&& node) noexcept
@@ -1562,6 +1668,12 @@ namespace nn
             case TypeNode::Type::TUPLE:
                 type_tuple.~TupleType();
                 break;
+            case TypeNode::Type::STRUCT:
+                type_struct.~StructType();
+                break;
+            case TypeNode::Type::LAZYSTRUCT:
+                type_lazystruct.~LazyStructType();
+                break;
             case TypeNode::Type::DLTYPE:
                 type_dl.~DlType();
                 break;
@@ -1595,6 +1707,12 @@ namespace nn
                 break;
             case TypeNode::Type::TUPLE:
                 new (&type_tuple) decltype(type_tuple)(std::move(node.type_tuple));
+                break;
+            case TypeNode::Type::STRUCT:
+                new (&type_struct) decltype(type_struct)(std::move(node.type_struct));
+                break;
+                case TypeNode::Type::LAZYSTRUCT:
+                new (&type_lazystruct) decltype(type_lazystruct)(std::move(node.type_lazystruct));
                 break;
             case TypeNode::Type::DLTYPE:
                 new (&type_dl) decltype(type_dl)(std::move(node.type_dl));
@@ -1655,6 +1773,32 @@ namespace nn
                 }
                 return type_manager->create_tuple(TypeInfo::Category::VIRTUAL, nullptr, cargs);
             }
+            case TypeNode::Type::STRUCT:
+            {
+                std::vector<std::pair<std::string, TypeRef>> fields;
+                for (const auto& [field_name, field_val] : type_struct.fields)
+                {
+                    TypeRef type = field_val->as_type(node_info);
+                    if (!type) return type;
+                    fields.push_back({ field_name, type });
+                }
+                return type_manager->create_struct(TypeInfo::Category::VIRTUAL, nullptr, type_struct.ast, fields);
+            }
+            case TypeNode::Type::LAZYSTRUCT:
+            {
+                std::map<std::string, TypeRef> cargs;
+                for (const auto& [carg_name, carg_val] : type_lazystruct.cargs)
+                {
+                    std::vector<TypeRef> rets;
+                    if (carg_val->get_type(node_info, rets))
+                    {
+                        error::compiler(node_info, "Expected a single return value from struct carg %", carg_name);
+                        return TypeRef();
+                    }
+                    cargs[carg_name] = rets.front();
+                }
+                return type_manager->create_lazystruct(type_lazystruct.ast, cargs);
+            }
             case TypeNode::Type::DLTYPE:
                 return type_manager->create_dltype(TypeInfo::null, TypeInfo::null, TypeInfo::null, TypeInfo::null);
             default:
@@ -1664,39 +1808,104 @@ namespace nn
             }
         }
 
+        bool ProcCall::match_struct_sig(Scope& scope, const AstStruct* ast,
+            const std::vector<Carg>& param_cargs, std::map<std::string, ValNode*>& cargs)
+        {
+            // TODO: implement all the functionality from match_cargs_sig to deal with signature deduction.
+            // For now, I'll just assume the order of the cargs and not worry about keyword arguments
+            // or default cargs at all.
+            for (const auto& param_carg : param_cargs)
+                if (param_carg.kwarg != "")
+                    return error::compiler(*param_carg.node_info, "Internal error: not implemented");
+            for (const auto& carg : ast->signature.cargs)
+                if (carg.is_packed || carg.default_expr)
+                    return error::compiler(carg.node_info, "Internal error: not implemented");
+
+            if (param_cargs.size() != ast->signature.cargs.size())
+                return true;
+            
+            for (size_t i = 0; i < param_cargs.size(); i++)
+            {
+                // Getting the type of the carg passed in to the struct
+                const Carg& param_carg = param_cargs[i];
+                std::vector<TypeRef> param_types;
+                if (param_carg.node->get_type(*param_carg.node_info, param_types))
+                    return true;
+                if (param_types.size() != 1)
+                    return error::compiler(*param_carg.node_info, "Expected carg to resolve to exactly 1 value");
+
+                // Getting the type of the carg in the struct signature
+                const AstArgDecl& arg_decl = ast->signature.cargs[i];
+                TypeRef sig_type;
+                if (codegen_expr_single_ret<TypeInfo::AllowAll>(scope, *arg_decl.type_expr, sig_type))
+                    return true;
+                if (sig_type->ty != TypeInfo::Type::TYPE)
+                    return error::compiler(arg_decl.type_expr->node_info, "Expected a type, recieved %", sig_type->to_string());
+                
+                // Doing the actual type check
+                if (param_types.front() != sig_type->type_type.base)
+                    return true;
+
+                // Adding the current argument to te cargs of the struct type
+                cargs[arg_decl.var_name] = param_carg.node;
+            }
+            return false;
+        }
+
         bool ProcCall::create_arg(Scope& scope, const AstArgDecl& decl, ValNode*& node)
+        {
+            return create_arg(scope,
+                decl.node_info, decl.is_packed, decl.type_expr.get(), decl.var_name, decl.default_expr.get(), node);
+        }
+
+        bool ProcCall::create_arg(Scope& scope, const AstExpr& decl, ValNode*& node)
+        {
+            assert(decl.ty == ExprType::VAR_DECL);
+            return create_arg(scope,
+                decl.node_info, false, decl.expr_name.expr.get(), decl.expr_name.val, nullptr, node);
+        }
+
+        bool ProcCall::create_arg(
+            Scope& scope,
+            const AstNodeInfo& node_info,
+            bool is_packed,
+            const AstExpr* type_expr,
+            const std::string& var_name,
+            const AstExpr* default_expr,
+            ValNode*& node)
         {
             node = next_val();
             new (&node->val_arg) Arg();
             node->ty = ValNode::Type::ARG_VAL;
-            node->node_info = &decl.node_info;
-            node->val_arg.name = decl.var_name;
-            if (!decl.is_packed)
+            node->node_info = &node_info;
+            node->val_arg.name = var_name;
+            if (!is_packed)
             {
                 // Non-packed arguments can have default values
-                if (decl.default_expr)
+                if (default_expr)
                 {
-                    if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, *decl.default_expr, node->val_arg.default_type))
+                    if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, *default_expr, node->val_arg.default_type))
                         return true;
                 }
-                return create_type(scope, *decl.type_expr, node->val_arg.type);
+                return create_type(scope, *type_expr, node->val_arg.type);
             }
             // The argument is packed, wrap the type in an array and make sure theres no defaults
-            if (decl.default_expr)
-                return error::compiler(decl.node_info, "Packed arguments cannot have default values");
+            if (default_expr)
+                return error::compiler(node_info, "Packed arguments cannot have default values");
             node->val_arg.type = next_type();
             if (!node->val_arg.type)
                 return true;
             new (&node->val_arg.type->type_array) ArrayType();
             node->val_arg.type->ty = TypeNode::Type::ARRAY;
-            node->val_arg.type->node_info = &decl.node_info;
-            return create_type(scope, *decl.type_expr, node->val_arg.type->type_array.carg);
+            node->val_arg.type->node_info = &node_info;
+            return create_type(scope, *type_expr, node->val_arg.type->type_array.carg);
         }
 
         bool ProcCall::create_type(Scope& scope, const AstExpr& expr, TypeNode*& node)
         {
             node = next_type();
             node->node_info = &expr.node_info;
+            TypeRef type;
             switch (expr.ty)
             {
             case ExprType::CARGS_CALL:
@@ -1731,7 +1940,7 @@ namespace nn
                 {
                     // Attempt a create_value on the callee and see what we end up with
                     ValNode* pnode;
-                    if (create_value(scope, *expr.expr_call.callee, pnode))
+                    if (create_value_callee(scope, *expr.expr_call.callee, pnode))
                         return true;
 
                     std::vector<TypeRef> callee_types;
@@ -1739,8 +1948,9 @@ namespace nn
                         return true;
                     if (callee_types.size() != 1)
                         return error::compiler(expr.expr_call.callee->node_info, "Cargs callee needs to be exactly one value");
+                    TypeRef callee_type = callee_types.front();
 
-                    if (callee_types.front()->ty == TypeInfo::Type::FTY)
+                    if (callee_type->ty == TypeInfo::Type::FTY)
                     {
                         // Its a tensor type, this places constraints on the cargs
                         new (&node->type_dl) DlType();
@@ -1778,9 +1988,78 @@ namespace nn
                         }
                         return false;
                     }
+                    
+                    if (callee_type->ty == TypeInfo::Type::LOOKUP)
+                    {
+                        std::vector<Carg> param_cargs;
+                        for (const AstExpr& arg : expr.expr_call.args)
+                        {
+                            if (arg.ty != ExprType::BINARY_ASSIGN)
+                            {
+                                // Simple case - positional argument
+                                ValNode* carg_node;
+                                if (create_value(scope, expr, carg_node))
+                                    return true;
+                                param_cargs.push_back({ "", carg_node });
+                                continue;
+                            }
+                            // keyword argument
+                            if (arg.expr_binary.left->ty != ExprType::VAR)
+                                return error::compiler(arg.node_info, "Expected an indentifier on the left side of keyword argument");
+                            ValNode* carg_node;
+                            if (create_value(scope, *expr.expr_binary.right, carg_node))
+                                return true;
+                            param_cargs.push_back({ arg.expr_binary.left->expr_string, carg_node });
+                        }
 
-                    // Its either a struct or an error.  Since structs aren't implemented yet, generate an error regardless
-                    return error::compiler(expr.node_info, "Internal error: not implemented");
+                        std::vector<std::pair<const AstStruct*, std::map<std::string, ValNode*>>> matches;
+                        for (const AstStruct* ast : callee_type->type_lookup.lookup.structs)
+                        {
+                            std::map<std::string, ValNode*> cargs;
+                            if (!match_struct_sig(scope, ast, param_cargs, cargs))
+                                matches.push_back({ ast, cargs });
+                        }
+                        if (matches.size() > 1)
+                            return error::compiler(expr.node_info, "Reference to struct % is ambiguous", callee_type->type_lookup.name);
+                        if (matches.size() == 0)
+                            return error::compiler(expr.node_info, "Unresolved reference to struct %", callee_type->type_lookup.name);
+                        const auto& [ast, cargs] = matches.front();
+
+                        if (lazy_types)
+                        {
+                            new (&node->type_lazystruct) LazyStructType();
+                            node->ty = TypeNode::Type::LAZYSTRUCT;
+                            node->type_lazystruct.ast = ast;
+                            node->type_lazystruct.cargs = cargs;
+                            return false;
+                        }
+
+                        new (&node->type_struct) StructType();
+                        node->ty = TypeNode::Type::STRUCT;
+                        node->type_struct.ast = ast;
+                        node->type_struct.cargs = cargs;
+
+                        // Generating the fields from the struct body
+                        for (const auto& line : ast->body)
+                        {
+                            if (line.ty != LineType::EXPR)
+                                return error::compiler(line.node_info, "A struct body must only contain variable declarations");
+                            const auto& decl = line.line_expr.line;
+                            if (decl.ty != ExprType::VAR_DECL)
+                                return error::compiler(decl.node_info, "A struct body must only contain variable declarations");
+                            
+                            TypeNode* field_node;
+                            lazy_types = true;
+                            bool ret = create_type(scope, *decl.expr_name.expr, field_node);
+                            lazy_types = false;
+                            if (ret) return true;
+                            node->type_struct.fields.push_back({ decl.expr_name.val, field_node });
+                        }
+
+                        return false;
+                    }
+
+                    return error::compiler(expr.node_info, "Unable to resolve type");
                 }
             case ExprType::KW:
                 switch (expr.expr_kw)
@@ -1826,8 +2105,53 @@ namespace nn
                     node->type_val.val = val_node;
                     return false;
                 }
-                // TODO: Implement structs in siguratures
-                return error::compiler(expr.node_info, "structs in signatures has not yet been implemented");
+                else
+                {
+                    CodeModule::LookupResult lookup;
+                    if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.end() }, expr.expr_string, lookup))
+                        return true;
+                    std::vector<const AstStruct*> matches;
+                    for (const AstStruct* ast_struct : lookup.structs)
+                        if (ast_struct->signature.cargs.size() == 0)
+                            matches.push_back(ast_struct);
+                    if (matches.size() > 1)
+                        return error::compiler(expr.node_info, "Reference to struct % is ambiguous", expr.expr_string);
+                    if (matches.size() == 0)
+                        return error::compiler(expr.node_info, "Unable to find struct %", expr.expr_string);
+
+                    if (lazy_types)
+                    {
+                        new (&node->type_lazystruct) LazyStructType();
+                        node->ty = TypeNode::Type::LAZYSTRUCT;
+                        node->type_lazystruct.ast = matches.front();
+                        node->type_lazystruct.cargs = {};
+                        return false;
+                    }
+
+                    new (&node->type_struct) StructType();
+                    node->ty = TypeNode::Type::STRUCT;
+                    node->type_struct.ast = matches.front();
+
+                    // Generating the fields from the struct body
+                    for (const auto& line : matches.front()->body)
+                    {
+                        if (line.ty != LineType::EXPR)
+                            return error::compiler(line.node_info, "A struct body must only contain variable declarations");
+                        const auto& decl = line.line_expr.line;
+                        if (decl.ty != ExprType::VAR_DECL)
+                            return error::compiler(decl.node_info, "A struct body must only contain variable declarations");
+
+                        TypeNode* field_node;
+                        lazy_types = true;
+                        bool ret = create_type(scope, *decl.expr_name.expr, field_node);
+                        lazy_types = false;
+                        if (ret) return true;
+                        node->type_struct.fields.push_back({ decl.expr_name.val, field_node });
+                    }
+
+                    return false;
+                }
+                
             default:
                 // everything else is invalid
                 return error::compiler(expr.node_info, "Invalid type expression in signature");
@@ -1852,36 +2176,36 @@ namespace nn
             case ExprType::UNARY_POS:
                 new (&node->val_unary) UnaryOp();
                 node->ty = ValNode::Type::UNARY_POS;
-                node->val_unary.inp = new ValNode{};
+                node->val_unary.inp = next_val();
                 return create_value(scope, *expr.expr_unary.expr, node->val_unary.inp);
             case ExprType::UNARY_NEG:
                 new (&node->val_unary) UnaryOp();
                 node->ty = ValNode::Type::UNARY_NEG;
-                node->val_unary.inp = new ValNode{};
+                node->val_unary.inp = next_val();
                 return create_value(scope, *expr.expr_unary.expr, node->val_unary.inp);
             case ExprType::UNARY_NOT:
                 new (&node->val_unary) UnaryOp();
                 node->ty = ValNode::Type::UNARY_NOT;
-                node->val_unary.inp = new ValNode{};
+                node->val_unary.inp = next_val();
                 return create_value(scope, *expr.expr_unary.expr, node->val_unary.inp);
             case ExprType::UNARY_UNPACK:
                 new (&node->val_unary) UnaryOp();
                 node->ty = ValNode::Type::UNARY_UNPACK;
-                node->val_unary.inp = new ValNode{};
+                node->val_unary.inp = next_val();
                 return create_value(scope, *expr.expr_unary.expr, node->val_unary.inp);
             case ExprType::BINARY_ADD:
                 new (&node->val_binary) BinaryOp();
                 node->ty = ValNode::Type::BINARY_ADD;
-                node->val_binary.lhs = new ValNode{};
-                node->val_binary.rhs = new ValNode{};
+                node->val_binary.lhs = next_val();
+                node->val_binary.rhs = next_val();
                 return
                     create_value(scope, *expr.expr_binary.left, node->val_binary.lhs) ||
                     create_value(scope, *expr.expr_binary.right, node->val_binary.rhs);
             case ExprType::BINARY_SUB:
                 new (&node->val_binary) BinaryOp();
                 node->ty = ValNode::Type::BINARY_SUB;
-                node->val_binary.lhs = new ValNode{};
-                node->val_binary.rhs = new ValNode{};
+                node->val_binary.lhs = next_val();
+                node->val_binary.rhs = next_val();
                 return
                     create_value(scope, *expr.expr_binary.left, node->val_binary.lhs) ||
                     create_value(scope, *expr.expr_binary.right, node->val_binary.rhs);
@@ -1890,6 +2214,64 @@ namespace nn
             // if all else fails, try codegening the expr and getting a constant value from it
             node->ty = ValNode::Type::CONST_VAL;
             return codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, expr, node->val);
+        }
+
+        bool ProcCall::create_value_callee(Scope& scope, const AstExpr& expr, ValNode*& node)
+        {
+            if (expr.ty == ExprType::VAR && carg_nodes.contains(expr.expr_string))
+            {
+                // Its a reference to a carg
+                node = carg_nodes.at(expr.expr_string);
+                node->is_root = false;
+                return false;
+            }
+
+            node = next_val();
+            node->node_info = &expr.node_info;
+            node->is_root = false;
+            switch (expr.ty)
+            {
+            case ExprType::UNARY_POS:
+                new (&node->val_unary) UnaryOp();
+                node->ty = ValNode::Type::UNARY_POS;
+                node->val_unary.inp = next_val();
+                return create_value_callee(scope, *expr.expr_unary.expr, node->val_unary.inp);
+            case ExprType::UNARY_NEG:
+                new (&node->val_unary) UnaryOp();
+                node->ty = ValNode::Type::UNARY_NEG;
+                node->val_unary.inp = next_val();
+                return create_value_callee(scope, *expr.expr_unary.expr, node->val_unary.inp);
+            case ExprType::UNARY_NOT:
+                new (&node->val_unary) UnaryOp();
+                node->ty = ValNode::Type::UNARY_NOT;
+                node->val_unary.inp = next_val();
+                return create_value_callee(scope, *expr.expr_unary.expr, node->val_unary.inp);
+            case ExprType::UNARY_UNPACK:
+                new (&node->val_unary) UnaryOp();
+                node->ty = ValNode::Type::UNARY_UNPACK;
+                node->val_unary.inp = next_val();
+                return create_value_callee(scope, *expr.expr_unary.expr, node->val_unary.inp);
+            case ExprType::BINARY_ADD:
+                new (&node->val_binary) BinaryOp();
+                node->ty = ValNode::Type::BINARY_ADD;
+                node->val_binary.lhs = next_val();
+                node->val_binary.rhs = next_val();
+                return
+                    create_value_callee(scope, *expr.expr_binary.left, node->val_binary.lhs) ||
+                    create_value_callee(scope, *expr.expr_binary.right, node->val_binary.rhs);
+            case ExprType::BINARY_SUB:
+                new (&node->val_binary) BinaryOp();
+                node->ty = ValNode::Type::BINARY_SUB;
+                node->val_binary.lhs = next_val();
+                node->val_binary.rhs = next_val();
+                return
+                    create_value_callee(scope, *expr.expr_binary.left, node->val_binary.lhs) ||
+                    create_value_callee(scope, *expr.expr_binary.right, node->val_binary.rhs);
+            }
+
+            // if all else fails, try codegening the expr and getting a constant value from it
+            node->ty = ValNode::Type::CONST_VAL;
+            return codegen_expr_callee(scope, expr, node->val);
         }
 
         bool ProcCall::codegen_root_arg(Scope& scope, ValNode& node)
@@ -2081,6 +2463,29 @@ namespace nn
             node.type_tuple.cargs;
             type->type_tuple;
             return error::compiler(*node.node_info, "Internal error: not implemented");
+        }
+
+        bool ProcCall::codegen_type_struct(Scope& scope, TypeNode& node, TypeRef& type)
+        {
+            if (type->ty != TypeInfo::Type::STRUCT)
+                return error::compiler(*node.node_info, "Type conflict found during signature deduction");
+            if (node.type_struct.fields.size() != type->type_struct.elems.size())
+                return error::compiler(*node.node_info, "Type conflict found during signature deduction");
+            for (size_t i = 0; i < node.type_struct.fields.size(); i++)
+            {
+                auto& [field_name, field_type] = node.type_struct.fields[i];
+                auto& [ elem_name,  elem_type] = type->type_struct.elems[i];
+                if (field_name != elem_name)
+                    return error::compiler(*node.node_info, "Field name conflict found during signature deduction: %, %", field_name, elem_name);
+                if (codegen_type(scope, *field_type, elem_type))
+                    return true;
+            }
+            return false;
+        }
+
+        bool ProcCall::codegen_type_lazystruct(Scope& scope, TypeNode& node, TypeRef& type)
+        {
+            return error::compiler(*node.node_info, "Internal error: lazy struct was not woken before codegen");
         }
 
         bool ProcCall::codegen_type_dltype(Scope& scope, TypeNode& node, TypeRef& type)
@@ -2307,6 +2712,10 @@ namespace nn
                 return codegen_type_array(scope, node, type);
             case TypeNode::Type::TUPLE:
                 return codegen_type_tuple(scope, node, type);
+            case TypeNode::Type::STRUCT:
+                return codegen_type_struct(scope, node, type);
+            case TypeNode::Type::LAZYSTRUCT:
+                return codegen_type_lazystruct(scope, node, type);
             case TypeNode::Type::DLTYPE:
                 return codegen_type_dltype(scope, node, type);
             default:
@@ -2406,6 +2815,24 @@ namespace nn
                         type->codegen(scope) ||
                         body->add_instruction(instruction::Eshp(node_info));
                 }, tmp);
+        }
+
+        CommonCall::CommonCall(const std::vector<std::string>& sig_ns) :
+            ProcCall(sig_ns)
+        {
+            dltype = TypeInfo::Type::INVALID;
+        }
+
+        TypeRef CommonCall::get_fp(const AstNodeInfo& node_info, TypeRef type)
+        {
+            error::compiler(node_info, "Internal error: retrieving fp on a common call");
+            return TypeRef();
+        }
+
+        TypeRef CommonCall::get_shape(const AstNodeInfo& node_info, TypeRef type)
+        {
+            error::compiler(node_info, "Internal error: retrieving shape on a common call");
+            return TypeRef();
         }
 
         bool InitCall::init(const AstInit& sig)
@@ -2511,6 +2938,156 @@ namespace nn
             return false;
         }
 
+        bool StructCall::init(const AstStruct& sig)
+        {
+            ast_struct = &sig;
+            node_info = &sig.node_info;
+            if (sig.is_bytecode)
+                return error::compiler(sig.node_info, "Structs cannot have a bytecode body");
+
+            std::vector<std::string> old_ns = cg_ns;  // copying out the old namespace
+            cg_ns = sig_ns;  // replacing it with the namespace that the sig was defined in
+
+            // Building the nodes for the cargs and building the struct's cargs along the way
+            ret_node = next_type();
+            new (&ret_node->type_struct) StructType();
+            ret_node->ty = TypeNode::Type::STRUCT;
+            ret_node->node_info = &sig.node_info;
+            ret_node->type_struct.ast = &sig;
+            Scope init_scope{ nullptr };
+            for (const auto& arg_decl : sig.signature.cargs)
+            {
+                if (carg_nodes.contains(arg_decl.var_name))
+                    return error::compiler(arg_decl.node_info, "Naming conflict for argument '%' in cargs", arg_decl.var_name);
+
+                ValNode* node;
+                TypeRef type;
+                if (create_arg(init_scope, arg_decl, node) ||
+                    arg_type(type, init_scope, arg_decl) ||
+                    init_scope.add(arg_decl.var_name, type, arg_decl.node_info) ||
+                    init_scope.push()
+                    ) return true;
+
+                if (arg_decl.default_expr)
+                {
+                    if (arg_decl.is_packed)
+                        return error::compiler(arg_decl.node_info, "Packed arguments cannot have default values");
+                    if (codegen_expr_single_ret<TypeInfo::NonVirtual>(init_scope, *arg_decl.default_expr, node->val_arg.default_type))
+                        return true;
+                }
+                carg_nodes[arg_decl.var_name] = node;
+                carg_stack.push_back(arg_decl.var_name);
+                ret_node->type_struct.cargs[arg_decl.var_name] = node;
+            }
+
+            // Building the nodes for the vargs and builde the struct's fields along the way
+            for (const auto& line : sig.body)
+            {
+                if (line.ty != LineType::EXPR)
+                    return error::compiler(line.node_info, "A struct body must only contain variable declarations");
+                const auto& decl = line.line_expr.line;
+                if (decl.ty != ExprType::VAR_DECL)
+                    return error::compiler(decl.node_info, "A struct body must only contain variable declarations");
+                
+                // For now, I'll keep this in since the values might get index via the scope during codegen,
+                // but this really shouldn't be nessisary
+                if (carg_nodes.contains(decl.expr_name.val))
+                    return error::compiler(decl.node_info, "Naming conflict for argument '%' between cargs and vargs", decl.expr_name.val);
+                if (varg_nodes.contains(decl.expr_name.val))
+                    return error::compiler(decl.node_info, "Naming conflict for argument '%' in vargs", decl.expr_name.val);
+
+                ValNode* node;
+                if (create_arg(init_scope, decl, node))
+                    return true;
+                varg_nodes[decl.expr_name.val] = node;
+                varg_stack.push_back(decl.expr_name.val);
+                ret_node->type_struct.fields.push_back({ decl.expr_name.val, node->val_arg.type });
+            }
+
+            cg_ns = old_ns;  // Putting the old namespace back
+            return false;
+        }
+
+        bool StructCall::apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs, const std::vector<TypeRef>& vargs)
+        {
+            // Checking to make sure all the provided cargs are in the signature
+            for (const auto& [name, type] : cargs)
+                if (!carg_nodes.contains(name))
+                    return error::compiler(node_info, "The provided carg '%' does not exist in the signature", name);
+            // Checking to make sure all the vargs are provided
+            if (vargs.size() < varg_stack.size())
+                return error::compiler(node_info, "Too few vargs provided in call");
+            if (vargs.size() > varg_stack.size())
+                return error::compiler(node_info, "Too many vargs provided in call");
+            assert(vargs.size() == varg_stack.size());
+
+            // Putting the carg exprs into the nodes
+            for (const auto& [name, expr] : cargs)
+                carg_nodes[name]->val = expr;
+
+            // Putting the varg exprs into the nodes
+            for (size_t i = 0; i < vargs.size(); i++)
+                varg_nodes[varg_stack[i]]->val = vargs[i];
+            return false;
+        }
+
+        bool StructCall::codegen(Scope& scope, std::vector<TypeRef>& rets)
+        {
+            // codegening all the nodes
+            for (auto& [name, node] : carg_nodes)
+                if (node->is_root && codegen_root_arg(scope, *node))
+                    return true;
+            for (auto& [name, node] : varg_nodes)
+                if (node->is_root && codegen_root_arg(scope, *node))
+                    return true;
+
+            // codegening each of the vargs onto the stack
+            for (const std::string& name : varg_stack)
+            {
+                const ValNode& node = *varg_nodes.at(name);
+                if (!node.val)
+                    return error::compiler(*node.node_info, "Missing required varg '%'", name);
+
+                if (node.val->codegen(scope))
+                    return true;
+            }
+
+            // combining all the vargs into a single tuple
+            if (body->add_instruction(instruction::Agg(*node_info, varg_stack.size())))
+                return true;
+
+            // Update the stack pointers
+            if (varg_stack.size() == 0)
+            {
+                if (scope.push())
+                    return true;
+            }
+            else
+            {
+                if (scope.pop(varg_stack.size() - 1))
+                    return true;
+            }
+
+            // Adding the struct to the scope
+            std::string var_name = scope.generate_var_name();
+            CodegenCallback codegen = [node_info{ ret_node->node_info }, var_name](Scope& scope) -> bool {
+                Scope::StackVar var;
+                if (scope.at(var_name, var))
+                    return error::compiler(*node_info, "Unable to resolve identifier %", var_name);
+                return
+                    body->add_instruction(instruction::Dup(*node_info, var.ptr)) ||
+                    scope.push();
+            };
+            TypeRef ret_type = ret_node->as_type(*ret_node->node_info);
+            if (!ret_type)
+                return true;
+            ret_type->cat = TypeInfo::Category::CONST;
+            ret_type->codegen = codegen;
+            rets.push_back(ret_type);
+            return
+                scope.add(var_name, ret_type, *ret_node->node_info);
+        }
+
         bool IntrCall::init(const AstBlock& sig)
         {
             ast_intr = &sig;
@@ -2541,8 +3118,6 @@ namespace nn
                     if (codegen_expr_single_ret<TypeInfo::NonVirtual>(init_scope, *arg_decl.default_expr, node->val_arg.default_type))
                         return true;
                 }
-                node->val_arg.name = arg_decl.var_name;
-                node->node_info = &arg_decl.node_info;
                 carg_nodes[arg_decl.var_name] = node;
                 carg_stack.push_back(arg_decl.var_name);
             }
@@ -2563,8 +3138,6 @@ namespace nn
                     return error::compiler(arg_decl.default_expr->node_info, "Default arguments are not allowed in vargs");
                 if (node->val_arg.type->ty != TypeNode::Type::DLTYPE)
                     return error::compiler(*node->val_arg.type->node_info, "Only edge types are allowed as vargs in an intr");
-                node->val_arg.name = arg_decl.var_name;
-                node->node_info = &arg_decl.node_info;
                 varg_nodes[arg_decl.var_name] = node;
                 varg_stack.push_back(arg_decl.var_name);
             }
@@ -2708,8 +3281,6 @@ namespace nn
                     if (codegen_expr_single_ret<TypeInfo::NonVirtual>(init_scope, *arg_decl.default_expr, node->val_arg.default_type))
                         return true;
                 }
-                node->val_arg.name = arg_decl.var_name;
-                node->node_info = &arg_decl.node_info;
                 carg_nodes[arg_decl.var_name] = node;
                 carg_stack.push_back(arg_decl.var_name);
             }
@@ -2730,8 +3301,6 @@ namespace nn
                     return error::compiler(arg_decl.default_expr->node_info, "Default arguments are not allowed in vargs");
                 if (node->val_arg.type->ty != TypeNode::Type::DLTYPE)
                     return error::compiler(*node->val_arg.type->node_info, "Only tensor types are allowed as vargs in a def");
-                node->val_arg.name = arg_decl.var_name;
-                node->node_info = &arg_decl.node_info;
                 varg_nodes[arg_decl.var_name] = node;
                 varg_stack.push_back(arg_decl.var_name);
             }
@@ -2943,8 +3512,6 @@ namespace nn
                     if (codegen_expr_single_ret<TypeInfo::NonVirtual>(init_scope, *arg_decl.default_expr, node->val_arg.default_type))
                         return true;
                 }
-                node->val_arg.name = arg_decl.var_name;
-                node->node_info = &arg_decl.node_info;
                 carg_nodes[arg_decl.var_name] = node;
                 carg_stack.push_back(arg_decl.var_name);
             }
@@ -2963,8 +3530,6 @@ namespace nn
                     return true;
                 if (arg_decl.default_expr)
                     return error::compiler(arg_decl.default_expr->node_info, "Default arguments are not allowed in vargs");
-                node->val_arg.name = arg_decl.var_name;
-                node->node_info = &arg_decl.node_info;
                 varg_nodes[arg_decl.var_name] = node;
                 varg_stack.push_back(arg_decl.var_name);
             }
@@ -3047,20 +3612,17 @@ namespace nn
             // calling the procedure
             std::string proc_name;
             size_t proc_addr;
-            Scope::StackVar var;
             if (proc_name_fn(proc_name, sig_ns, *ast_fn) ||
                 bc->add_static_ref(*node_info, proc_name, proc_addr) ||
-                scope.at("~block", var) ||
-                body->add_instruction(instruction::Dup(*node_info, var.ptr)) ||
                 body->add_instruction(instruction::New(*node_info, proc_addr)) ||
                 body->add_instruction(instruction::Call(*node_info))
                 ) return true;
 
             // cleaning the stack (+1 from ~block), and marking the return values to the stack
-            for (size_t i = 0; i < carg_stack.size() + varg_stack.size() + 1; i++)
+            for (size_t i = 0; i < carg_stack.size() + varg_stack.size(); i++)
                 if (body->add_instruction(instruction::Pop(*node_info, ret_nodes.size())))
                     return true;
-            if (scope.pop(carg_stack.size() + varg_stack.size()))
+            if (scope.pop(carg_stack.size() + varg_stack.size() - 1))
                 return true;
 
             for (TypeNode* node : ret_nodes)
@@ -3320,19 +3882,7 @@ namespace nn
                         // Its a generic type.  This is a special case where the base of the stack's type
                         // needs to be constructed explicitly rather than from ret
                         TypeRef tmp = type_manager->create_generic(TypeInfo::Category::VIRTUAL, nullptr, arg.var_name);
-                        if (!tmp)
-                            return true;
-                        // Any generic type args should be on the stack at runtime
-                        base = type_manager->create_type(
-                            TypeInfo::Category::CONST,
-                            [&arg](Scope& scope) -> bool {
-                                Scope::StackVar var;
-                                return
-                                    scope.at(arg.var_name, var) ||
-                                    body->add_instruction(instruction::Dup(arg.node_info, var.ptr)) ||
-                                    scope.push();
-                            }, tmp);
-                        if (!base)
+                        if (!tmp || tmp->to_obj(arg.node_info, base))
                             return true;
                     }
                     else
@@ -3341,6 +3891,8 @@ namespace nn
                         base = explicit_type->type_type.base;
                     }
                     explicit_type = type_manager->duplicate(TypeInfo::Category::CONST, codegen, base);
+                    if (!explicit_type)
+                        return true;
                 }
                 else
                     return error::compiler(arg.type_expr->node_info, "Type expression for parameter % did not resolve to a type.", arg.var_name);
@@ -3411,6 +3963,8 @@ namespace nn
                     return true;
                 return match_arg(arg_type->type_array.elem, param_type->type_array.elem, generics);
             case TypeInfo::Type::TUPLE:
+                if (param_type->ty != TypeInfo::Type::TUPLE)
+                    return true;
                 if (arg_type->type_tuple.elems.size() != param_type->type_tuple.elems.size())
                     return true;
                 for (size_t i = 0; i < arg_type->type_tuple.elems.size(); i++)
@@ -3418,9 +3972,22 @@ namespace nn
                         return true;
                 return false;
             case TypeInfo::Type::STRUCT:
-                assert(false);
-                // TODO: implement structs
-                return true;
+                if (param_type->ty != TypeInfo::Type::STRUCT)
+                    return true;
+                if (param_type->type_struct.ast != arg_type->type_struct.ast)
+                    return true;
+                if (arg_type->type_struct.elems.size() != param_type->type_struct.elems.size())
+                    return true;
+                for (size_t i = 0; i < arg_type->type_struct.elems.size(); i++)
+                {
+                    const auto& [  arg_name,   arg_elem] =   arg_type->type_struct.elems[i];
+                    const auto& [param_name, param_elem] = param_type->type_struct.elems[i];
+                    if (arg_name != param_name)
+                        return true;
+                    if (match_arg(arg_elem, param_elem, generics))
+                        return true;
+                }
+                return false;
             case TypeInfo::Type::GENERIC:
                 if (generics.contains(arg_type->type_generic.name))
                     return generics.at(arg_type->type_generic.name) != param_type;
@@ -3473,196 +4040,194 @@ namespace nn
                             sig_it = it + 1;
                             break;
                         }
+                    continue;
                 }
-                else
+
+                // Codegen whatever the argument is and see if its able to match the signature
+                std::vector<TypeRef> rets;
+                if (codegen_expr(scope, *arg_it, rets))
+                    return true;
+                if (rets.size() == 0)
+                    continue;  // That value didn't matter I guess
+                auto rets_it = rets.begin();
+                size_t unpack_min_sz = 0;
+                if (!sig_it->is_packed)
                 {
-                    // Codegen whatever the argument is and see if its able to match the signature
-                    std::vector<TypeRef> rets;
-                    if (codegen_expr(scope, *arg_it, rets))
-                        return true;
-                    if (rets.size() == 0)
-                        continue;  // That value didn't matter I guess
-                    auto rets_it = rets.begin();
-                    size_t unpack_min_sz = 0;
-                    if (!sig_it->is_packed)
+                    // The signature element isn't packed
+                    if ((*rets_it)->ty == TypeInfo::Type::UNPACK)
                     {
-                        // The signature element isn't packed
-                        if ((*rets_it)->ty == TypeInfo::Type::UNPACK)
-                        {
-                            // TODO: figure out argument unpacking in signatures
-                            // This case should place a runtime requirement on the length of the underlying array
-                            return error::compiler(arg_it->node_info, "Internal error: not implemented");
-                        }
-                        else
-                        {
-                            // Straight forward case, eat the current ret and increment the iterator
-                            // First check if the argument has already been provided a value
-                            if (cargs.contains(sig_it->var_name))
-                                return error::compiler(arg_it->node_info, "Found multiple values for argument '%'", sig_it->var_name);
-                            cargs[sig_it->var_name] = *rets_it;
-                            rets_it++;
-                            if (rets_it == rets.end())
-                            {
-                                // Finished eating all the rets from the passed value, move onto the next one.
-                                // continue might not be right here...
-                                // Future me responding: nope it wasn't, I needed to also increment sig_it.
-                                sig_it++;
-                                continue;
-                            }
-                        }
+                        // TODO: figure out argument unpacking in signatures
+                        // This case should place a runtime requirement on the length of the underlying array
+                        return error::compiler(arg_it->node_info, "Internal error: not implemented");
                     }
                     else
                     {
-                        // The signature element is packed, in this case we keep eating the arguments until either
-                        // an unpacked value or a type doesn't match.  If it terminates with an unpacked value,
-                        // the packed signature argument doesn't keep eating.  This means that we can't
-                        // peel elements of the array off the back of it, only the front,
-                        // but it allows for much cleaner rule around multiple packed arguments in a signature.
-                        // This way here, a single unpacked value won't eat multiple packed signature arguments
-                        // To eat multiple packed signature arguments, you need multiple unpacked values.
-                        // This results in much more intuitive behaviour where there's a one to one mapping between
-                        // the passed arguments and the signature as it appears in code.
-                        
-                        // First up, make sure the argument hasn't already been given a value
+                        // Straight forward case, eat the current ret and increment the iterator
+                        // First check if the argument has already been provided a value
                         if (cargs.contains(sig_it->var_name))
                             return error::compiler(arg_it->node_info, "Found multiple values for argument '%'", sig_it->var_name);
-                        // Next get the signature argument type to match the passed values against, and get ready
-                        // for the bullshit that's gonna happen next
-                        Scope::StackVar var;
-                        TypeRef ety;
-                        if (sig_scope.at(sig_it->var_name, var) ||
-                            var.type->to_obj(sig_it->node_info, ety)
-                            ) return true;
-                        // Callback for generating the packed argument which gets added to as parameters get captured
-                        CodegenCallback cb = [&node_info{ arg_it->node_info }](Scope& scope) {
-                            return
-                                body->add_instruction(instruction::Agg(node_info, 0)) ||
-                                scope.push();
-                        };
-                        while (true)
+                        cargs[sig_it->var_name] = *rets_it;
+                        rets_it++;
+                        if (rets_it == rets.end())
                         {
-                            if (rets_it == rets.end())
-                            {
-                                // Hit the end of the rets recieved from the current arg_it and we haven't hit
-                                // neither a value that didn't match the signature, nor an unpacked value.
-                                // codegen the next passed value and continue
-                                arg_it++;
-                                if (arg_it == args.end())
-                                {
-                                    // The packed signature element ate all the remaining cargs given
-                                    TypeRef ret = type_manager->create_array(TypeInfo::Category::CONST, cb, var.type);
-                                    if (!ret)
-                                        return true;
-                                    cargs[sig_it->var_name] = ret;
-                                    return false;  // Successfully matched the args to the signature!
-                                }
-                                // First check if the next arg is a keyword argument.  If it is, the current
-                                // carg is finished and we need to resume the normal algorithm
-                                if (arg_it->ty == ExprType::BINARY_ASSIGN)
-                                {
-                                    // Its a keyword argument, save the current argument then decrement arg_it
-                                    // so that when the for loop increments it, its back to the current position
-                                    TypeRef ret = type_manager->create_array(TypeInfo::Category::CONST, cb, var.type);
-                                    if (!ret)
-                                        return true;
-                                    cargs[sig_it->var_name] = ret;
-                                    arg_it--;
-                                    break;  // breaking the while (true), not the for loop
-                                }
-                                // We didn't hit the last arg yet, so codegen it into rets and reset rets_it
-                                rets.clear();
-                                if (codegen_expr(scope, *arg_it, rets))
-                                    return true;
-                                rets_it = rets.begin();
-                                // Continue on as though nothing happend
-                            }
+                            // Finished eating all the rets from the passed value, move onto the next one.
+                            // continue might not be right here...
+                            // Future me responding: nope it wasn't, I needed to also increment sig_it.
+                            sig_it++;
+                            continue;
+                        }
+                    }
+                    continue;
+                }
 
-                            if ((*rets_it)->ty != TypeInfo::Type::UNPACK)
-                            {
-                                // Its a standard argument also it can't contain any unpacks since capturing an unpack
-                                // is not allowed
-                                if ((*rets_it)->cat == TypeInfo::Category::VIRTUAL)
-                                    return error::compiler(arg_it->node_info, "Arguments must be non-virtual");
-                                if (match_arg(var.type, *rets_it, generics))
-                                {
-                                    // Found an argument which doesn't match the type of the packed signature element
-                                    // This terminates the current argument, but leaves leftover passed values in rets
-                                    // which could potentially come from half an expanded tuple.  This means that we
-                                    // can't leverage the previous code for this.
-                                    TypeRef ret = type_manager->create_array(TypeInfo::Category::CONST, cb, var.type);
-                                    if (!ret)
-                                        return true;
-                                    cargs[sig_it->var_name] = ret;
-                                    // The rest of rets need to be matched against the remaining signature.  What makes this
-                                    // difficult is what happens when we encounter a packed signature element during this
-                                    for (; rets_it == rets.end(); rets_it++)
-                                    {
-                                        // This for loop iterates over the direct matches between the passed arguments
-                                        // and non-packed signature elements.
-                                        sig_it++;
-                                        if (sig_it == sig.end())
-                                            return error::compiler(arg_it->node_info, "Too many arguments were provided");
-                                        if (cargs.contains(sig_it->var_name))
-                                            return error::compiler(arg_it->node_info, "Found multiple values for argument '%'", sig_it->var_name);
-                                        // Updating the current info kept about the signature element
-                                        if (sig_scope.at(sig_it->var_name, var) ||
-                                            var.type->to_obj(sig_it->node_info, ety)
-                                            ) return true;
-                                        // If the signature element is a packed value, I can directly leverage the outer
-                                        // while (true) loop to parse out the rest of the signature
-                                        if (sig_it->is_packed)
-                                            break;
+                // The signature element is packed, in this case we keep eating the arguments until either
+                // an unpacked value or a type doesn't match.  If it terminates with an unpacked value,
+                // the packed signature argument doesn't keep eating.  This means that we can't
+                // peel elements of the array off the back of it, only the front,
+                // but it allows for much cleaner rule around multiple packed arguments in a signature.
+                // This way here, a single unpacked value won't eat multiple packed signature arguments
+                // To eat multiple packed signature arguments, you need multiple unpacked values.
+                // This results in much more intuitive behaviour where there's a one to one mapping between
+                // the passed arguments and the signature as it appears in code.
+                        
+                // First up, make sure the argument hasn't already been given a value
+                if (cargs.contains(sig_it->var_name))
+                    return error::compiler(arg_it->node_info, "Found multiple values for argument '%'", sig_it->var_name);
+                // Next get the signature argument type to match the passed values against, and get ready
+                // for the bullshit that's gonna happen next
+                Scope::StackVar var;
+                TypeRef ety;
+                if (sig_scope.at(sig_it->var_name, var) ||
+                    var.type->to_obj(sig_it->node_info, ety)
+                    ) return true;
+                // Callback for generating the packed argument which gets added to as parameters get captured
+                CodegenCallback cb = [&node_info{ arg_it->node_info }](Scope& scope) {
+                    return
+                        body->add_instruction(instruction::Agg(node_info, 0)) ||
+                        scope.push();
+                };
+                while (true)
+                {
+                    if (rets_it == rets.end())
+                    {
+                        // Hit the end of the rets recieved from the current arg_it and we haven't hit
+                        // neither a value that didn't match the signature, nor an unpacked value.
+                        // codegen the next passed value and continue
+                        arg_it++;
+                        if (arg_it == args.end())
+                        {
+                            // The packed signature element ate all the remaining cargs given
+                            TypeRef ret = type_manager->create_array(TypeInfo::Category::CONST, cb, var.type);
+                            if (!ret)
+                                return true;
+                            cargs[sig_it->var_name] = ret;
+                            return false;  // Successfully matched the args to the signature!
+                        }
+                        // First check if the next arg is a keyword argument.  If it is, the current
+                        // carg is finished and we need to resume the normal algorithm
+                        if (arg_it->ty == ExprType::BINARY_ASSIGN)
+                        {
+                            // Its a keyword argument, save the current argument then decrement arg_it
+                            // so that when the for loop increments it, its back to the current position
+                            TypeRef ret = type_manager->create_array(TypeInfo::Category::CONST, cb, var.type);
+                            if (!ret)
+                                return true;
+                            cargs[sig_it->var_name] = ret;
+                            arg_it--;
+                            break;  // breaking the while (true), not the for loop
+                        }
+                        // We didn't hit the last arg yet, so codegen it into rets and reset rets_it
+                        rets.clear();
+                        if (codegen_expr(scope, *arg_it, rets))
+                            return true;
+                        rets_it = rets.begin();
+                        // Continue on as though nothing happend
+                    }
 
-                                        // The signature element wasn't packed, it's just a simple match
-                                        if (match_arg(var.type, *rets_it, generics))
-                                            return true;
-                                        cargs[sig_it->var_name] = *rets_it;
-                                    }
-                                    if (rets_it != rets.end())
-                                        // Didn't hit the end of rets, instead there was a packed signature element
-                                        continue;
-                                    // Finished rets cleanly, break out of the while (true) and resume the normal algorithm
+                    if ((*rets_it)->ty != TypeInfo::Type::UNPACK)
+                    {
+                        // Its a standard argument also it can't contain any unpacks since capturing an unpack
+                        // is not allowed
+                        if ((*rets_it)->cat == TypeInfo::Category::VIRTUAL)
+                            return error::compiler(arg_it->node_info, "Arguments must be non-virtual");
+                        if (match_arg(var.type, *rets_it, generics))
+                        {
+                            // Found an argument which doesn't match the type of the packed signature element
+                            // This terminates the current argument, but leaves leftover passed values in rets
+                            // which could potentially come from half an expanded tuple.  This means that we
+                            // can't leverage the previous code for this.
+                            TypeRef ret = type_manager->create_array(TypeInfo::Category::CONST, cb, var.type);
+                            if (!ret)
+                                return true;
+                            cargs[sig_it->var_name] = ret;
+                            // The rest of rets need to be matched against the remaining signature.  What makes this
+                            // difficult is what happens when we encounter a packed signature element during this
+                            for (; rets_it == rets.end(); rets_it++)
+                            {
+                                // This for loop iterates over the direct matches between the passed arguments
+                                // and non-packed signature elements.
+                                sig_it++;
+                                if (sig_it == sig.end())
+                                    return error::compiler(arg_it->node_info, "Too many arguments were provided");
+                                if (cargs.contains(sig_it->var_name))
+                                    return error::compiler(arg_it->node_info, "Found multiple values for argument '%'", sig_it->var_name);
+                                // Updating the current info kept about the signature element
+                                if (sig_scope.at(sig_it->var_name, var) ||
+                                    var.type->to_obj(sig_it->node_info, ety)
+                                    ) return true;
+                                // If the signature element is a packed value, I can directly leverage the outer
+                                // while (true) loop to parse out the rest of the signature
+                                if (sig_it->is_packed)
                                     break;
-                                }
-                                cb = [lhs{ cb }, rhs{ (*rets_it)->codegen }, ety, &node_info{ arg_it->node_info }](Scope& scope) {
+
+                                // The signature element wasn't packed, it's just a simple match
+                                if (match_arg(var.type, *rets_it, generics))
+                                    return true;
+                                cargs[sig_it->var_name] = *rets_it;
+                            }
+                            if (rets_it != rets.end())
+                                // Didn't hit the end of rets, instead there was a packed signature element
+                                continue;
+                            // Finished rets cleanly, break out of the while (true) and resume the normal algorithm
+                            break;
+                        }
+                        cb = [lhs{ cb }, rhs{ (*rets_it)->codegen }, ety, &node_info{ arg_it->node_info }](Scope& scope) {
+                            return
+                                lhs(scope) ||
+                                rhs(scope) ||
+                                ety->codegen(scope) ||
+                                body->add_instruction(instruction::Arr(node_info)) ||
+                                body->add_instruction(instruction::Add(node_info)) ||
+                                scope.pop(2);
+                        };
+                    }
+                    else
+                    {
+                        // The passed parameter was packed and the signature element was as well
+                        if (!match_arg(var.type->type_array.elem, (*rets_it)->type_array.elem, generics))
+                        {
+                            // Perfect match between the unpacked passed value and the signature type
+                            // This means that the lhs and rhs can directly be added
+                            TypeRef ret = type_manager->create_array(
+                                TypeInfo::Category::CONST,
+                                [lhs{ cb }, rhs{ (*rets_it)->codegen }, ety, &node_info{ arg_it->node_info }](Scope& scope) {
                                     return
                                         lhs(scope) ||
                                         rhs(scope) ||
-                                        ety->codegen(scope) ||
-                                        body->add_instruction(instruction::Arr(node_info)) ||
+                                        ety->codegen(scope) ||  // This will be an array type
                                         body->add_instruction(instruction::Add(node_info)) ||
                                         scope.pop(2);
-                                };
-                            }
-                            else
-                            {
-                                // The passed parameter was packed and the signature element was as well
-                                if (!match_arg(var.type->type_array.elem, (*rets_it)->type_array.elem, generics))
-                                {
-                                    // Perfect match between the unpacked passed value and the signature type
-                                    // This means that the lhs and rhs can directly be added
-                                    TypeRef ret = type_manager->create_array(
-                                        TypeInfo::Category::CONST,
-                                        [lhs{ cb }, rhs{ (*rets_it)->codegen }, ety, &node_info{ arg_it->node_info }](Scope& scope) {
-                                            return
-                                                lhs(scope) ||
-                                                rhs(scope) ||
-                                                ety->codegen(scope) ||  // This will be an array type
-                                                body->add_instruction(instruction::Add(node_info)) ||
-                                                scope.pop(2);
-                                        }, var.type->type_array.elem);
-                                    if (!ret)
-                                        return true;
-                                    cargs[sig_it->var_name] = ret;
-                                    assert(rets_it + 1 == rets.end());
-                                    // Finished the packed signature argument, resume the normal algorithm
-                                    break;  // breaking the while (true), not the for loop
-                                }
-
-                                // TODO: implicitly cast the unpacked values
-                                return error::compiler(arg_it->node_info, "Internal error: implicit unpack cast has not been implemented");
-                            }
+                                }, var.type->type_array.elem);
+                            if (!ret)
+                                return true;
+                            cargs[sig_it->var_name] = ret;
+                            assert(rets_it + 1 == rets.end());
+                            // Finished the packed signature argument, resume the normal algorithm
+                            break;  // breaking the while (true), not the for loop
                         }
+
+                        // TODO: implicitly cast the unpacked values
+                        return error::compiler(arg_it->node_info, "Internal error: implicit unpack cast has not been implemented");
                     }
                 }
             }
@@ -3731,15 +4296,11 @@ namespace nn
                 TypeRef type;
                 if (codegen_expr_single_ret<TypeInfo::AllowAll>(sig_scope, *fn.signature.vargs[i].type_expr, type))
                     return true;
-                if (type->ty == TypeInfo::Type::TYPE)
-                {
-                    if (match_arg(type->type_type.base, param_vargs[i], generics))
-                        return true;
-                    continue;
-                }
-                if (type->ty == TypeInfo::Type::DLTYPE)
-                    return error::compiler(fn.signature.vargs[i].node_info, "Internal error: not implemented");
-                return error::compiler(fn.signature.vargs[i].node_info, "Type expression for varg did not resolve to a type");
+                if (type->ty != TypeInfo::Type::TYPE)
+                    return error::compiler(fn.signature.vargs[i].node_info, "Type expression for varg did not resolve to a type");
+                if (match_arg(type->type_type.base, param_vargs[i], generics))
+                    return true;
+                continue;
             }
 
             vargs = param_vargs;
@@ -4362,7 +4923,7 @@ namespace nn
                         return error::compiler(expr.node_info, "Tensor types can only be assigned to other tensors");
                     // Merging tensors is weird.  The forward edges can directly be merged, but thats not always true for the backward edges
                     // This is cause if the tensors are used by multiple nodes, both backward edges will have bound inputs.
-                    // In this cases, if the backward edges were merged directly it would cause a runtime error, which is incorrect behaviour
+                    // In these cases, if the backward edges were merged directly it would cause a runtime error, which is incorrect behaviour
                     // Instead, it should implement the multivariable chain rule where the inputs to the backward edges get summed.
                     // 
                     // The best solution I could come up with to resolve this issue is to check if both the backward edges have their inputs bound
@@ -4439,6 +5000,10 @@ namespace nn
                         body->add_instruction(instruction::Mrg(expr.node_info)) ||
                         scope.pop(2);
                 }
+
+                if (lhs_type != rhs_type)
+                    return error::compiler(expr.node_info, "Type mismatch in assignment.\nExpected %, recieved %",
+                        lhs_type->to_string(), rhs_type->to_string());
                 
                 return
                     lhs_type->codegen(scope) ||
@@ -4753,7 +5318,7 @@ namespace nn
                 case TypeInfo::Type::TUPLE:
                     if (expr_arg.lhs->ty != ExprType::LIT_INT)
                         return error::compiler(expr_arg.lhs->node_info, "Tuple indexing arguments must be known at compile time");
-                    if (expr_arg.lhs->expr_int < 0 || callee->type_tuple.elems.size() <= expr_arg.lhs->expr_int)
+                    if (expr_arg.lhs->expr_int < 0 || (int64_t)callee->type_tuple.elems.size() <= expr_arg.lhs->expr_int)
                         return error::compiler(expr_arg.lhs->node_info, "Tuple index % is out of range", expr_arg.lhs->expr_int);
                     ret = type_manager->duplicate(
                         callee->cat,
@@ -4765,6 +5330,7 @@ namespace nn
                                 body->add_instruction(instruction::Idx(expr.node_info)) ||
                                 scope.pop(2);
                         }, callee->type_tuple.elems[expr_arg.lhs->expr_int]);
+                    break;
                 default:
                     return error::compiler(expr.node_info, "Unable to index into type %", callee->to_string());
                 }
@@ -4825,7 +5391,35 @@ namespace nn
                 return false;
             }
             case TypeInfo::Type::STRUCT:
-                return error::compiler(expr.node_info, "struct member access has not been implemented");
+            {
+                size_t i = 0;
+                for (; i < lhs->type_struct.elems.size(); i++)
+                    if (lhs->type_struct.elems[i].first == expr.expr_name.val)
+                        break;
+                if (i == lhs->type_struct.elems.size())
+                    return error::compiler(expr.node_info, "struct % has no member %",
+                        lhs->type_struct.ast->signature.name, expr.expr_name.val);
+                TypeRef lhs_type;
+                if (lhs->to_obj(expr.node_info, lhs_type))
+                    return true;
+                TypeRef type = type_manager->duplicate(
+                    lhs->cat,
+                    [&expr, lhs, lhs_type, i](Scope& scope) -> bool {
+                        size_t addr;
+                        return
+                            bc->add_obj_int(addr, i) ||
+                            lhs->codegen(scope) ||
+                            body->add_instruction(instruction::New(expr.node_info, addr)) ||
+                            scope.push() ||
+                            lhs_type->codegen(scope) ||
+                            body->add_instruction(instruction::Idx(expr.node_info)) ||
+                            scope.pop(2);
+                    }, lhs->type_struct.elems[i].second);
+                if (!type)
+                    return true;
+                rets.push_back(type);
+                return false;
+            }
             default:
                 return error::compiler(expr.node_info, "Unable to perform a member access operation on the given type");
             }
@@ -5021,6 +5615,7 @@ namespace nn
                         call->apply_args(expr.node_info, init_matches[0].second) ||
                         call->codegen(scope, rets);
                 }
+
                 // Non of the inits matched the cargs, so see if a struct matches
                 std::vector<std::pair<const AstStruct*, std::map<std::string, TypeRef>>> struct_matches;
                 for (const AstStruct* struct_elem : callee->type_lookup.lookup.structs)
@@ -5031,13 +5626,60 @@ namespace nn
                     if (!match_carg_sig(scope, sig_scope, struct_elem->signature.cargs, expr.expr_call.args, cargs, generics))
                         struct_matches.push_back({ struct_elem, std::move(cargs) });
                 }
-                if (init_matches.size() > 1)
+                if (struct_matches.size() > 1)
                     return error::compiler(expr.node_info, "Reference to struct '%' is ambiguous", callee->type_lookup.name);
-                if (init_matches.size() == 1)
+                if (struct_matches.size() == 1)
                 {
                     // Perfect match, return it
-                    return error::compiler(expr.node_info, "Interal error: not implemented");
+                    const auto& [ast, cargs] = struct_matches.front();
+                    if (lazy_types)
+                    {
+                        // Not much work to do here then
+                        TypeRef tmp = type_manager->create_lazystruct(ast, cargs);
+                        if (!tmp) return true;
+                        TypeRef type;
+                        if (tmp->to_obj(expr.node_info, type))
+                            return true;
+                        rets.push_back(type);
+                        return false;
+                    }
+                    
+                    // Constructing a scope of all the cargs needed to convert the struct body into a type
+                    // I don't care about codegeneration here since this is for uninitialized struct declarations
+                    // here, so the stack positions don't need to be correct
+                    Scope struct_scope{ nullptr };
+                    for (const auto& [carg_name, carg_type] : cargs)
+                        if (struct_scope.add(carg_name, carg_type, expr.node_info))
+                            return true;
+                    
+                    std::vector<std::pair<std::string, TypeRef>> elems;
+                    for (const auto& line : ast->body)
+                    {
+                        if (line.ty != LineType::EXPR)
+                            return error::compiler(line.node_info, "A struct body must only contain variable declarations");
+                        const auto& decl_expr = line.line_expr.line;
+                        if (decl_expr.ty != ExprType::VAR_DECL)
+                            return error::compiler(decl_expr.node_info, "A struct body must only contain variable declarations");
+
+                        TypeRef decl_type;
+                        lazy_types = true;
+                        bool ret = codegen_expr_single_ret<TypeInfo::AllowAll>(struct_scope, *decl_expr.expr_name.expr, decl_type);
+                        lazy_types = false;
+                        if (ret) return true;
+                        if (decl_type->ty != TypeInfo::Type::TYPE)
+                            return error::compiler(decl_expr.expr_name.expr->node_info, "Expected a type in variable declaration");
+                        elems.push_back({ decl_expr.expr_name.val, decl_type->type_type.base });
+                    }
+
+                    TypeRef tmp = type_manager->create_struct(TypeInfo::Category::VIRTUAL, nullptr, ast, elems);
+                    if (!tmp) return true;
+                    TypeRef type;
+                    if (tmp->to_obj(expr.node_info, type))
+                        return true;
+                    rets.push_back(type);
+                    return false;
                 }
+
                 // Couldn't find anything, its a user error
                 return error::compiler(expr.node_info, "Unable to find an init or struct '%' with the given cargs", callee->type_lookup.name);
             }
@@ -5397,16 +6039,22 @@ namespace nn
             for (const AstExpr& arg : expr.expr_call.args)
                 if (codegen_expr_multi_ret<TypeInfo::NonVirtual>(scope, arg, param_vargs))
                     return true;
-            bool check_def = true;
-            bool check_intr = true;
-            for (TypeRef varg : param_vargs)
+            bool check_def = false;
+            bool check_intr = false;
+            if (body_type == BodyType::DEF)
             {
-                if (varg->ty != TypeInfo::Type::TENSOR)
-                    check_def = false;
-                if (varg->ty != TypeInfo::Type::EDGE)
-                    check_intr = false;
-                if (varg->ty == TypeInfo::Type::UNPACK)
-                    return error::compiler(expr.node_info, "Internal error: not implemented");
+                // Only defs can call other defs or intrs.  All other body types are not allows to
+                check_def = true;
+                check_intr = true;
+                for (TypeRef varg : param_vargs)
+                {
+                    if (varg->ty != TypeInfo::Type::TENSOR)
+                        check_def = false;
+                    if (varg->ty != TypeInfo::Type::EDGE)
+                        check_intr = false;
+                    if (varg->ty == TypeInfo::Type::UNPACK)
+                        return error::compiler(expr.node_info, "Internal error: not implemented");
+                }
             }
 
             std::vector<AstExpr> default_cargs = {};
@@ -5477,6 +6125,7 @@ namespace nn
                         intr_call->codegen(scope, rets);
                 }
             }
+
             // It doesn't match a def nor an intr, try for a function
             std::vector<std::tuple<const AstFn*, std::map<std::string, TypeRef>, std::vector<TypeRef>>> fn_matches;
             for (const AstFn* fn : lookup->fns)
@@ -5498,6 +6147,29 @@ namespace nn
                     fn_call->apply_args(expr.node_info, std::get<1>(fn_matches.front()), std::get<2>(fn_matches.front())) ||
                     fn_call->codegen(scope, rets);
             }
+
+            // Final try - struct initialization
+            std::vector<std::pair<const AstStruct*, std::map<std::string, TypeRef>>> struct_matches;
+            for (const AstStruct* ast_struct : lookup->structs)
+            {
+                std::map<std::string, TypeRef> cargs;
+                std::map<std::string, TypeRef> generics;
+                Scope sig_scope{ nullptr };
+                if (!match_carg_sig(scope, sig_scope, ast_struct->signature.cargs, *param_cargs, cargs, generics))
+                    struct_matches.push_back({ ast_struct, cargs });
+            }
+            if (struct_matches.size() > 1)
+                return error::compiler(expr.node_info, "Reference to struct '%' is ambiguous", *name);
+            if (struct_matches.size() == 1)
+            {
+                // Perfect match, return it
+                std::unique_ptr<StructCall> struct_call = std::make_unique<StructCall>(lookup->ns);
+                return
+                    struct_call->init(*struct_matches.front().first) ||
+                    struct_call->apply_args(expr.node_info, struct_matches.front().second, param_vargs) ||
+                    struct_call->codegen(scope, rets);
+            }
+
             return error::compiler(expr.node_info, "Unable to find a suitable overload for varg call to '%'", *name);
         }
 
@@ -5522,6 +6194,8 @@ namespace nn
                 if (!tmp) return true;
                 type = type_manager->create_type(TypeInfo::Category::VIRTUAL, nullptr, tmp);
                 break;
+            case ExprKW::VOID:
+                return false;  // void results in 0 return values
             case ExprKW::INIT:
                 // the default behaviour of an init declaration is to create an init with an empty name and no configs
                 tmp = type_manager->create_init(
@@ -5751,7 +6425,52 @@ namespace nn
             if (struct_matches.size() == 1)
             {
                 // Perfect match, return it
-                return error::compiler(expr.node_info, "Internal error: structs have not been implemented yet");
+                const AstStruct& ast_struct = *struct_matches[0];
+                if (lazy_types)
+                {
+                    TypeRef tmp = type_manager->create_lazystruct(&ast_struct, {});
+                    if (!tmp) return true;
+                    TypeRef type;
+                    if (tmp->to_obj(expr.node_info, type))
+                        return true;
+                    rets.push_back(type);
+                    return false;
+                }
+
+                if (ast_struct.is_bytecode)
+                    return error::compiler(ast_struct.node_info, "A struct body must not be bytecode");
+                std::vector<std::pair<std::string, TypeRef>> elems;
+                for (const auto& line : ast_struct.body)
+                {
+                    if (line.ty != LineType::EXPR)
+                        return error::compiler(line.node_info, "A struct body must only contain variable declarations");
+                    const auto& decl_expr = line.line_expr.line;
+                    if (decl_expr.ty != ExprType::VAR_DECL)
+                        return error::compiler(decl_expr.node_info, "A struct body must only contain variable declarations");
+                    TypeRef decl_type;
+                    lazy_types = true;
+                    bool ret = codegen_expr_single_ret<TypeInfo::AllowAll>(scope, *decl_expr.expr_name.expr, decl_type);
+                    lazy_types = false;
+                    if (ret) return true;
+                    if (decl_type->ty != TypeInfo::Type::TYPE)
+                        return error::compiler(decl_expr.expr_name.expr->node_info, "Expected a type in variable declaration");
+                    elems.push_back({ decl_expr.expr_name.val, decl_type->type_type.base });
+                }
+                // Note that since this is a lone struct reference, this is basically declaration without
+                // initialization, so the correct behaviour is to put an empty aggregate onto the stack
+                TypeRef tmp = type_manager->create_struct(
+                    TypeInfo::Category::DEFAULT,
+                    [&expr](Scope& scope) -> bool {
+                        return
+                            body->add_instruction(instruction::Agg(expr.node_info, 0)) ||
+                            scope.push();
+                    }, &ast_struct, elems);
+                if (!tmp) return true;
+                TypeRef type;
+                if (tmp->to_obj(ast_struct.node_info, type))
+                    return true;
+                rets.push_back(type);
+                return false;
             }
             
             // No struct matches were found.  It could still be a def or fn reference type of thing
@@ -6423,11 +7142,6 @@ namespace nn
             return ret;
         }
 
-        bool proc_name_struct(std::string& name, const std::vector<std::string>& ns, const AstStruct& ast_struct)
-        {
-            return error::compiler(ast_struct.node_info, "Internal error: not implemented");
-        }
-
         bool proc_name_fn(std::string& name, const std::vector<std::string>& ns, const AstFn& ast_fn)
         {
             std::stringstream fn_name;
@@ -6508,17 +7222,6 @@ namespace nn
             return false;
         }
 
-        bool codegen_struct(const std::string& name, const AstStruct& ast_struct, const std::vector<std::string>& ns)
-        {
-            if (ast_struct.is_bytecode)
-                return error::compiler(ast_struct.node_info, "the body of a struct must not be bytecode");
-
-            body_type = BodyType::STRUCT;
-            ByteCodeBody body{ ast_struct.node_info };
-
-            return error::compiler(ast_struct.node_info, "Not implemented");
-        }
-
         bool codegen_proc_safety(const AstNodeInfo& node_info)
         {
             // During proper code execution, this point should be unreachable.
@@ -6573,18 +7276,7 @@ namespace nn
                     scope.push()
                     ) return true;
             }
-            TypeRef blk_ty = type_manager->create_block(
-                TypeInfo::Category::CONST,
-                [&ast_fn](Scope& scope) -> bool {
-                    Scope::StackVar var;
-                    return
-                        scope.at("~block", var) ||
-                        body->add_instruction(instruction::Dup(ast_fn.node_info, var.ptr)) ||
-                        scope.push();
-                });
-            if (!blk_ty)
-                return true;
-            if (scope.add("~block", blk_ty, ast_fn.node_info))
+            if (scope.pop())
                 return true;
 
             if (bc->has_proc(fn_name))
@@ -6896,7 +7588,10 @@ namespace nn
                 }
                 return ret;
             case CodeModule::AttrType::STRUCT:
-                return codegen_struct(name, *std::get<const AstStruct*>(attr), ns);
+                // Struct's don't need to be codegenned
+                // Explicit declaration results in a null pointer on the stack
+                // And construction via a call results in inline code
+                return false;
             case CodeModule::AttrType::FUNC:
                 return codegen_func(name, *std::get<const AstFn*>(attr), ns);
             case CodeModule::AttrType::DEF:

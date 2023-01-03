@@ -24,6 +24,7 @@ namespace nn
         enum class ExprType
         {
             INVALID,
+            VOID,
             LIT_BOOL,
             LIT_INT,
             LIT_FLOAT,
@@ -113,7 +114,9 @@ namespace nn
 
         enum class ExprKW
         {
+            NUL,
             TYPE,
+            VOID,
             INIT,
             FTY,
             BOOL,

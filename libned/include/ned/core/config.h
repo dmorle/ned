@@ -29,6 +29,7 @@ namespace nn
 
         struct ConfigVal
         {
+            static ConfigVal make_null();
             static ConfigVal make_bool(bool val);
             static ConfigVal make_fty(EdgeFty val);
             static ConfigVal make_int(int64_t val);
@@ -39,8 +40,9 @@ namespace nn
             enum class Tag
             {
                 INVALID,
-                FTY,
+                NUL,
                 BOOL,
+                FTY,
                 INT,
                 FLOAT,
                 STRING,
@@ -75,6 +77,7 @@ namespace nn
 
         struct ConfigType
         {
+            static ConfigType make_null();
             static ConfigType make_bool();
             static ConfigType make_fty();
             static ConfigType make_int();
@@ -86,6 +89,7 @@ namespace nn
             enum class Tag
             {
                 INVALID,
+                NUL,
                 BOOL,
                 FTY,
                 INT,

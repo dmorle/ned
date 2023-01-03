@@ -958,7 +958,7 @@ namespace nn
         {
             // Tuples are always initialized, and bounds are checked for all aggregate types at compile time
             // This can only occur in compiled bytecode when a struct that wasn't initialized was dereferenced
-            if (elem_tys.size() == 0)
+            if (lhs.agg_obj->size() == 0)
                 return error::runtime("Dereferencing uninitialized struct");
 
             // This should never occur from compiled bytecode, only manually written bytecode

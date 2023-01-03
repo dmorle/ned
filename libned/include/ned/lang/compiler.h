@@ -97,11 +97,6 @@ namespace nn
             TypeRef base;
         };
 
-        struct TypeInfoPrimitive
-        {
-            CodegenCallback cb;
-        };
-
         struct TypeInfoArray
         {
             TypeRef elem;
@@ -127,9 +122,14 @@ namespace nn
 
         struct TypeInfoStruct
         {
-            const AstStruct* matches;
-            std::vector<std::pair<TypeRef, CodegenCallback>> cargs;
-            std::map<std::string, std::pair<TypeRef, CodegenCallback>> kwcargs;
+            const AstStruct* ast;
+            std::vector<std::pair<std::string, TypeRef>> elems;
+        };
+
+        struct TypeInfoLazyStruct
+        {
+            const AstStruct* ast;
+            std::map<std::string, TypeRef> cargs;
         };
 
         struct TypeInfoDlType
@@ -176,6 +176,7 @@ namespace nn
                 LOOKUP,      // Result of an identifier lookup in the module
                 CARGBIND,    // Result of binding cargs to a lookup result
                 STRUCT,      // Struct with bound cargs
+                LAZYSTRUCT,  // Same as struct but with extra steps
                 INIT,        // Init object
                 NODE,        // Node object
                 BLOCK,       // Block object
@@ -222,14 +223,15 @@ namespace nn
 
             union
             {
-                TypeInfoType      type_type;
-                TypeInfoArray     type_array;
-                TypeInfoTuple     type_tuple;
-                TypeInfoLookup    type_lookup;
-                TypeInfoCargBind  type_cargbind;
-                TypeInfoStruct    type_struct;
-                TypeInfoDlType    type_dltype;
-                TypeInfoGeneric   type_generic;
+                TypeInfoType        type_type;
+                TypeInfoArray       type_array;
+                TypeInfoTuple       type_tuple;
+                TypeInfoLookup      type_lookup;
+                TypeInfoCargBind    type_cargbind;
+                TypeInfoStruct      type_struct;
+                TypeInfoLazyStruct  type_lazystruct;
+                TypeInfoDlType      type_dltype;
+                TypeInfoGeneric     type_generic;
             };
 
             TypeInfo();
@@ -280,6 +282,9 @@ namespace nn
             void do_move(TypeInfo&& type) noexcept;
         };
 
+        // wakes up a lazy type, leaving it's elements still lazy though
+        bool wake_up(const AstNodeInfo& node_info, TypeRef src, TypeRef& dst);
+
         class TypeManager
         {
             friend class TypeRef;
@@ -312,9 +317,10 @@ namespace nn
             TypeRef create_array       (TypeInfo::Category cat, CodegenCallback codegen, TypeRef elem);
             TypeRef create_tuple       (TypeInfo::Category cat, CodegenCallback codegen, std::vector<TypeRef> elems);
             
-            TypeRef create_lookup      (std::string name, CodeModule::LookupResult lookup);  // always virtual'
+            TypeRef create_lookup      (std::string name, CodeModule::LookupResult lookup);  // always virtual
             TypeRef create_cargbind    (std::string name, CodeModule::LookupResult lookup, const std::vector<AstExpr>& cargs); // always virtual
-            TypeRef create_struct      (TypeInfo::Category cat, CodegenCallback codegen);
+            TypeRef create_struct      (TypeInfo::Category cat, CodegenCallback codegen, const AstStruct* ast, const std::vector<std::pair<std::string, TypeRef>>& elems);
+            TypeRef create_lazystruct  (const AstStruct* ast, const std::map<std::string, TypeRef>& cargs);  // always virtual
             TypeRef create_init        (TypeInfo::Category cat, CodegenCallback codegen);
             
             TypeRef create_node        (TypeInfo::Category cat, CodegenCallback codegen);
@@ -394,27 +400,6 @@ namespace nn
                 ValNode* rhs = nullptr;
             };
 
-            struct ValType
-            {
-                ValNode* val = nullptr;
-            };
-
-            struct ArrayType
-            {
-                TypeNode* carg = nullptr;
-            };
-
-            struct TupleType
-            {
-                std::vector<TypeNode*> cargs;
-            };
-
-            struct DlType
-            {
-                ValNode* fp = nullptr;
-                std::vector<ValNode*> shape;
-            };
-
             struct ValNode
             {
                 enum class Type
@@ -454,6 +439,40 @@ namespace nn
                 void do_move(ValNode&& node) noexcept;
             };
 
+            struct ValType
+            {
+                ValNode* val = nullptr;
+            };
+
+            struct ArrayType
+            {
+                TypeNode* carg = nullptr;
+            };
+
+            struct TupleType
+            {
+                std::vector<TypeNode*> cargs;
+            };
+
+            struct StructType
+            {
+                const AstStruct* ast;
+                std::map<std::string, ValNode*> cargs;
+                std::vector<std::pair<std::string, TypeNode*>> fields;
+            };
+
+            struct LazyStructType
+            {
+                const AstStruct* ast;
+                std::map<std::string, ValNode*> cargs;
+            };
+
+            struct DlType
+            {
+                ValNode* fp = nullptr;
+                std::vector<ValNode*> shape;
+            };
+
             struct TypeNode
             {
                 enum class Type
@@ -470,15 +489,19 @@ namespace nn
                     UNPACK,  // Unpacked types
                     ARRAY,
                     TUPLE,
+                    STRUCT,
+                    LAZYSTRUCT,
                     DLTYPE  // either a tensor or an edge depending on the context
                 } ty = Type::INVALID;
 
                 union
                 {
-                    ArrayType   type_array;
-                    TupleType   type_tuple;
-                    DlType      type_dl;
-                    ValType     type_val;
+                    ArrayType       type_array;
+                    TupleType       type_tuple;
+                    StructType      type_struct;
+                    LazyStructType  type_lazystruct;
+                    DlType          type_dl;
+                    ValType         type_val;
                 };
 
                 TypeNode() {}
@@ -494,9 +517,22 @@ namespace nn
                 void do_move(TypeNode&& node) noexcept;
             };
 
+            struct Carg
+            {
+                std::string kwarg;
+                ValNode* node;
+                const AstNodeInfo* node_info;
+            };
+
+            // TODO: handle generics
+            bool match_struct_sig(Scope& scope, const AstStruct* ast,
+                const std::vector<Carg>& param_cargs, std::map<std::string, ValNode*>& cargs);
+
             bool create_arg   (Scope& scope, const AstArgDecl& decl, ValNode*& node);
+            bool create_arg   (Scope& scope, const AstExpr& decl, ValNode*& node);
             bool create_type  (Scope& scope, const AstExpr& expr, TypeNode*& node);
             bool create_value (Scope& scope, const AstExpr& expr, ValNode*& node);
+            bool create_value_callee (Scope& scope, const AstExpr& expr, ValNode*& node);
 
             bool codegen_root_arg(Scope& scope, ValNode& node);
 
@@ -510,17 +546,19 @@ namespace nn
 
             bool codegen_value(Scope& scope, ValNode& node, TypeRef& val);
             
-            bool codegen_type_type    (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_init    (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_fty     (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_bool    (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_int     (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_float   (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_string  (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_generic (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_array   (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_tuple   (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_dltype  (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_type        (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_init        (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_fty         (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_bool        (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_int         (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_float       (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_string      (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_generic     (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_array       (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_tuple       (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_struct      (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_lazystruct  (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_dltype      (Scope& scope, TypeNode& node, TypeRef& type);
 
             bool codegen_type(Scope& scope, TypeNode& node, TypeRef& type);
 
@@ -539,6 +577,14 @@ namespace nn
             TypeNode* next_type();
 
         private:
+            bool create_arg(
+                Scope& scope,
+                const AstNodeInfo& node_info,
+                bool is_packed,
+                const AstExpr* type_expr,
+                const std::string& var_name,
+                const AstExpr* default_expr,
+                ValNode*& node);
             static constexpr size_t bufsz = 1024;
 
             ValNode val_buf[bufsz] = {};
@@ -570,11 +616,24 @@ namespace nn
             virtual TypeRef get_shape(const AstNodeInfo& node_info, TypeRef type);
         };
 
-        class InitCall :
-            public TensorCall
+        class CommonCall :
+            public ProcCall
         {
         public:
-            using TensorCall::TensorCall;
+            CommonCall(const std::vector<std::string>& sig_ns);
+
+        protected:
+            virtual TypeRef get_fp(const AstNodeInfo& node_info, TypeRef type);
+            virtual TypeRef get_shape(const AstNodeInfo& node_info, TypeRef type);
+        };
+
+        // Concrete call classes
+
+        class InitCall :
+            public CommonCall
+        {
+        public:
+            using CommonCall::CommonCall;
 
             bool init(const AstInit& sig);
             bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs);
@@ -586,14 +645,20 @@ namespace nn
         };
 
         class StructCall :
-            public TensorCall
+            public CommonCall
         {
         public:
-            using TensorCall::TensorCall;
+            using CommonCall::CommonCall;
 
             bool init(const AstStruct& sig);
-            bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs);
+            bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs, const std::vector<TypeRef>& vargs);
             bool codegen(Scope& scope, std::vector<TypeRef>& rets);
+
+        private:
+            std::map<std::string, ValNode*> varg_nodes;
+            std::vector<std::string> varg_stack;
+            TypeNode* ret_node;
+            const AstStruct* ast_struct;
         };
 
         class IntrCall :
@@ -632,10 +697,10 @@ namespace nn
         };
 
         class FnCall :
-            public TensorCall
+            public CommonCall
         {
         public:
-            using TensorCall::TensorCall;
+            using CommonCall::CommonCall;
 
             bool init(const AstFn& sig);
             bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs, const std::vector<TypeRef>& vargs);
@@ -740,12 +805,10 @@ namespace nn
         bool codegen_line(Scope& scope, const AstLine& line);  // generates code for independent lines.  Can't handle if, elif, else, forward.
         bool codegen_lines(Scope& scope, const std::vector<AstLine>& lines);
 
-        bool proc_name_struct (std::string& name, const std::vector<std::string>& ns, const AstStruct& ast_struct);
         bool proc_name_fn     (std::string& name, const std::vector<std::string>& ns, const AstFn&     ast_fn    );
         bool proc_name_def    (std::string& name, const std::vector<std::string>& ns, const AstBlock&  ast_def   );
         bool proc_name_intr   (std::string& name, const std::vector<std::string>& ns, const AstBlock&  ast_intr  );
 
-        bool codegen_struct(const std::string& name, const AstStruct& ast_struct, const std::vector<std::string>& ns);
         bool codegen_func(const std::string& name, const AstFn& ast_fn, const std::vector<std::string>& ns);
         bool codegen_def(const std::string& name, const AstBlock& ast_def, const std::vector<std::string>& ns);
         bool codegen_intr(const std::string& name, const AstBlock& ast_intr, const std::vector<std::string>& ns);

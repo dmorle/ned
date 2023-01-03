@@ -566,8 +566,16 @@ namespace nn
                 ast_expr.expr_bool = false;
                 ast_expr.ty = ExprType::LIT_BOOL;
                 return false;
+            case TokenType::KW_NULL:
+                ast_expr.expr_kw = ExprKW::NUL;
+                ast_expr.ty = ExprType::KW;
+                return false;
             case TokenType::KW_TYPE:
                 ast_expr.expr_kw = ExprKW::TYPE;
+                ast_expr.ty = ExprType::KW;
+                return false;
+            case TokenType::KW_VOID:
+                ast_expr.expr_kw = ExprKW::VOID;
                 ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_INIT:
@@ -1585,8 +1593,18 @@ namespace nn
 
         bool parse_namespace(const TokenArray& tarr, AstNamespace& ast_namespace, int indent_level)
         {
+            int i = 0;
+            for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (tarr[i]->expect<TokenType::IDN>())
+                return true;
+            ast_namespace.name = tarr[i]->get<TokenType::IDN>().val;
+            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (tarr[i]->expect<TokenType::COLON>())
+                return true;
+            i++;
+
             bool ret = false;
-            for (int i = 0; i < tarr.size(); i++)
+            for (; i < tarr.size(); i++)
             {
                 if (tarr[i]->ty == TokenType::ENDL || tarr[i]->ty == TokenType::INDENT)
                     continue;
@@ -1597,7 +1615,7 @@ namespace nn
                 case TokenType::KW_IMPORT:
                     ret = error::syntax(tarr[i], "imports are not allowed within a namespace");
                     i = tarr.search(IsSameCriteria(TokenType::ENDL), i);
-                    continue;
+                    break;
                 case TokenType::KW_NAMESPACE:
                     i++;
                     end = tarr.search(LineEndCriteria(indent_level), i);
@@ -1608,7 +1626,7 @@ namespace nn
                     ast_namespace.namespaces.push_back(AstNamespace());
                     if (ret = ret || parse_namespace({ tarr, i, end }, ast_namespace.namespaces.back(), indent_level + 1))
                         ast_namespace.namespaces.pop_back();
-                    continue;
+                    break;
                 case TokenType::KW_STRUCT:
                     i++;
                     end = tarr.search(LineEndCriteria(indent_level), i);
@@ -1619,7 +1637,7 @@ namespace nn
                     ast_namespace.structs.push_back(AstStruct());
                     if (ret = ret || parse_code_block({ tarr, i, end }, ast_namespace.structs.back(), indent_level + 1))
                         ast_namespace.structs.pop_back();
-                    continue;
+                    break;
                 case TokenType::KW_FN:
                     i++;
                     end = tarr.search(LineEndCriteria(indent_level), i);
@@ -1630,7 +1648,7 @@ namespace nn
                     ast_namespace.funcs.push_back(AstFn());
                     if (ret = ret || parse_code_block({ tarr, i, end }, ast_namespace.funcs.back(), indent_level + 1))
                         ast_namespace.funcs.pop_back();
-                    continue;
+                    break;
                 case TokenType::KW_DEF:
                     i++;
                     end = tarr.search(LineEndCriteria(indent_level), i);
@@ -1641,7 +1659,7 @@ namespace nn
                     ast_namespace.defs.push_back(AstBlock());
                     if (ret = ret || parse_code_block({ tarr, i, end }, ast_namespace.defs.back(), indent_level + 1))
                         ast_namespace.defs.pop_back();
-                    continue;
+                    break;
                 case TokenType::KW_INTR:
                     i++;
                     end = tarr.search(LineEndCriteria(indent_level), i);
@@ -1652,7 +1670,7 @@ namespace nn
                     ast_namespace.intrs.push_back(AstBlock());
                     if (ret = ret || parse_code_block({ tarr, i, end }, ast_namespace.intrs.back(), indent_level + 1))
                         ast_namespace.intrs.pop_back();
-                    continue;
+                    break;
                 case TokenType::KW_INIT:
                     i++;
                     end = tarr.search(IsSameCriteria(TokenType::ENDL), i);
@@ -1663,10 +1681,11 @@ namespace nn
                     ast_namespace.inits.push_back(AstInit());
                     if (ret = ret || parse_init({ tarr, i, end }, ast_namespace.inits.back()))
                         ast_namespace.inits.pop_back();
-                    continue;
+                    break;
                 default:
                     return error::syntax(tarr[i], "Invalid token in namespace");
                 }
+                i = end;
             }
             return ret;
         }
@@ -1792,6 +1811,7 @@ namespace nn
             switch (ty)
             {
             case ExprType::INVALID:
+            case ExprType::VOID:
             case ExprType::LIT_BOOL:
             case ExprType::LIT_INT:
             case ExprType::LIT_FLOAT:
@@ -1871,6 +1891,7 @@ namespace nn
             switch (ty)
             {
             case ExprType::INVALID:
+            case ExprType::VOID:
                 break;
             case ExprType::LIT_BOOL:
                 new (&expr_bool) decltype(expr_bool)(std::move(expr.expr_bool));

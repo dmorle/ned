@@ -42,6 +42,13 @@ namespace nn
             return true;
         }
 
+        ConfigVal ConfigVal::make_null()
+        {
+            ConfigVal ret;
+            ret.ty = Tag::NUL;
+            return ret;
+        }
+
         ConfigVal ConfigVal::make_bool(bool val)
         {
             ConfigVal ret;
@@ -129,6 +136,7 @@ namespace nn
             switch (ty)
             {
             case Tag::INVALID:
+            case Tag::NUL:
                 break;
             case Tag::BOOL:
                 val_bool.~decltype(val_bool)();
@@ -158,6 +166,7 @@ namespace nn
             switch (ty)
             {
             case Tag::INVALID:
+            case Tag::NUL:
                 break;
             case Tag::BOOL:
                 new (&val_bool) decltype(val_bool)(val.val_bool);
@@ -188,6 +197,7 @@ namespace nn
             switch (ty)
             {
             case Tag::INVALID:
+            case Tag::NUL:
                 break;
             case Tag::BOOL:
                 new (&val_bool) decltype(val_bool)(std::move(val.val_bool));
@@ -208,6 +218,13 @@ namespace nn
                 new (&val_list) decltype(val_list)(std::move(val.val_list));
                 break;
             }
+        }
+
+        ConfigType ConfigType::make_null()
+        {
+            ConfigType ret;
+            ret.ty = Tag::NUL;
+            return ret;
         }
 
         ConfigType ConfigType::make_bool()
@@ -296,6 +313,7 @@ namespace nn
             switch (ty)
             {
             case Tag::INVALID:
+            case Tag::NUL:
             case Tag::BOOL:
             case Tag::FTY:
             case Tag::INT:
@@ -318,6 +336,7 @@ namespace nn
             switch (ty)
             {
             case Tag::INVALID:
+            case Tag::NUL:
             case Tag::BOOL:
             case Tag::FTY:
             case Tag::INT:
@@ -341,6 +360,7 @@ namespace nn
             switch (ty)
             {
             case Tag::INVALID:
+            case Tag::NUL:
             case Tag::BOOL:
             case Tag::FTY:
             case Tag::INT:
@@ -367,6 +387,7 @@ namespace nn
             {
             case ConfigType::Tag::INVALID:
                 return false;
+            case ConfigType::Tag::NUL:
             case ConfigType::Tag::BOOL:
             case ConfigType::Tag::FTY:
             case ConfigType::Tag::INT:

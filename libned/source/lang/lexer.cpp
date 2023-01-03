@@ -854,6 +854,9 @@ namespace nn
                     case hash("struct"):
                         tarr.push_back(TokenImp<TokenType::KW_STRUCT>(fname, line_num, col_num));
                         continue;
+                    case hash("enum"):
+                        tarr.push_back(TokenImp<TokenType::KW_ENUM>(fname, line_num, col_num));
+                        continue;
                     case hash("def"):
                         tarr.push_back(TokenImp<TokenType::KW_DEF>(fname, line_num, col_num));
                         continue;
@@ -899,6 +902,9 @@ namespace nn
                     case hash("type"):
                         tarr.push_back(TokenImp<TokenType::KW_TYPE>(fname, line_num, col_num));
                         continue;
+                    case hash("void"):
+                        tarr.push_back(TokenImp<TokenType::KW_VOID>(fname, line_num, col_num));
+                        continue;
                     case hash("fty"):
                         tarr.push_back(TokenImp<TokenType::KW_FTY>(fname, line_num, col_num));
                         continue;
@@ -925,6 +931,9 @@ namespace nn
                         continue;
                     case hash("const"):
                         tarr.push_back(TokenImp<TokenType::KW_CONST>(fname, line_num, col_num));
+                        continue;
+                    case hash("null"):
+                        tarr.push_back(TokenImp<TokenType::KW_NULL>(fname, line_num, col_num));
                         continue;
                     case hash("true"):
                         tarr.push_back(TokenImp<TokenType::KW_TRUE>(fname, line_num, col_num));
