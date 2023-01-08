@@ -154,18 +154,30 @@ bool test_adding()
     return false;
 }
 
-bool test_comp()
+bool test_simple()
 {
     core::Graph graph;
     auto adding_setup = [](ModuleInfo& info) -> bool {
+        TypeRef N = info.create_int(5);
+        TypeRef fp = info.create_fty(core::EdgeFty::F16);
+        if (!fp || !N) return true;
+        return info.entry_setup("model", { { "fp", fp }, { "N", N } });
+    };
+    return generate_graph("simple.nn", "simple.bcnn", graph, adding_setup);
+}
+
+bool test_generic_structs()
+{
+    core::Graph graph;
+    auto setup = [](ModuleInfo& info) -> bool {
         return info.entry_setup("model", {});
     };
-    return generate_graph("lang.nn", "lang.bcnn", graph, adding_setup);
+    return generate_graph("generic_structs.nn", "generic_structs.bcnn", graph, setup);
 }
 
 int main(void)
 {
-    if (test_comp())
+    if (test_generic_structs())
     {
         error::print();
         return 1;

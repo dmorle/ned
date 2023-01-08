@@ -302,7 +302,7 @@ bool optimizer_test()
 
 int main()
 {
-    if (optimizer_test())
+    if (linear_test())
     {
         error::print();
         return 1;

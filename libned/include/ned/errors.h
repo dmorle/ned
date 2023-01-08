@@ -11,6 +11,12 @@
 #include <vector>
 #include <sstream>
 
+#if defined(_DEBUG) && defined(_MSVC_LANG)
+void nn_breakpoint(bool cond);
+#else
+#define nn_breakpoint(cond)
+#endif
+
 namespace nn
 {
     namespace lang

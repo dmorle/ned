@@ -2019,6 +2019,12 @@ namespace nn
 
         runtime_error:
             // TODO: unwind the call stack with location type
+            while (pc_stack.size() != 0)
+            {
+                exec_ret(stack);
+                error::runtime("traceback info");
+            }
+
             return true;
 		}
 	}

@@ -17,55 +17,55 @@
 #struct Block:
 #    str name
 #    array<Instr>
-
-struct S<type T>:
-    str name
-    int val
-    T opaque
-
-struct Vec2:
-    int x
-    int y
-
-fn print_vec(Vec2 v):
-    print "Vec(" + str::v.x + ", " + str::v.y + ")"
-    return void
-
-fn test<type T>() -> T:
-    T t
-    return t
-
-#struct Node:
-#    Node next
-#    int data
 #
-#struct LinkedList:
-#    Node head
-#    int size
+#struct S<type T>:
+#    str name
+#    int val
+#    T opaque
 #
-#namespace ll:
-#    fn new() -> LinkedList:
-#        Node head
-#        return LinkedList(head, 0)
+#struct Vec2:
+#    int x
+#    int y
+#
+#fn print_vec(Vec2 v):
+#    print "Vec(" + str::v.x + ", " + str::v.y + ")"
+#    return void
+#
+#fn test<type T>() -> T:
+#    T t
+#    return t
 
-fn main():
-    # n = Numers.one(1)
-    # n.one.val
+struct Node:
+    Node next
+    int data
 
-    S<int> s = S<int>("", 0, 1)
-    print str::s.opaque
+struct LinkedList:
+    Node head
+    int size
 
-    Vec2 vec = Vec2(0, 1)
-    print_vec(vec)
+fn ll_new() -> LinkedList:
+    Node head
+    return LinkedList(head, 0)
 
-    print str::test<int>()
-
-    return void
+#fn main():
+#    # n = Numers.one(1)
+#    # n.one.val
+#
+#    S<int> s = S<int>("", 0, 1)
+#    print str::s.opaque
+#
+#    Vec2 vec = Vec2(0, 1)
+#    print_vec(vec)
+#
+#    print str::test<int>()
+#
+#    return void
 
 fn ll_test():
+    LinkedList lst = ll_new()
     return void
 
 def model():
-    main()
+    #main()
     ll_test()
     return void

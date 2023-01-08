@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+    <Type Name="nn::lang::TypeRef">
+        <DisplayString>{{ ptr={ptr} }}</DisplayString>
+        <Expand>
+            <ExpandedItem>type_manager->buf[ptr]</ExpandedItem>
+        </Expand>
+    </Type>
+
+</AutoVisualizer>

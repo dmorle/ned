@@ -123,13 +123,9 @@ namespace nn
         struct TypeInfoStruct
         {
             const AstStruct* ast;
-            std::vector<std::pair<std::string, TypeRef>> elems;
-        };
-
-        struct TypeInfoLazyStruct
-        {
-            const AstStruct* ast;
             std::map<std::string, TypeRef> cargs;
+            std::vector<std::pair<std::string, TypeRef>> fields;
+            bool lazy;
         };
 
         struct TypeInfoDlType
@@ -176,7 +172,6 @@ namespace nn
                 LOOKUP,      // Result of an identifier lookup in the module
                 CARGBIND,    // Result of binding cargs to a lookup result
                 STRUCT,      // Struct with bound cargs
-                LAZYSTRUCT,  // Same as struct but with extra steps
                 INIT,        // Init object
                 NODE,        // Node object
                 BLOCK,       // Block object
@@ -229,7 +224,6 @@ namespace nn
                 TypeInfoLookup      type_lookup;
                 TypeInfoCargBind    type_cargbind;
                 TypeInfoStruct      type_struct;
-                TypeInfoLazyStruct  type_lazystruct;
                 TypeInfoDlType      type_dltype;
                 TypeInfoGeneric     type_generic;
             };
@@ -261,10 +255,13 @@ namespace nn
             bool check_xflt() const;  // whether the type can be converted into a float
             bool check_cpy() const;
             bool check_idx() const;
+            bool check_dl() const;
 
             std::string encode() const;
             std::string to_string() const;
             bool to_obj(const AstNodeInfo& node_info, TypeRef& type) const;  // converts the type into a runtime object
+            bool wake_up_struct(const AstNodeInfo& node_info);  // wakes up a lazy struct as an uninitialized struct declaration
+            bool wake_up_struct(const AstNodeInfo& node_info, TypeInfo::Category cat, CodegenCallback codegen);  // wakes up a lazy struct, leaving it's elements still lazy though
             template<class allowed>
             bool in_category() const
             {
@@ -281,9 +278,6 @@ namespace nn
         private:
             void do_move(TypeInfo&& type) noexcept;
         };
-
-        // wakes up a lazy type, leaving it's elements still lazy though
-        bool wake_up(const AstNodeInfo& node_info, TypeRef src, TypeRef& dst);
 
         class TypeManager
         {
@@ -319,7 +313,9 @@ namespace nn
             
             TypeRef create_lookup      (std::string name, CodeModule::LookupResult lookup);  // always virtual
             TypeRef create_cargbind    (std::string name, CodeModule::LookupResult lookup, const std::vector<AstExpr>& cargs); // always virtual
-            TypeRef create_struct      (TypeInfo::Category cat, CodegenCallback codegen, const AstStruct* ast, const std::vector<std::pair<std::string, TypeRef>>& elems);
+            TypeRef create_struct      (TypeInfo::Category cat, CodegenCallback codegen, const AstStruct* ast,
+                                        const std::map<std::string, TypeRef>& cargs,
+                                        const std::vector<std::pair<std::string, TypeRef>>& fields);
             TypeRef create_lazystruct  (const AstStruct* ast, const std::map<std::string, TypeRef>& cargs);  // always virtual
             TypeRef create_init        (TypeInfo::Category cat, CodegenCallback codegen);
             
@@ -347,6 +343,7 @@ namespace nn
             std::map<std::string, StackVar> stack_vars;
             Scope* parent = nullptr;
             size_t curr_var_name = 0;
+            int stack_size = 0;
 
         public:
             Scope(Scope* parent) : parent(parent) {}
@@ -363,6 +360,10 @@ namespace nn
             const Scope* get_parent() const;
             bool local_size(size_t& sz, const Scope* scope) const;
             bool list_local_vars(std::vector<StackVar>& vars, const Scope* scope);
+
+        private:
+            bool push_impl(size_t n);
+            bool pop_impl(size_t n);
         };
 
         // Responsible for building the dependancy graph for signature cargs, vargs, and rets
@@ -432,8 +433,12 @@ namespace nn
                 // Start by assuming all nodes are root nodes then during ProcCall::create_* calls,
                 // if the node name comes up it means that the Node wasn't a root node
                 bool is_root = true;
+                bool is_constref = false;  // const or ref (doesn't need to be copied before the proc call)
                 const AstNodeInfo* node_info;
                 TypeRef val = TypeInfo::null;  // This field gets initialized during codegen
+
+                bool codegen_carg(Scope& scope, const std::string& name) const;
+                bool codegen_varg(Scope& scope, const std::string& name) const;
 
             private:
                 void do_move(ValNode&& node) noexcept;
@@ -455,13 +460,6 @@ namespace nn
             };
 
             struct StructType
-            {
-                const AstStruct* ast;
-                std::map<std::string, ValNode*> cargs;
-                std::vector<std::pair<std::string, TypeNode*>> fields;
-            };
-
-            struct LazyStructType
             {
                 const AstStruct* ast;
                 std::map<std::string, ValNode*> cargs;
@@ -490,7 +488,6 @@ namespace nn
                     ARRAY,
                     TUPLE,
                     STRUCT,
-                    LAZYSTRUCT,
                     DLTYPE  // either a tensor or an edge depending on the context
                 } ty = Type::INVALID;
 
@@ -499,7 +496,6 @@ namespace nn
                     ArrayType       type_array;
                     TupleType       type_tuple;
                     StructType      type_struct;
-                    LazyStructType  type_lazystruct;
                     DlType          type_dl;
                     ValType         type_val;
                 };
@@ -510,6 +506,7 @@ namespace nn
                 ~TypeNode();
 
                 TypeRef as_type(const AstNodeInfo& node_info) const;
+                bool immutable() const;  // Certain types don't allow for mutable values.  Ex. TYPE, UNPACK
 
                 const AstNodeInfo* node_info;
 
@@ -524,14 +521,30 @@ namespace nn
                 const AstNodeInfo* node_info;
             };
 
-            // TODO: handle generics
+
+            // Note: these functions are not called during codegeneration, but rather during
+            // initialization.  Ex. fn foo<type T>(ref MyGenericStruct<T> x) ...
+            bool type_eq(const ProcCall::TypeNode& lhs, const ProcCall::TypeNode& rhs, bool& eq);
+            bool is_instance(const ValNode& val, const TypeNode& type, bool& inst);
             bool match_struct_sig(Scope& scope, const AstStruct* ast,
                 const std::vector<Carg>& param_cargs, std::map<std::string, ValNode*>& cargs);
 
-            bool create_arg   (Scope& scope, const AstArgDecl& decl, ValNode*& node);
-            bool create_arg   (Scope& scope, const AstExpr& decl, ValNode*& node);
-            bool create_type  (Scope& scope, const AstExpr& expr, TypeNode*& node);
-            bool create_value (Scope& scope, const AstExpr& expr, ValNode*& node);
+            // Retrospective look at this system and trying to provide an explaination:
+            // It seems that all the codegen calls don't actually modify the stack at all,
+            // or codegen anything.  Instead, they are used to perform signature deduction
+            // by updating the nodes using the passed in arguments - which is why in the
+            // specific codegen functions (ex. StructCall::codegen) which do the ACTUAL
+            // codegen, they only call the codegen_root_arg functions.  Additionally, they
+            // don't have to pass in any data into the codegen_* functions here since the data
+            // was attached to the ValNodes during the block-specific ::apply_args call.
+            // So when writing or modifying any codegen function, the modifications need to
+            // guarentee that they don't update the stack at all, but they DO need to act on
+            // and write code that runs on the actual stack, you con't use virtual stacks.
+
+            bool create_arg          (Scope& scope, const AstArgDecl& decl, ValNode*& node);
+            bool create_arg          (Scope& scope, const AstExpr& decl, ValNode*& node);
+            bool create_type         (Scope& scope, const AstExpr& expr, TypeNode*& node);
+            bool create_value        (Scope& scope, const AstExpr& expr, ValNode*& node);
             bool create_value_callee (Scope& scope, const AstExpr& expr, ValNode*& node);
 
             bool codegen_root_arg(Scope& scope, ValNode& node);
@@ -546,19 +559,18 @@ namespace nn
 
             bool codegen_value(Scope& scope, ValNode& node, TypeRef& val);
             
-            bool codegen_type_type        (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_init        (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_fty         (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_bool        (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_int         (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_float       (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_string      (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_generic     (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_array       (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_tuple       (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_struct      (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_lazystruct  (Scope& scope, TypeNode& node, TypeRef& type);
-            bool codegen_type_dltype      (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_type    (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_init    (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_fty     (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_bool    (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_int     (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_float   (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_string  (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_generic (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_array   (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_tuple   (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_struct  (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_dltype  (Scope& scope, TypeNode& node, TypeRef& type);
 
             bool codegen_type(Scope& scope, TypeNode& node, TypeRef& type);
 
@@ -739,6 +751,7 @@ namespace nn
         bool parse_cargs(const std::vector<AstExpr>& args, std::map<std::string, const AstExpr*>& cargs);
         bool arg_type(TypeRef& type, Scope& scope, const AstArgDecl& arg);
         bool match_elems(const std::vector<AstExpr>& lhs, const std::vector<TypeRef>& rhs, CodegenCallback& setup_fn, std::vector<CodegenCallback>& elem_fns);
+        bool match_arg(const TypeRef& arg_type, const TypeRef& param_type, std::map<std::string, TypeRef>& generics);
         bool match_carg_sig(Scope& scope, Scope& sig_scope, const std::vector<AstArgDecl>& sig, const std::vector<AstExpr>& args,
             std::map<std::string, TypeRef>& cargs, std::map<std::string, TypeRef>& generics);
         bool match_def_sig(Scope& scope, Scope& sig_scope, const AstBlock& def,

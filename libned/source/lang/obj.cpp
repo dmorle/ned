@@ -962,7 +962,10 @@ namespace nn
                 return error::runtime("Dereferencing uninitialized struct");
 
             // This should never occur from compiled bytecode, only manually written bytecode
-            assert(elem_tys.size() == lhs.agg_obj->size());
+            if (elem_tys.size() != lhs.agg_obj->size())
+                return error::runtime(
+                    "Invalid bytecode for aggregate type indexing.\nThe type declared % elements, but the object had % elements",
+                    elem_tys.size(), lhs.agg_obj->size());
 
             dst = lhs.agg_obj->operator[](*rhs.int_obj);
             return false;

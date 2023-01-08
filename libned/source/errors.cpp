@@ -8,6 +8,18 @@
 #include <sstream>
 #include <iostream>
 
+#if defined(_DEBUG) && defined(_MSVC_LANG)
+#include <windows.h>
+#include <debugapi.h>
+#undef VOID
+#undef CONST
+void nn_breakpoint(bool cond)
+{
+    if (cond)
+        DebugBreak();
+}
+#endif
+
 namespace std
 {
     std::string to_string(std::string val) { return val; }

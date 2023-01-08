@@ -1,0 +1,58 @@
+struct Node<type S>:
+    Node<S> next
+    S data
+
+struct LinkedList<type T>:
+    Node<T> head
+    int size
+
+fn ll_new<type U>() -> LinkedList<U>:
+    Node<U> head
+    return LinkedList(head, 0)
+
+fn impl_append<type T>(int idx, ref Node<T> nd, ref T val):
+    print "Entered impl_append"
+    if idx == 0:
+        print "idx == 0"
+        Node<T> tail
+        nd = Node(tail, val)
+        return void
+
+    print "idx != 0"
+    impl_append(idx - 1, nd.next, val)
+    return void
+
+fn ll_append<type T>(ref LinkedList<T> self, ref T val):
+    print "Entered ll_append"
+    impl_append(self.size, self.head, val)
+    self.size += 1
+    return void
+
+fn impl_str(int idx, ref Node<int> nd) -> str:
+    print "Entered impl_str"
+    if idx == 0:
+        print "idx == 0"
+        return ""
+    print "idx != 0"
+    return str::nd.data + ", " + impl_str(idx - 1, nd.next)
+
+fn ll_str(const LinkedList<int> self) -> str:
+    print "Entered ll_str"
+    return "LinkedList(" + impl_str(self.size, self.head) + ")"
+
+fn main():
+    ref lst = ll_new<int>()
+
+    ll_append(lst, 1)
+    print str::lst.size
+    print ""
+    ll_append(lst, 2)
+    print str::lst.size
+    print ""
+    print ll_str(lst)
+
+    return void
+
+def model():
+    main()
+    return void
