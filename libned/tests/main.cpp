@@ -166,18 +166,45 @@ bool test_simple()
     return generate_graph("simple.nn", "simple.bcnn", graph, adding_setup);
 }
 
+bool test_basic_structs()
+{
+    core::Graph graph;
+    auto setup = [](ModuleInfo& info) -> bool {
+        return info.entry_setup("model", {});
+    };
+    return generate_graph("structs/basic.nn", "basic_structs.bcnn", graph, setup);
+}
+
+bool test_recursive_structs()
+{
+    core::Graph graph;
+    auto setup = [](ModuleInfo& info) -> bool {
+        return info.entry_setup("model", {});
+    };
+    return generate_graph("structs/recursive.nn", "recursive_structs.bcnn", graph, setup);
+}
+
 bool test_generic_structs()
 {
     core::Graph graph;
     auto setup = [](ModuleInfo& info) -> bool {
         return info.entry_setup("model", {});
     };
-    return generate_graph("generic_structs.nn", "generic_structs.bcnn", graph, setup);
+    return generate_graph("structs/generic.nn", "generic_structs.bcnn", graph, setup);
+}
+
+bool test_lang()
+{
+    core::Graph graph;
+    auto setup = [](ModuleInfo& info) -> bool {
+        return info.entry_setup("model", {});
+    };
+    return generate_graph("lang.nn", "lang.bcnn", graph, setup);
 }
 
 int main(void)
 {
-    if (test_generic_structs())
+    if (test_lang())
     {
         error::print();
         return 1;

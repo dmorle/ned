@@ -105,6 +105,14 @@ namespace nn
         {
             return error::syntax<>(tk, format(fmt, args...));
         }
+        
+        template<typename... Args> bool syntax(const lang::AstNodeInfo& node_info, const std::string& fmt, Args... args);
+        template<> bool syntax<>(const lang::AstNodeInfo& node_info, const std::string& errmsg);
+        template<typename... Args>
+        bool syntax<Args...>(const lang::AstNodeInfo& node_info, const std::string& fmt, Args... args)
+        {
+            return error::syntax<>(node_info, format(fmt, args...));
+        }
 
         void bind_runtime_context(const lang::ByteCodeDebugInfo& debug_info, const size_t& pc);
 

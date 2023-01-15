@@ -15,28 +15,23 @@ namespace nn
         class CodeModule
         {
         public:
-            struct Node;
-            using Attr = std::variant<Node, const AstStruct*, const AstFn*, const AstBlock*>;
-            enum AttrType
+            struct Namespace
             {
-                NODE = 0,
-                STRUCT,
-                FUNC,
-                DEF
-            };
-
-            struct Node
-            {
-                std::map<std::string, std::vector<Attr>>            attrs;
-                std::map<std::string, std::vector<const AstBlock*>> intrs;  // references but doesn't own the memory
-                std::map<std::string, std::vector<const AstInit*>>  inits;  // references but doesn't own the memory
+                std::map<std::string, std::vector<Namespace>>        namespaces;
+                std::map<std::string, std::vector<const AstStruct*>> structs;
+                std::map<std::string, std::vector<const AstEnum*>>   enums;
+                std::map<std::string, std::vector<const AstFn*>>     fns;
+                std::map<std::string, std::vector<const AstBlock*>>  defs;
+                std::map<std::string, std::vector<const AstBlock*>>  intrs;
+                std::map<std::string, std::vector<const AstInit*>>   inits;
             };
 
             struct LookupResult
             {
                 std::vector<std::string> ns;  // the signature's namespace
-                std::vector<const Node*>      nodes;
+                std::vector<const Namespace*> namespaces;
                 std::vector<const AstStruct*> structs;
+                std::vector<const AstEnum*>   enums;
                 std::vector<const AstFn*>     fns;
                 std::vector<const AstBlock*>  defs;
                 std::vector<const AstBlock*>  intrs;
@@ -47,16 +42,16 @@ namespace nn
 
         private:
             template<typename T>
-            static bool merge_node(Node& dst, T& src);
+            static bool merge_namespace(Namespace& dst, T& src);
 
         public:
-            Node root;
+            Namespace root;
             bool merge_ast(AstModule& ast);
             static bool create(CodeModule& mod, AstModule& ast, const std::vector<std::string>& imp_dirs, std::vector<std::string> visited);
 
             struct LookupCtx
             {
-                Node& nd;
+                Namespace& nd;
                 std::vector<std::string>::const_iterator it;
                 std::vector<std::string>::const_iterator end;
             };
@@ -128,6 +123,21 @@ namespace nn
             bool lazy;
         };
 
+        struct TypeInfoEnum
+        {
+            const AstEnum* ast;
+            std::vector<std::string> ast_ns;
+            std::map<std::string, TypeRef> cargs;
+        };
+
+        struct TypeInfoEnumEntry  // Result of a non-trivial enum entry access (always virtual)
+        {
+            const AstEnum* ast;
+            std::vector<std::string> ast_ns;
+            std::map<std::string, TypeRef> cargs;
+            size_t idx;
+        };
+
         struct TypeInfoDlType
         {
             TypeRef tensor;
@@ -167,11 +177,13 @@ namespace nn
                 FLOAT,       // Floating point
                 STR,         // String
 
-                ARRAY,       // Array - Fixed length
+                ARRAY,       // Array
                 TUPLE,       // Tuple
                 LOOKUP,      // Result of an identifier lookup in the module
                 CARGBIND,    // Result of binding cargs to a lookup result
                 STRUCT,      // Struct with bound cargs
+                ENUM,        // Enum with bound cargs
+                ENUMENTRY,   // Non-trivial enum entry access without the entry being called
                 INIT,        // Init object
                 NODE,        // Node object
                 BLOCK,       // Block object
@@ -224,6 +236,8 @@ namespace nn
                 TypeInfoLookup      type_lookup;
                 TypeInfoCargBind    type_cargbind;
                 TypeInfoStruct      type_struct;
+                TypeInfoEnum        type_enum;
+                TypeInfoEnumEntry   type_enum_entry;
                 TypeInfoDlType      type_dltype;
                 TypeInfoGeneric     type_generic;
             };
@@ -317,8 +331,12 @@ namespace nn
                                         const std::map<std::string, TypeRef>& cargs,
                                         const std::vector<std::pair<std::string, TypeRef>>& fields);
             TypeRef create_lazystruct  (const AstStruct* ast, const std::map<std::string, TypeRef>& cargs);  // always virtual
+            TypeRef create_enum        (TypeInfo::Category cat, CodegenCallback codegen, const AstEnum* ast,
+                                        const std::vector<std::string> ast_ns, const std::map<std::string, TypeRef>& cargs);
+            TypeRef create_enum_entry  (const AstEnum* ast, const std::vector<std::string> ast_ns,
+                                        const std::map<std::string, TypeRef>& cargs, size_t idx);
+
             TypeRef create_init        (TypeInfo::Category cat, CodegenCallback codegen);
-            
             TypeRef create_node        (TypeInfo::Category cat, CodegenCallback codegen);
             TypeRef create_block       (TypeInfo::Category cat, CodegenCallback codegen);
             TypeRef create_edge        (TypeInfo::Category cat, CodegenCallback codegen);
@@ -465,6 +483,13 @@ namespace nn
                 std::map<std::string, ValNode*> cargs;
             };
 
+            struct EnumType
+            {
+                const AstEnum* ast;
+                std::vector<std::string> ast_ns;
+                std::map<std::string, ValNode*> cargs;
+            };
+
             struct DlType
             {
                 ValNode* fp = nullptr;
@@ -488,6 +513,7 @@ namespace nn
                     ARRAY,
                     TUPLE,
                     STRUCT,
+                    ENUM,
                     DLTYPE  // either a tensor or an edge depending on the context
                 } ty = Type::INVALID;
 
@@ -496,6 +522,7 @@ namespace nn
                     ArrayType       type_array;
                     TupleType       type_tuple;
                     StructType      type_struct;
+                    EnumType        type_enum;
                     DlType          type_dl;
                     ValType         type_val;
                 };
@@ -526,8 +553,10 @@ namespace nn
             // initialization.  Ex. fn foo<type T>(ref MyGenericStruct<T> x) ...
             bool type_eq(const ProcCall::TypeNode& lhs, const ProcCall::TypeNode& rhs, bool& eq);
             bool is_instance(const ValNode& val, const TypeNode& type, bool& inst);
-            bool match_struct_sig(Scope& scope, const AstStruct* ast,
+            bool match_carg_sig(Scope& scope, const AstCargSig& sig,
                 const std::vector<Carg>& param_cargs, std::map<std::string, ValNode*>& cargs);
+            bool resolve_lookup(Scope& scope, const AstNodeInfo& node_info, const std::vector<Carg>& param_cargs,
+                const CodeModule::LookupResult& lookup, const std::string& name, TypeNode* node);
 
             // Retrospective look at this system and trying to provide an explaination:
             // It seems that all the codegen calls don't actually modify the stack at all,
@@ -570,6 +599,7 @@ namespace nn
             bool codegen_type_array   (Scope& scope, TypeNode& node, TypeRef& type);
             bool codegen_type_tuple   (Scope& scope, TypeNode& node, TypeRef& type);
             bool codegen_type_struct  (Scope& scope, TypeNode& node, TypeRef& type);
+            bool codegen_type_enum    (Scope& scope, TypeNode& node, TypeRef& type);
             bool codegen_type_dltype  (Scope& scope, TypeNode& node, TypeRef& type);
 
             bool codegen_type(Scope& scope, TypeNode& node, TypeRef& type);
@@ -673,6 +703,24 @@ namespace nn
             const AstStruct* ast_struct;
         };
 
+        class EnumCall :
+            public CommonCall
+        {
+        public:
+            using CommonCall::CommonCall;
+
+            bool init(const AstEnum& sig, size_t idx);
+            bool apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs, const std::vector<TypeRef>& vargs);
+            bool codegen(Scope& scope, std::vector<TypeRef>& rets);
+
+        private:
+            std::map<std::string, ValNode*> varg_nodes;
+            std::vector<std::string> varg_stack;
+            TypeNode* ret_node;
+            const AstEnum* ast_enum;
+            size_t tag_val;
+        };
+
         class IntrCall :
             public EdgeCall
         {
@@ -763,6 +811,10 @@ namespace nn
         bool match_fn_sig(Scope& scope, Scope& sig_scope, const AstFn& fn,
             const std::vector<AstExpr>& param_cargs, const std::vector<TypeRef>& param_vargs,
             std::map<std::string, TypeRef>& cargs, std::vector<TypeRef>& vargs);
+        bool resolve_lookup(Scope& scope, const AstNodeInfo& node_info, const std::string& name,
+            const CodeModule::LookupResult& lookup, std::vector<TypeRef>& rets);
+        bool codegen_fields(const std::string& container_type, const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs,
+            const std::vector<AstLine>& lines, std::vector<std::pair<std::string, TypeRef>>& fields);
 
         template<class allowed> bool codegen_expr_single_ret(Scope& scope, const AstExpr& expr, TypeRef& ret);
         template<class allowed> bool codegen_expr_multi_ret(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
@@ -809,6 +861,7 @@ namespace nn
         bool codegen_line_raise    (Scope& scope, const AstLine& line);
         bool codegen_line_print    (Scope& scope, const AstLine& line);
         bool codegen_line_return   (Scope& scope, const AstLine& line);
+        bool codegen_line_match    (Scope& scope, const AstLine& line);
         bool codegen_line_branch   (Scope& scope, const AstLine& line, const std::string& end_label);  // if or elif statement
         bool codegen_line_block    (Scope& scope, const AstLine& line);
         bool codegen_line_while    (Scope& scope, const AstLine& line);
@@ -822,11 +875,11 @@ namespace nn
         bool proc_name_def    (std::string& name, const std::vector<std::string>& ns, const AstBlock&  ast_def   );
         bool proc_name_intr   (std::string& name, const std::vector<std::string>& ns, const AstBlock&  ast_intr  );
 
-        bool codegen_func(const std::string& name, const AstFn& ast_fn, const std::vector<std::string>& ns);
-        bool codegen_def(const std::string& name, const AstBlock& ast_def, const std::vector<std::string>& ns);
-        bool codegen_intr(const std::string& name, const AstBlock& ast_intr, const std::vector<std::string>& ns);
-        bool codegen_attr(const std::string& name, const CodeModule::Attr& attr, std::vector<std::string>& ns);
+        bool codegen_func (const std::string& name, const AstFn& ast_fn, const std::vector<std::string>& ns);
+        bool codegen_def  (const std::string& name, const AstBlock& ast_def, const std::vector<std::string>& ns);
+        bool codegen_intr (const std::string& name, const AstBlock& ast_intr, const std::vector<std::string>& ns);
 
+        bool codegen_namespace (const CodeModule::Namespace& node, std::vector<std::string>& ns);
         bool codegen_module(ByteCodeModule& bc, ModuleInfo& info, AstModule& ast, const std::vector<std::string>& imp_dirs);
     }
 }

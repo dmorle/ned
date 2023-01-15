@@ -1,5 +1,11 @@
+#enum Type:
+#    float64
+#    float32
+#    float16
+#
 #struct Value:
-#    
+#    str name
+#    Type ty
 #
 #enum Instr:
 #    iadd:
@@ -18,54 +24,70 @@
 #    str name
 #    array<Instr>
 #
-#struct S<type T>:
-#    str name
-#    int val
-#    T opaque
+#struct Node:
+#    Node next
+#    int data
 #
-#struct Vec2:
-#    int x
-#    int y
-#
-#fn print_vec(Vec2 v):
-#    print "Vec(" + str::v.x + ", " + str::v.y + ")"
-#    return void
-#
-#fn test<type T>() -> T:
-#    T t
-#    return t
+#struct LinkedList:
+#    Node head
+#    int size
 
-struct Node:
-    Node next
-    int data
+enum Message:
+    quit
+    move:
+        int dx
+        int dy
+    write:
+        str message
 
-struct LinkedList:
-    Node head
-    int size
+fn msg_str(const Message msg) -> str:
+    match msg:
+        quit:
+            return "quit"
+        move:
+            return "move(" + str::dx + ", " + str::dy + ")"
+        write:
+            return "message(" + message + ")"
 
-fn ll_new() -> LinkedList:
-    Node head
-    return LinkedList(head, 0)
+fn msg_is_quit(const Message msg) -> bool:
+    match msg:
+        quit:
+            print "I quit!"
+            return true
+        else:
+            return false
 
-#fn main():
-#    # n = Numers.one(1)
-#    # n.one.val
-#
-#    S<int> s = S<int>("", 0, 1)
-#    print str::s.opaque
-#
-#    Vec2 vec = Vec2(0, 1)
-#    print_vec(vec)
-#
-#    print str::test<int>()
-#
-#    return void
+enum Simp:
+    one
+    two
+    three
 
-fn ll_test():
-    LinkedList lst = ll_new()
+fn print_simp(const Simp simp):
+    match simp:
+        one:
+            print "one"
+        two:
+            print "two"
+        three:
+            print "three"
+    return void
+
+fn get_message() -> array<Message>:
+    return [
+        Message.quit,
+        Message.move(1, 1)
+    ]
+
+fn main():
+    Simp s = Simp.one
+    print_simp(s)
+
+    ref msgs = get_message()
+    for ref msg in msgs:
+        print msg_str(msg)
+
     return void
 
 def model():
-    #main()
-    ll_test()
+    main()
     return void

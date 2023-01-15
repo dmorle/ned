@@ -40,6 +40,9 @@ fn ll_str(const LinkedList<int> self) -> str:
     print "Entered ll_str"
     return "LinkedList(" + impl_str(self.size, self.head) + ")"
 
+fn idn<type T>(ref T val) -> T:
+    return val
+
 fn main():
     ref lst = ll_new<int>()
 
@@ -50,6 +53,8 @@ fn main():
     print str::lst.size
     print ""
     print ll_str(lst)
+
+    print str::idn(lst.head.next.data)
 
     return void
 

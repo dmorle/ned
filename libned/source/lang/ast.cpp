@@ -128,29 +128,29 @@ namespace nn
         }
 
         template<>
-        bool parse_signature<AstCargSig>(const TokenArray& tarr, AstCargSig& ast_struct_sig)
+        bool parse_signature<AstCargSig>(const TokenArray& tarr, AstCargSig& ast_carg_sig)
         {
             assert(tarr.size() > 0);
 
-            // Setup and getting the name of the struct definition
+            // Setup and getting the name of the definition
             int i = 0;
             for (; tarr[i]->is_whitespace(); i++);
             if (tarr[i]->expect<TokenType::IDN>())
                 return true;
-            ast_struct_sig.name = tarr[i]->get<TokenType::IDN>().val;
+            ast_carg_sig.name = tarr[i]->get<TokenType::IDN>().val;
             for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
             if (i == tarr.size())
                 return false;
 
-            // Parsing out the cargs from the struct definition
+            // Parsing out the cargs themselves
             if (tarr[i]->expect<TokenType::ANGLE_O>())
                 return true;
-            i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(tarr, i, ast_struct_sig.cargs);
+            i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(tarr, i, ast_carg_sig.cargs);
             if (i == -1)
-                return error::syntax(tarr[0], "Error parsing struct cargs");
+                return error::syntax(tarr[0], "Error parsing cargs");
             for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
             if (i != tarr.size())
-                return error::syntax(tarr[i], "Unexpected token after struct cargs");
+                return error::syntax(tarr[i], "Unexpected token after cargs");
             return false;
         }
 
@@ -398,10 +398,12 @@ namespace nn
                 break;
             case TokenType::DOT:
                 for (start = 1; start < tarr.size() && tarr[start]->is_whitespace(); start++);
-                end = tarr.search(IsSameCriteria(TokenType::DOT), start);
+                end = tarr.search(IsSameCriteria(TokenType::IDN), start);
                 if (end == -1)
                     end = tarr.size();
-                for (const Token& tk : TokenArray{ tarr, start + 1, end })  // making sure there are no more tokens between the identifier and the dot
+                else
+                    end++;  // i needs to go one past the identifier
+                for (const Token& tk : TokenArray{ tarr, start, end - 1 })  // making sure there are no more tokens between the identifier and the dot
                     if (!tk.is_whitespace())
                         return error::syntax(tk, "Unexpected token after '.'");
                 i = end;
@@ -1093,15 +1095,8 @@ namespace nn
             while ((end = tarr.search(sc, i)) > 0)
             {
                 AstExpr elem_expr;
-                if (parse_expr_prec<prec + 1>({ tarr, i, end }, elem_expr))
+                if (parse_expr({ tarr, i, end }, elem_expr))
                     return true;
-                elem_expr.node_info = {
-                    .fname = tarr[0]->fname,
-                    .line_start = tarr[i]->line_num,
-                    .line_end = tarr[end]->line_num,
-                    .col_start = tarr[i]->col_num,
-                    .col_end = tarr[end]->col_num
-                };
                 elem_exprs.push_back(std::move(elem_expr));
                 i = end + 1;
             }
@@ -1115,15 +1110,8 @@ namespace nn
             if (i == tarr.size())
                 return false;  // In case the tuple was ended with a comma
             AstExpr last_expr;
-            if (parse_expr_prec<prec + 1>({ tarr, i }, last_expr))
+            if (parse_expr({ tarr, i }, last_expr))
                 return true;
-            last_expr.node_info = {
-                .fname = tarr[0]->fname,
-                .line_start = tarr[i]->line_num,
-                .line_end = tarr[tarr.size() - 1]->line_num,
-                .col_start = tarr[i]->col_num,
-                .col_end = tarr[tarr.size() - 1]->col_num
-            };
             ast_expr.expr_agg.elems.push_back(std::move(last_expr));
             return false;
         }
@@ -1146,6 +1134,47 @@ namespace nn
             int end = tarr.size() - 1;
             for (; tarr[end]->is_whitespace(); end--);
             return parse_expr_prec<0>({ tarr, i, end + 1 }, ast_expr);
+        }
+
+        bool parse_match_elem(const TokenArray& tarr, AstMatchElem& ast_match_elem, int indent_level)
+        {
+            assert(tarr.size() > 0);
+            ast_match_elem.node_info = {
+                .fname = tarr[0]->fname,
+                .line_start = tarr[0]->line_num,
+                .line_end = tarr[tarr.size() - 1]->line_num,
+                .col_start = tarr[0]->col_num,
+                .col_end = tarr[tarr.size() - 1]->col_num
+            };
+
+            int i = 0;
+            for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (i == tarr.size())
+                return error::syntax(tarr[0], "Empty lines are not allowed");
+
+            // Parsing out the label of the match statement element
+            if (tarr[i]->ty == TokenType::KW_ELSE)
+                ast_match_elem.label = "else";  // Let the compiler figure this out
+            else
+            {
+                if (tarr[i]->expect<TokenType::IDN>())
+                    return true;
+                ast_match_elem.label = tarr[i]->get<TokenType::IDN>().val;
+            }
+            
+            // Parsing out the body of the match statement element
+            int end = i + 1;
+            for (; end < tarr.size() && tarr[end]->is_whitespace(); end++);
+            if (end == tarr.size())
+                return error::syntax(tarr[i], "Missing ':' after label % in match statement", ast_match_elem.label);
+            if (tarr[end]->expect<TokenType::COLON>())
+                return true;
+            for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+            if (end == tarr.size())
+                return error::syntax(tarr[(size_t)end - 1], "Missing body of label % in match statement", ast_match_elem.label);
+            return
+                tarr[end]->expect<TokenType::ENDL>() ||
+                parse_lines<AstLine, parse_line>(tarr, end, indent_level + 1, ast_match_elem.body);
         }
 
         bool parse_line(const TokenArray& tarr, AstLine& ast_line, int indent_level)
@@ -1221,6 +1250,26 @@ namespace nn
                 ast_line.ty = LineType::PRINT;
                 if (parse_expr({ tarr, i + 1 }, ast_line.line_func.expr))
                     return error::syntax(tarr[i], "Invalid syntax in print statement");
+                break;
+
+            case TokenType::KW_MATCH:
+                new (&ast_line.line_match) AstLineMatch();
+                ast_line.ty = LineType::MATCH;
+                
+                end = tarr.search(IsSameCriteria(TokenType::COLON));
+                if (end == -1)
+                    return error::syntax(tarr[i], "Missing ':' in match statement");
+                if (end == i + 1)
+                    return error::syntax(tarr[i], "Empty expression in match condition");
+                if (parse_expr({ tarr, i + 1, end }, ast_line.line_match.arg))
+                    return error::syntax(tarr[i], "Invalid syntax in match argument");
+
+                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                if (end == tarr.size())
+                    return error::syntax(tarr[(size_t)end - 1], "Missing body of match block");
+                if (tarr[end]->expect<TokenType::ENDL>() ||
+                    parse_lines<AstMatchElem, parse_match_elem>(tarr, end, indent_level + 1, ast_line.line_match.elems))
+                    return true;
                 break;
 
             case TokenType::KW_IF:
@@ -1497,13 +1546,14 @@ namespace nn
             int i = tarr.search(IsSameCriteria(TokenType::COLON));
             if (i == -1)
                 return error::syntax(tarr[0], "Missing ':' in signature");
-            SIG signature{};
-            if (parse_signature({ tarr, 0, i }, signature))
+            if (parse_signature({ tarr, 0, i }, ast_code_block.signature))
                 return true;
 
-            // Finding the ':' that starts the body
+            // Finding the line that starts the body
             assert(!tarr[i]->expect<TokenType::COLON>());
-            for (i++; tarr[i]->ty == TokenType::INDENT; i++);  // one token past the last tab after the ':'
+            for (i++; i < tarr.size() && tarr[i]->ty == TokenType::INDENT; i++);  // one token past the last tab after the ':'
+            if (i == tarr.size())
+                return error::syntax(tarr[0], "Expected new line after ':'");
             if (tarr[i]->expect<TokenType::ENDL>())
                 return true;
 
@@ -1513,16 +1563,104 @@ namespace nn
             {
                 ast_code_block.is_bytecode = true;
                 ast_code_block.tarr = std::make_unique<TokenArray>(tarr, i);
-                ast_code_block.signature = std::move(signature);
                 return false;
             }
 
             // not bytecode, just a normal body that will be compiled
             ast_code_block.is_bytecode = false;
-            if (parse_lines<AstLine, parse_line>(tarr, i, indent_level, ast_code_block.body))
+            return parse_lines<AstLine, parse_line>(tarr, i, indent_level, ast_code_block.body);
+        }
+
+        bool parse_enum_entry(const TokenArray& tarr, AstEnumEntry& ast_entry, int indent_level)
+        {
+            assert(tarr.size() > 0);
+            ast_entry.node_info = {
+                .fname = tarr[0]->fname,
+                .line_start = tarr[0]->line_num,
+                .line_end = tarr[tarr.size() - 1]->line_num,
+                .col_start = tarr[0]->col_num,
+                .col_end = tarr[tarr.size() - 1]->col_num
+            };
+
+            int i = 0;
+            for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+            if (i == tarr.size())
+                return error::syntax(tarr[0], "Empty enum entries are not allowed");
+
+            if (tarr[i]->expect<TokenType::IDN>())
                 return true;
-            ast_code_block.signature = std::move(signature);  // All the signature structs are movable
-            return false;
+            ast_entry.name = tarr[i]->get<TokenType::IDN>().val;
+            for (i++; i < tarr.size() && tarr[i]->ty == TokenType::INDENT; i++);
+            if (i == tarr.size() || tarr[i]->ty == TokenType::ENDL)
+            {
+                // Potentially an empty enum entry
+                for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
+                if (i == tarr.size())
+                    return false;
+            }
+            if (tarr[i]->expect<TokenType::COLON>())
+                return true;
+            for (i++; i < tarr.size() && tarr[i]->ty == TokenType::INDENT; i++);  // one token past the last tab after the ':'
+            if (i == tarr.size())
+                return error::syntax(tarr[0], "Expected new line after ':'");
+            if (tarr[i]->expect<TokenType::ENDL>())
+                return true;
+            return parse_lines<AstLine, parse_line>(tarr, i, indent_level + 1, ast_entry.lines);
+        }
+
+        bool parse_enum(const TokenArray& tarr, AstEnum& ast_enum, int indent_level)
+        {
+            assert(tarr.size() > 0);
+            ast_enum.node_info = {
+                .fname = tarr[0]->fname,
+                .line_start = tarr[0]->line_num,
+                .line_end = tarr[tarr.size() - 1]->line_num,
+                .col_start = tarr[0]->col_num,
+                .col_end = tarr[tarr.size() - 1]->col_num
+            };
+
+            // Splitting the enum between the signature and the body
+            int i = tarr.search(IsSameCriteria(TokenType::COLON));
+            if (i == -1)
+                return error::syntax(tarr[0], "Missing ':' in signature");
+            if (parse_signature({ tarr, 0, i }, ast_enum.signature))
+                return true;
+
+            // Finding the line that starts the body
+            assert(!tarr[i]->expect<TokenType::COLON>());
+            for (i++; tarr[i]->ty == TokenType::INDENT; i++);  // one token past the last tab after the ':'
+            if (tarr[i]->expect<TokenType::ENDL>())
+                return true;
+
+            // Parsing out the body of the enum
+            if (parse_lines<AstEnumEntry, parse_enum_entry>(tarr, i, indent_level, ast_enum.entries))
+                return true;
+
+            // Making sure that no labels are duplicated in the enum, and building out the entry map
+            bool ret = false;
+            for (const auto& entry : ast_enum.entries)
+            {
+                const auto& it = ast_enum.entry_map.find(entry.name);
+                if (it != ast_enum.entry_map.end())
+                    ret = error::syntax(it->second->node_info, "Found duplicate label % in enum definition", it->first);
+                else
+                    ast_enum.entry_map[entry.name] = &entry;
+            }
+            return ret;
+        }
+
+        bool parse_init(const TokenArray& tarr, AstInit& ast_init)
+        {
+            assert(tarr.size() > 0);
+            ast_init.node_info = {
+                .fname = tarr[0]->fname,
+                .line_start = tarr[0]->line_num,
+                .line_end = tarr[tarr.size() - 1]->line_num,
+                .col_start = tarr[0]->col_num,
+                .col_end = tarr[tarr.size() - 1]->col_num
+            };
+
+            return parse_signature(tarr, ast_init.signature);
         }
 
         bool parse_import(const TokenArray& tarr, AstImport& ast_import)
@@ -1555,39 +1693,6 @@ namespace nn
                     expect_idn = true;
                 }
             }
-            return false;
-        }
-
-        bool parse_init(const TokenArray& tarr, AstInit& ast_init)
-        {
-            assert(tarr.size() > 0);
-            ast_init.node_info = {
-                .fname = tarr[0]->fname,
-                .line_start = tarr[0]->line_num,
-                .line_end = tarr[tarr.size() - 1]->line_num,
-                .col_start = tarr[0]->col_num,
-                .col_end = tarr[tarr.size() - 1]->col_num
-            };
-
-            // Setup and getting the name of the struct definition
-            int i = 0;
-            for (; tarr[i]->is_whitespace(); i++);
-            if (tarr[i]->expect<TokenType::IDN>())
-                return true;
-            ast_init.signature.name = tarr[i]->get<TokenType::IDN>().val;
-            for (i++; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-            if (i == tarr.size())
-                return false;  // No cargs needed for init
-
-            // Parsing out the init cargs
-            if (tarr[i]->expect<TokenType::ANGLE_O>())
-                return error::syntax(tarr[i], "Unexpected token after init declaration");
-            i = parse_args<AstArgDecl, parse_arg_decl, TokenType::ANGLE_O, TokenType::ANGLE_C>(tarr, i, ast_init.signature.cargs);
-            if (i == -1)
-                return error::syntax(tarr[0], "Error parsing init cargs");
-            for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
-            if (i != tarr.size())
-                return error::syntax(tarr[i], "Unexpected token after init cargs");
             return false;
         }
 
@@ -1624,7 +1729,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_namespace.namespaces.push_back(AstNamespace());
-                    if (ret = ret || parse_namespace({ tarr, i, end }, ast_namespace.namespaces.back(), indent_level + 1))
+                    if (ret = parse_namespace({ tarr, i, end }, ast_namespace.namespaces.back(), indent_level + 1) || ret)
                         ast_namespace.namespaces.pop_back();
                     break;
                 case TokenType::KW_STRUCT:
@@ -1635,8 +1740,19 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_namespace.structs.push_back(AstStruct());
-                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_namespace.structs.back(), indent_level + 1))
+                    if (ret = parse_code_block({ tarr, i, end }, ast_namespace.structs.back(), indent_level + 1) || ret)
                         ast_namespace.structs.pop_back();
+                    break;
+                case TokenType::KW_ENUM:
+                    i++;
+                    end = tarr.search(LineEndCriteria(indent_level), i);
+                    if (end == i)
+                        return error::syntax(tarr[i], "Expected identifier after 'enum'");
+                    if (end < 0)
+                        end = tarr.size();
+                    ast_namespace.enums.push_back(AstEnum());
+                    if (ret = parse_enum({ tarr, i, end }, ast_namespace.enums.back(), indent_level + 1) || ret)
+                        ast_namespace.enums.pop_back();
                     break;
                 case TokenType::KW_FN:
                     i++;
@@ -1646,7 +1762,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_namespace.funcs.push_back(AstFn());
-                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_namespace.funcs.back(), indent_level + 1))
+                    if (ret = parse_code_block({ tarr, i, end }, ast_namespace.funcs.back(), indent_level + 1) || ret)
                         ast_namespace.funcs.pop_back();
                     break;
                 case TokenType::KW_DEF:
@@ -1657,7 +1773,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_namespace.defs.push_back(AstBlock());
-                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_namespace.defs.back(), indent_level + 1))
+                    if (ret = parse_code_block({ tarr, i, end }, ast_namespace.defs.back(), indent_level + 1) || ret)
                         ast_namespace.defs.pop_back();
                     break;
                 case TokenType::KW_INTR:
@@ -1668,7 +1784,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_namespace.intrs.push_back(AstBlock());
-                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_namespace.intrs.back(), indent_level + 1))
+                    if (ret = parse_code_block({ tarr, i, end }, ast_namespace.intrs.back(), indent_level + 1) || ret)
                         ast_namespace.intrs.pop_back();
                     break;
                 case TokenType::KW_INIT:
@@ -1679,7 +1795,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_namespace.inits.push_back(AstInit());
-                    if (ret = ret || parse_init({ tarr, i, end }, ast_namespace.inits.back()))
+                    if (ret = parse_init({ tarr, i, end }, ast_namespace.inits.back()) || ret)
                         ast_namespace.inits.pop_back();
                     break;
                 default:
@@ -1711,7 +1827,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.imports.push_back(AstImport());
-                    if (ret = ret || parse_import({ tarr, i, end }, ast_module.imports.back()))
+                    if (ret = parse_import({ tarr, i, end }, ast_module.imports.back()) || ret)
                         ast_module.imports.pop_back();
                     break;
                 case TokenType::KW_NAMESPACE:
@@ -1722,7 +1838,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.namespaces.push_back(AstNamespace());
-                    if (ret = ret || parse_namespace({ tarr, i, end }, ast_module.namespaces.back(), 1))
+                    if (ret = parse_namespace({ tarr, i, end }, ast_module.namespaces.back(), 1) || ret)
                         ast_module.namespaces.pop_back();
                     break;
                 case TokenType::KW_STRUCT:
@@ -1733,8 +1849,19 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.structs.push_back(AstStruct());
-                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_module.structs.back(), 1))
+                    if (ret = parse_code_block({ tarr, i, end }, ast_module.structs.back(), 1) || ret)
                         ast_module.structs.pop_back();
+                    break;
+                case TokenType::KW_ENUM:
+                    i++;
+                    end = tarr.search(LineEndCriteria(0), i);
+                    if (end == i)
+                        return error::syntax(tarr[i], "Expected identifier after 'enum'");
+                    if (end < 0)
+                        end = tarr.size();
+                    ast_module.enums.push_back(AstEnum());
+                    if (ret = parse_enum({ tarr, i, end }, ast_module.enums.back(), 1) || ret)
+                        ast_module.enums.pop_back();
                     break;
                 case TokenType::KW_FN:
                     i++;
@@ -1744,7 +1871,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.funcs.push_back(AstFn());
-                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_module.funcs.back(), 1))
+                    if (ret = parse_code_block({ tarr, i, end }, ast_module.funcs.back(), 1) || ret)
                         ast_module.funcs.pop_back();
                     break;
                 case TokenType::KW_DEF:
@@ -1755,7 +1882,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.defs.push_back(AstBlock());
-                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_module.defs.back(), 1))
+                    if (ret = parse_code_block({ tarr, i, end }, ast_module.defs.back(), 1) || ret)
                         ast_module.defs.pop_back();
                     break;
                 case TokenType::KW_INTR:
@@ -1766,7 +1893,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.intrs.push_back(AstBlock());
-                    if (ret = ret || parse_code_block({ tarr, i, end }, ast_module.intrs.back(), 1))
+                    if (ret = parse_code_block({ tarr, i, end }, ast_module.intrs.back(), 1) || ret)
                         ast_module.intrs.pop_back();
                     break;
                 case TokenType::KW_INIT:
@@ -1777,7 +1904,7 @@ namespace nn
                     if (end < 0)
                         end = tarr.size();
                     ast_module.inits.push_back(AstInit());
-                    if (ret = ret || parse_init({ tarr, i, end }, ast_module.inits.back()))
+                    if (ret = parse_init({ tarr, i, end }, ast_module.inits.back()) || ret)
                         ast_module.inits.pop_back();
                     break;
                 default:
@@ -2005,6 +2132,9 @@ namespace nn
             case LineType::RETURN:
                 line_func.~AstLineUnaryFunc();
                 break;
+            case LineType::MATCH:
+                line_match.~AstLineMatch();
+                break;
             case LineType::IF:
             case LineType::ELIF:
             case LineType::WHILE:
@@ -2049,6 +2179,9 @@ namespace nn
             case LineType::PRINT:
             case LineType::RETURN:
                 new (&line_func) decltype(line_func)(std::move(line.line_func));
+                break;
+            case LineType::MATCH:
+                new (&line_match) decltype(line_match)(std::move(line.line_match));
                 break;
             case LineType::IF:
             case LineType::ELIF:

@@ -90,6 +90,18 @@ namespace nn
             return true;
         }
 
+        template<>
+        bool syntax<>(const lang::AstNodeInfo& node_info, const std::string& errmsg)
+        {
+            std::stringstream ss;
+            ss  << "Syntax Error: " << errmsg
+                << "\nline: " << node_info.line_start
+                << " column: " << node_info.line_start
+                << " file: " << node_info.fname;
+            errors.push_back(ss.str());
+            return true;
+        }
+
         const lang::ByteCodeDebugInfo* pdebug_info = nullptr;
         const size_t* ppc = nullptr;
         void bind_runtime_context(const lang::ByteCodeDebugInfo& debug_info, const size_t& pc)

@@ -121,6 +121,8 @@ namespace nn
                 return "keyword namespace";
             case TokenType::KW_STRUCT:
                 return "keyword struct";
+            case TokenType::KW_ENUM:
+                return "keyword enum";
             case TokenType::KW_DEF:
                 return "keyword def";
             case TokenType::KW_INTR:
@@ -143,6 +145,8 @@ namespace nn
                 return "keyword break";
             case TokenType::KW_CONTINUE:
                 return "keyword continue";
+            case TokenType::KW_MATCH:
+                return "keyword match";
             case TokenType::KW_IF:
                 return "keyword if";
             case TokenType::KW_ELIF:
@@ -282,6 +286,8 @@ namespace nn
                 return "namespace ";
             case TokenType::KW_STRUCT:
                 return "struct ";
+            case TokenType::KW_ENUM:
+                return "enum ";
             case TokenType::KW_DEF:
                 return "def ";
             case TokenType::KW_INTR:
@@ -304,6 +310,8 @@ namespace nn
                 return "break ";
             case TokenType::KW_CONTINUE:
                 return "continue ";
+            case TokenType::KW_MATCH:
+                return "match ";
             case TokenType::KW_IF:
                 return "if ";
             case TokenType::KW_ELIF:
@@ -890,6 +898,9 @@ namespace nn
                     case hash("continue"):
                         tarr.push_back(TokenImp<TokenType::KW_CONTINUE>(fname, line_num, col_num));
                         continue;
+                    case hash("match"):
+                        tarr.push_back(TokenImp<TokenType::KW_MATCH>(fname, line_num, col_num));
+                        continue;
                     case hash("if"):
                         tarr.push_back(TokenImp<TokenType::KW_IF>(fname, line_num, col_num));
                         continue;
@@ -1106,14 +1117,16 @@ namespace nn
                 {
                     last_endl = idx;
                     current_ilv = 0;
+                    in_line = false;
                 }
             }
             else if (ptk->ty == TokenType::INDENT)
                 current_ilv++;
             else
             {
-                if (!in_bracket() && last_endl > 0 && current_ilv <= target_ilv)  // Must be >, not >=
+                if (!in_bracket() && !in_line && last_endl > 0 && current_ilv <= target_ilv)  // Must be >, not >=
                     return last_endl;
+                in_line = true;
                 count_token(ptk);
             }
             return -1;

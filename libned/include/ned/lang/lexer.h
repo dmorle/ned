@@ -71,6 +71,7 @@ namespace nn
             KW_IN,
             KW_BREAK,
             KW_CONTINUE,
+            KW_MATCH,
             KW_IF,
             KW_ELIF,
             KW_ELSE,
@@ -485,6 +486,7 @@ namespace nn
             int target_ilv;
             int current_ilv = 0;
             int last_endl = -1;
+            bool in_line = false;
 
         public:
             LineEndCriteria(int indent_level);

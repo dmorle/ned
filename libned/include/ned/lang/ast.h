@@ -6,6 +6,8 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <unordered_map>
+#include <map>
 
 namespace nn
 {
@@ -223,6 +225,7 @@ namespace nn
             RAISE,
             PRINT,
             RETURN,
+            MATCH,
             IF,
             ELIF,
             ELSE,
@@ -230,6 +233,14 @@ namespace nn
             FOR,
             EXPR,
             EVALMODE
+        };
+
+        struct AstMatchElem
+        {
+            AstNodeInfo node_info;
+
+            std::string label;
+            std::vector<AstLine> body;
         };
 
         // An export statement needs a name associated with it
@@ -248,6 +259,13 @@ namespace nn
         struct AstLineUnaryFunc
         {
             AstExpr expr;
+        };
+
+        // match statement
+        struct AstLineMatch
+        {
+            AstExpr arg;
+            std::vector<AstMatchElem> elems;
         };
 
         // if / elif statement and while loop
@@ -296,6 +314,7 @@ namespace nn
                 AstLineExport     line_export;
                 AstLineExtern     line_extern;
                 AstLineUnaryFunc  line_func;
+                AstLineMatch      line_match;
                 AstLineBranch     line_branch;
                 AstLineBlock      line_block;
                 AstLineFor        line_for;
@@ -334,6 +353,32 @@ namespace nn
         using AstFn     = AstCodeBlock<AstFnSig   >;
         using AstBlock  = AstCodeBlock<AstBlockSig>;
 
+        struct AstEnumEntry
+        {
+            AstNodeInfo node_info;
+            std::string name;
+            std::vector<AstLine> lines;
+        };
+
+        struct AstEnum
+        {
+            AstNodeInfo node_info;
+            AstCargSig signature;
+            std::vector<AstEnumEntry> entries;
+            // Technically, this is redunant info, but it'll speed up compilation
+            std::unordered_map<std::string, const AstEnumEntry*> entry_map;
+
+            AstEnum() {}
+            AstEnum(AstEnum&& ast_enum) noexcept
+            {
+                // fuck you msvc
+                node_info = std::move(ast_enum.node_info);
+                signature = std::move(ast_enum.signature);
+                entries   = std::move(ast_enum.entries  );
+                entry_map = std::move(ast_enum.entry_map);
+            }
+        };
+
         struct AstImport
         {
             AstNodeInfo node_info;
@@ -351,6 +396,7 @@ namespace nn
             std::string name;
             std::vector<AstNamespace> namespaces;
             std::vector<AstStruct>    structs;
+            std::vector<AstEnum>      enums;
             std::vector<AstFn>        funcs;
             std::vector<AstBlock>     defs;
             std::vector<AstBlock>     intrs;
@@ -363,6 +409,7 @@ namespace nn
             std::vector<AstImport>    imports;
             std::vector<AstNamespace> namespaces;
             std::vector<AstStruct>    structs;
+            std::vector<AstEnum>      enums;
             std::vector<AstFn>        funcs;
             std::vector<AstBlock>     defs;
             std::vector<AstBlock>     intrs;
@@ -373,14 +420,17 @@ namespace nn
 
         bool parse_expr       (const TokenArray& tarr, AstExpr&);
 
+        bool parse_match_elem (const TokenArray& tarr, AstMatchElem&, int indent_level);
         bool parse_line       (const TokenArray& tarr, AstLine&, int indent_level);
 
         bool parse_arg_decl   (const TokenArray& tarr, AstArgDecl&);
 
-        bool parse_struct_sig (const TokenArray& tarr, AstCargSig&);
-
         template<CodeBlockSig SIG> bool parse_signature  (const TokenArray& tarr, SIG& sig);
         template<CodeBlockSig SIG> bool parse_code_block (const TokenArray& tarr, AstCodeBlock<SIG>&, int indent_level);
+        
+        bool parse_enum       (const TokenArray& tarr, AstEnum& ast_enum, int indent_level);
+        bool parse_init       (const TokenArray& tarr, AstInit& ast_init);
+        bool parse_import     (const TokenArray& tarr, AstImport& ast_import);
 
         bool parse_namespace  (const TokenArray& tarr, AstNamespace&, int indent_level);
         bool parse_import     (const TokenArray& tarr, AstImport&);

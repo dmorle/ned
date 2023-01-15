@@ -63,24 +63,26 @@ namespace nn
         // Function implementations
 
         template<typename T>
-        bool CodeModule::merge_node(Node& dst, T& src)
+        bool CodeModule::merge_namespace(Namespace& dst, T& src)
         {
             // std::variant isn't working for the non-copyable Ast* types
             // TODO: custom implementation of CodeModule::Attr that doesn't depend on std::variant
 
             for (const AstNamespace& ns : src.namespaces)
             {
-                CodeModule::Node nd;
-                if (merge_node(nd, ns))
+                CodeModule::Namespace nd;
+                if (merge_namespace(nd, ns))
                     return true;
-                dst.attrs[ns.name].push_back(std::move(nd));
+                dst.namespaces[ns.name].push_back(std::move(nd));
             }
             for (const AstStruct& agg : src.structs)
-                dst.attrs[agg.signature.name].push_back(&agg);
+                dst.structs[agg.signature.name].push_back(&agg);
+            for (const AstEnum& e : src.enums)
+                dst.enums[e.signature.name].push_back(&e);
             for (const AstFn& fn : src.funcs)
-                dst.attrs[fn.signature.name].push_back(&fn);
+                dst.fns[fn.signature.name].push_back(&fn);
             for (const AstBlock& def : src.defs)
-                dst.attrs[def.signature.name].push_back(&def);
+                dst.defs[def.signature.name].push_back(&def);
             for (const AstBlock& intr : src.intrs)
                 dst.intrs[intr.signature.name].push_back(&intr);
             for (const AstInit& init : src.inits)
@@ -90,7 +92,7 @@ namespace nn
 
         bool CodeModule::merge_ast(AstModule& ast)
         {
-            return merge_node(root, ast);
+            return merge_namespace(root, ast);
         }
 
         bool CodeModule::create(CodeModule& mod, AstModule& ast, const std::vector<std::string>& imp_dirs, std::vector<std::string> visited)
@@ -161,8 +163,9 @@ namespace nn
         bool CodeModule::LookupResult::empty()
         {
             return
-                nodes.size() == 0 &&
+                namespaces.size() == 0 &&
                 structs.size() == 0 &&
+                enums.size() == 0 &&
                 fns.size() == 0 &&
                 defs.size() == 0 &&
                 intrs.size() == 0 &&
@@ -175,34 +178,19 @@ namespace nn
             if (ctx.it != ctx.end)
             {
                 // try to get to the proper level namespace first.  If the fails, search through the current level
-                for (auto& attr : ctx.nd.attrs[*ctx.it])
-                    if (attr.index() == AttrType::NODE && !lookup({ std::get<Node>(attr), ctx.it + 1, ctx.end }, idn, result))
+                for (auto& ns : ctx.nd.namespaces[*ctx.it])
+                    if (!lookup({ ns, ctx.it + 1, ctx.end }, idn, result))
                         return false;
             }
             // Either there wasn't anything in the upper namespace, or we are currently at the most upper namespace
-            if (ctx.nd.attrs.contains(idn))
-            {
-                for (const auto& attr : ctx.nd.attrs.at(idn))
-                {
-                    switch (attr.index())
-                    {
-                    case AttrType::NODE:
-                        result.nodes.push_back(&std::get<Node>(attr));
-                        break;
-                    case AttrType::STRUCT:
-                        result.structs.push_back(std::get<const AstStruct*>(attr));
-                        break;
-                    case AttrType::FUNC:
-                        result.fns.push_back(std::get<const AstFn*>(attr));
-                        break;
-                    case AttrType::DEF:
-                        result.defs.push_back(std::get<const AstBlock*>(attr));
-                        break;
-                    default:
-                        assert(false);
-                    }
-                }
-            }
+            if (ctx.nd.structs.contains(idn))
+                result.structs = ctx.nd.structs.at(idn);
+            if (ctx.nd.enums.contains(idn))
+                result.enums = ctx.nd.enums.at(idn);
+            if (ctx.nd.fns.contains(idn))
+                result.fns = ctx.nd.fns.at(idn);
+            if (ctx.nd.defs.contains(idn))
+                result.defs = ctx.nd.defs.at(idn);
             if (ctx.nd.intrs.contains(idn))
                 result.intrs = ctx.nd.intrs.at(idn);
             if (ctx.nd.inits.contains(idn))
@@ -268,6 +256,12 @@ namespace nn
             case TypeInfo::Type::STRUCT:
                 type_struct.~TypeInfoStruct();
                 break;
+            case TypeInfo::Type::ENUM:
+                type_enum.~TypeInfoEnum();
+                break;
+            case TypeInfo::Type::ENUMENTRY:
+                type_enum_entry.~TypeInfoEnumEntry();
+                break;
             case TypeInfo::Type::INIT:
             case TypeInfo::Type::NODE:
             case TypeInfo::Type::BLOCK:
@@ -319,6 +313,12 @@ namespace nn
                 break;
             case TypeInfo::Type::STRUCT:
                 new (&type_struct) decltype(type_struct)(std::move(type.type_struct));
+                break;
+            case TypeInfo::Type::ENUM:
+                new (&type_enum) decltype(type_enum)(std::move(type.type_enum));
+                break;
+            case TypeInfo::Type::ENUMENTRY:
+                new (&type_enum_entry) decltype(type_enum_entry)(std::move(type.type_enum_entry));
                 break;
             case TypeInfo::Type::INIT:
             case TypeInfo::Type::NODE:
@@ -624,7 +624,25 @@ namespace nn
             case TypeInfo::Type::CARGBIND:
                 return "-";
             case TypeInfo::Type::STRUCT:
-                return "0";  // TODO: implement structs
+            {
+                // TODO: make this handle the namespace of the struct
+                std::stringstream ss;
+                ss << "z";
+                for (const AstArgDecl& arg : type_struct.ast->signature.cargs)
+                    ss << type_struct.cargs.at(arg.var_name)->encode();
+                ss << "0";
+                return ss.str();
+            }
+            case TypeInfo::Type::ENUM:
+            {
+                // TODO: make this handle the namespace of the enum
+                std::stringstream ss;
+                ss << "e";
+                for (const AstArgDecl& arg : type_enum.ast->signature.cargs)
+                    ss << type_enum.cargs.at(arg.var_name)->encode();
+                ss << "0";
+                return ss.str();
+            }
             case TypeInfo::Type::INIT:
                 return "I";
             case TypeInfo::Type::NODE:
@@ -687,6 +705,8 @@ namespace nn
                 return "cargbind";
             case TypeInfo::Type::STRUCT:
                 return format("struct %", type_struct.ast->signature.name);
+            case TypeInfo::Type::ENUM:
+                return format("enum %", type_enum.ast->signature.name);
             case TypeInfo::Type::INIT:
                 return "init";
             case TypeInfo::Type::NODE:
@@ -953,6 +973,31 @@ namespace nn
                         }, tmp);
                 }
                 break;
+            case TypeInfo::Type::ENUM:
+                tmp = type_manager->create_enum(
+                    TypeInfo::Category::DEFAULT,
+                    [&node_info](Scope& scope) -> bool {
+                        size_t addr;
+                        return
+                            bc->add_obj_int(addr, 0) ||
+                            body->add_instruction(instruction::New(node_info, addr)) ||
+                            body->add_instruction(instruction::Agg(node_info, 0)) ||
+                            body->add_instruction(instruction::Agg(node_info, 2)) ||
+                            scope.push();
+                    }, type_enum.ast, type_enum.ast_ns, type_enum.cargs);
+                if (!tmp) return true;
+                type = type_manager->create_type(
+                    TypeInfo::Category::CONST,
+                    [&node_info](Scope& scope) -> bool {
+                        size_t addr;
+                        return
+                            bc->add_type_int(addr) ||
+                            body->add_instruction(instruction::New(node_info, addr)) ||
+                            body->add_instruction(instruction::Aty(node_info, 0)) ||
+                            body->add_instruction(instruction::Aty(node_info, 2)) ||
+                            scope.push();
+                    }, tmp);
+                break;
             case TypeInfo::Type::GENERIC:
                 tmp = type_manager->create_generic(
                     TypeInfo::Category::DEFAULT,
@@ -1000,35 +1045,12 @@ namespace nn
             assert(ty == TypeInfo::Type::STRUCT);
             assert(type_struct.lazy);
 
-            // The fields of the struct can be virtual - they'll never get codegened,
-            // so any codegen callbacks don't need a valid scope to index into.
-            // Because of this, I can just make a new scope to handle struct cargs here
-            Scope sig_scope{ nullptr };
-            for (const auto& [carg_name, carg_val] : type_struct.cargs)
-                if (sig_scope.add(carg_name, carg_val, node_info))
-                    return true;
-
             const AstStruct& ast = *type_struct.ast;
             if (ast.is_bytecode)
                 return error::compiler(ast.node_info, "A struct body must not be bytecode");
             std::vector<std::pair<std::string, TypeRef>> fields;
-            for (const auto& line : ast.body)
-            {
-                if (line.ty != LineType::EXPR)
-                    return error::compiler(line.node_info, "A struct body must only contain variable declarations");
-                const auto& decl_expr = line.line_expr.line;
-                if (decl_expr.ty != ExprType::VAR_DECL)
-                    return error::compiler(decl_expr.node_info, "A struct body must only contain variable declarations");
-                TypeRef decl_type;
-                lazy_types = true;
-                bool ret = codegen_expr_single_ret<TypeInfo::AllowAll>(sig_scope, *decl_expr.expr_name.expr, decl_type);
-                lazy_types = false;
-                if (ret) return true;
-                if (decl_type->ty != TypeInfo::Type::TYPE)
-                    return error::compiler(decl_expr.expr_name.expr->node_info, "Expected a type in variable declaration");
-                decl_type->cat = TypeInfo::Category::VIRTUAL;  // Making sure that any field codegens fail
-                fields.push_back({ decl_expr.expr_name.val, decl_type->type_type.base });
-            }
+            if (codegen_fields("A struct", node_info, type_struct.cargs, ast.body, fields))
+                return true;
             
             type_struct.fields = std::move(fields);
             type_struct.lazy = false;
@@ -1062,6 +1084,11 @@ namespace nn
                 if (lhs->type_struct.ast != rhs->type_struct.ast)
                     return false;
                 // TODO: don't be lazy and check the elem types - you know for generics and stuff
+                return true;
+            case TypeInfo::Type::ENUM:
+                if (lhs->type_enum.ast != rhs->type_enum.ast)
+                    return false;
+                // TODO: same as structs
                 return true;
             case TypeInfo::Type::GENERIC:
                 return lhs->type_generic.name == rhs->type_generic.name;
@@ -1173,6 +1200,18 @@ namespace nn
                     type->type_struct.fields.push_back({ elem_name, tmp });
                 }
                 type->type_struct.lazy = src->type_struct.lazy;
+                break;
+            case TypeInfo::Type::ENUM:
+                new (&type->type_enum) TypeInfoEnum();
+                type->ty = TypeInfo::Type::ENUM;
+                type->type_enum.ast = src->type_enum.ast;
+                type->type_enum.ast_ns = src->type_enum.ast_ns;
+                for (const auto& [carg_name, carg_type] : src->type_enum.cargs)
+                {
+                    tmp = duplicate(carg_type);
+                    if (!tmp) return TypeInfo::null;
+                    type->type_enum.cargs[carg_name] = tmp;
+                }
                 break;
             case TypeInfo::Type::INIT:
             case TypeInfo::Type::NODE:
@@ -1370,6 +1409,30 @@ namespace nn
             if (!type) return type;
             new (&type->type_struct) TypeInfoStruct{ ast, cargs, {}, true };
             type->ty = TypeInfo::Type::STRUCT;
+            type->cat = TypeInfo::Category::VIRTUAL;
+            type->codegen = nullptr;
+            return type;
+        }
+
+        TypeRef TypeManager::create_enum(TypeInfo::Category cat, CodegenCallback codegen, const AstEnum* ast,
+            const std::vector<std::string> ast_ns, const std::map<std::string, TypeRef>& cargs)
+        {
+            TypeRef type = next();
+            if (!type) return type;
+            new (&type->type_enum) TypeInfoEnum{ ast, ast_ns, cargs };
+            type->ty = TypeInfo::Type::ENUM;
+            type->cat = cat;
+            type->codegen = codegen;
+            return type;
+        }
+
+        TypeRef TypeManager::create_enum_entry(const AstEnum* ast, const std::vector<std::string> ast_ns,
+            const std::map<std::string, TypeRef>& cargs, size_t idx)
+        {
+            TypeRef type = next();
+            if (!type) return type;
+            new (&type->type_enum_entry) TypeInfoEnumEntry{ ast, ast_ns, cargs, idx };
+            type->ty = TypeInfo::Type::ENUMENTRY;
             type->cat = TypeInfo::Category::VIRTUAL;
             type->codegen = nullptr;
             return type;
@@ -1807,6 +1870,9 @@ namespace nn
             case TypeNode::Type::STRUCT:
                 type_struct.~StructType();
                 break;
+            case TypeNode::Type::ENUM:
+                type_enum.~EnumType();
+                break;
             case TypeNode::Type::DLTYPE:
                 type_dl.~DlType();
                 break;
@@ -1843,6 +1909,9 @@ namespace nn
                 break;
             case TypeNode::Type::STRUCT:
                 new (&type_struct) decltype(type_struct)(std::move(node.type_struct));
+                break;
+            case TypeNode::Type::ENUM:
+                new (&type_enum) decltype(type_enum)(std::move(node.type_enum));
                 break;
             case TypeNode::Type::DLTYPE:
                 new (&type_dl) decltype(type_dl)(std::move(node.type_dl));
@@ -1917,6 +1986,21 @@ namespace nn
                     cargs[carg_name] = rets.front();
                 }
                 return type_manager->create_lazystruct(type_struct.ast, cargs);
+            }
+            case TypeNode::Type::ENUM:
+            {
+                std::map<std::string, TypeRef> cargs;
+                for (const auto& [carg_name, carg_node] : type_enum.cargs)
+                {
+                    std::vector<TypeRef> rets;
+                    if (carg_node->get_type(node_info, rets))
+                    {
+                        error::compiler(node_info, "Expected a single return value from enum carg %", carg_name);
+                        return TypeRef();
+                    }
+                    cargs[carg_name] = rets.front();
+                }
+                return type_manager->create_enum(TypeInfo::Category::VIRTUAL, nullptr, type_enum.ast, type_enum.ast_ns, cargs);
             }
             case TypeNode::Type::DLTYPE:
                 return type_manager->create_dltype(TypeInfo::null, TypeInfo::null, TypeInfo::null, TypeInfo::null);
@@ -2007,7 +2091,36 @@ namespace nn
                             eq = false;
                             return false;
                         }
+                }
+                eq = true;
+                return false;
+            case ProcCall::TypeNode::Type::ENUM:
+                // Same as struct
+                if (lhs.type_enum.ast != rhs.type_enum.ast)
+                    return false;
+                assert(lhs.type_enum.cargs.size() == rhs.type_enum.cargs.size());
+                for (auto& [carg_name, lhs_val] : lhs.type_enum.cargs)
+                {
+                    assert(rhs.type_enum.cargs.contains(carg_name));
+                    ProcCall::ValNode* rhs_val = rhs.type_enum.cargs.at(carg_name);
 
+                    std::vector<TypeRef> lhs_rets;
+                    std::vector<TypeRef> rhs_rets;
+                    if (lhs_val->get_type(*lhs_val->node_info, lhs_rets) ||
+                        rhs_val->get_type(*rhs_val->node_info, rhs_rets)
+                        ) return true;
+
+                    if (lhs_rets.size() != rhs_rets.size())
+                    {
+                        eq = false;
+                        return false;
+                    }
+                    for (size_t i = 0; i < lhs_rets.size(); i++)
+                        if (lhs_rets[i] != rhs_rets[i])
+                        {
+                            eq = false;
+                            return false;
+                        }
                 }
                 eq = true;
                 return false;
@@ -2052,7 +2165,7 @@ namespace nn
             return error::compiler(*val.node_info, "Internal error: enum out of range");
         }
 
-        bool ProcCall::match_struct_sig(Scope& scope, const AstStruct* ast,
+        bool ProcCall::match_carg_sig(Scope& scope, const AstCargSig& sig,
             const std::vector<Carg>& param_cargs, std::map<std::string, ValNode*>& cargs)
         {
             // TODO: implement all the functionality from match_cargs_sig to deal with signature deduction.
@@ -2061,15 +2174,15 @@ namespace nn
             for (const auto& param_carg : param_cargs)
                 if (param_carg.kwarg != "")
                     return error::compiler(*param_carg.node_info, "Internal error: not implemented");
-            for (const auto& carg : ast->signature.cargs)
+            for (const auto& carg : sig.cargs)
                 if (carg.is_packed || carg.default_expr)
                     return error::compiler(carg.node_info, "Internal error: not implemented");
 
-            if (param_cargs.size() != ast->signature.cargs.size())
+            if (param_cargs.size() != sig.cargs.size())
                 return true;
             
             Scope sig_scope{ nullptr };
-            for (const AstArgDecl& carg : ast->signature.cargs)
+            for (const AstArgDecl& carg : sig.cargs)
             {
                 TypeRef arg;
                 if (arg_type(arg, sig_scope, carg) ||
@@ -2081,7 +2194,7 @@ namespace nn
             for (size_t i = 0; i < param_cargs.size(); i++)
             {
                 // Generating a ValNode from the carg in the struct signature
-                const AstArgDecl& arg_decl = ast->signature.cargs[i];
+                const AstArgDecl& arg_decl = sig.cargs[i];
                 TypeNode* type;
                 if (create_type(scope, *arg_decl.type_expr, type))
                     return true;
@@ -2098,6 +2211,84 @@ namespace nn
                 
                 // Adding the current argument to te cargs of the struct type
                 cargs[arg_decl.var_name] = param_cargs[i].node;
+            }
+            return false;
+        }
+
+        bool ProcCall::resolve_lookup(Scope& scope, const AstNodeInfo& node_info, const std::vector<Carg>& param_cargs,
+            const CodeModule::LookupResult& lookup, const std::string& name, TypeNode* node)
+        {
+            // Checking if a struct matches the cargs
+            std::vector<std::pair<const AstStruct*, std::map<std::string, ValNode*>>> struct_matches;
+            for (const AstStruct* ast : lookup.structs)
+            {
+                std::map<std::string, ValNode*> cargs;
+                if (!match_carg_sig(scope, ast->signature, param_cargs, cargs))
+                    struct_matches.push_back({ ast, cargs });
+            }
+            if (struct_matches.size() > 1)
+                return error::compiler(node_info, "Reference to struct % is ambiguous", name);
+            if (struct_matches.size() == 1)
+            {
+                const auto& [ast, cargs] = struct_matches.front();
+                new (&node->type_struct) StructType();
+                node->ty = TypeNode::Type::STRUCT;
+                node->type_struct.ast = ast;
+                node->type_struct.cargs = cargs;
+                return false;
+            }
+
+            // Checking if an enum matches the cargs
+            std::vector<std::pair<const AstEnum*, std::map<std::string, ValNode*>>> enum_matches;
+            for (const AstEnum* ast : lookup.enums)
+            {
+                std::map<std::string, ValNode*> cargs;
+                if (!match_carg_sig(scope, ast->signature, param_cargs, cargs))
+                    enum_matches.push_back({ ast, cargs });
+            }
+            if (enum_matches.size() > 1)
+                return error::compiler(node_info, "Reference to enum % is ambiguous", name);
+            if (enum_matches.size() == 1)
+            {
+                const auto& [ast, cargs] = enum_matches.front();
+                new (&node->type_enum) EnumType();
+                node->ty = TypeNode::Type::ENUM;
+                node->type_enum.ast = ast;
+                node->type_enum.ast_ns = lookup.ns;
+                node->type_enum.cargs = cargs;
+                return false;
+            }
+
+            return error::compiler(node_info, "Unresolved reference to user type %", name);
+        }
+
+        bool codegen_fields(const std::string& container_type, const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs,
+            const std::vector<AstLine>& lines, std::vector<std::pair<std::string, TypeRef>>& fields)
+        {
+            // The fields of the struct or enum can be virtual - they'll never get codegened,
+            // so any codegen callbacks don't need a valid scope to index into.
+            // Because of this, I can just make a new scope to handle cargs here
+            Scope fields_scope{ nullptr };
+            for (const auto& [carg_name, carg_val] : cargs)
+                if (fields_scope.add(carg_name, carg_val, node_info))
+                    return true;
+
+            for (const auto& line : lines)
+            {
+                if (line.ty != LineType::EXPR)
+                    return error::compiler(line.node_info, "% body must only contain variable declarations", container_type);
+                const auto& decl_expr = line.line_expr.line;
+                if (decl_expr.ty != ExprType::VAR_DECL)
+                    return error::compiler(decl_expr.node_info, "% body must only contain variable declarations", container_type);
+                TypeRef decl_type;
+                lazy_types = true;
+                bool ret = codegen_expr_single_ret<TypeInfo::AllowAll>(fields_scope, *decl_expr.expr_name.expr, decl_type);
+                lazy_types = false;
+                if (ret) return true;
+                if (decl_type->ty != TypeInfo::Type::TYPE)
+                    return error::compiler(decl_expr.expr_name.expr->node_info, "Expected a type in variable declaration");
+                decl_type->cat = TypeInfo::Category::VIRTUAL;  // Making sure that any field codegens fail
+                fields.push_back({ decl_expr.expr_name.val, decl_type->type_type.base });
             }
             return false;
         }
@@ -2253,6 +2444,7 @@ namespace nn
                     
                     if (callee_type->ty == TypeInfo::Type::LOOKUP)
                     {
+                        // Generating the cargs as ValNode*'s
                         std::vector<Carg> param_cargs;
                         for (const AstExpr& arg : expr.expr_call.args)
                         {
@@ -2273,25 +2465,9 @@ namespace nn
                                 return true;
                             param_cargs.push_back({ arg.expr_binary.left->expr_string, carg_node });
                         }
-
-                        std::vector<std::pair<const AstStruct*, std::map<std::string, ValNode*>>> matches;
-                        for (const AstStruct* ast : callee_type->type_lookup.lookup.structs)
-                        {
-                            std::map<std::string, ValNode*> cargs;
-                            if (!match_struct_sig(scope, ast, param_cargs, cargs))
-                                matches.push_back({ ast, cargs });
-                        }
-                        if (matches.size() > 1)
-                            return error::compiler(expr.node_info, "Reference to struct % is ambiguous", callee_type->type_lookup.name);
-                        if (matches.size() == 0)
-                            return error::compiler(expr.node_info, "Unresolved reference to struct %", callee_type->type_lookup.name);
-                        const auto& [ast, cargs] = matches.front();
-
-                        new (&node->type_struct) StructType();
-                        node->ty = TypeNode::Type::STRUCT;
-                        node->type_struct.ast = ast;
-                        node->type_struct.cargs = cargs;
-                        return false;
+                        // Common function for figuring out what a lookup + cargs is referring to
+                        return resolve_lookup(scope, expr.node_info, param_cargs,
+                            callee_type->type_lookup.lookup, callee_type->type_lookup.name, node);
                     }
 
                     return error::compiler(expr.node_info, "Unable to resolve type");
@@ -2345,20 +2521,7 @@ namespace nn
                     CodeModule::LookupResult lookup;
                     if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.end() }, expr.expr_string, lookup))
                         return true;
-                    std::vector<const AstStruct*> matches;
-                    for (const AstStruct* ast_struct : lookup.structs)
-                        if (ast_struct->signature.cargs.size() == 0)
-                            matches.push_back(ast_struct);
-                    if (matches.size() > 1)
-                        return error::compiler(expr.node_info, "Reference to struct % is ambiguous", expr.expr_string);
-                    if (matches.size() == 0)
-                        return error::compiler(expr.node_info, "Unable to find struct %", expr.expr_string);
-
-                    new (&node->type_struct) StructType();
-                    node->ty = TypeNode::Type::STRUCT;
-                    node->type_struct.ast = matches.front();
-                    node->type_struct.cargs = {};
-                    return false;
+                    return resolve_lookup(scope, expr.node_info, {}, lookup, expr.expr_string, node);
                 }
                 
             default:
@@ -2692,6 +2855,24 @@ namespace nn
             return false;
         }
 
+        bool ProcCall::codegen_type_enum(Scope& scope, TypeNode& node, TypeRef& type)
+        {
+            if (type->ty != TypeInfo::Type::ENUM)
+                return error::compiler(*node.node_info,
+                    "Type conflict found during signature deduction\nExpected enum %, recieved %",
+                    node.type_enum.ast->signature.name, type->to_string());
+            if (type->type_enum.ast != node.type_enum.ast)
+                return error::compiler(*node.node_info,
+                    "Type conflict found during signature deduction\nExpected struct %, recieved struct %",
+                    node.type_enum.ast->signature.name, type->type_enum.ast->signature.name);
+
+            // Deducing the enum's cargs
+            for (auto& [carg_name, carg_node] : node.type_enum.cargs)
+                if (codegen_value(scope, *carg_node, type->type_enum.cargs.at(carg_name)))
+                    return true;
+            return false;
+        }
+
         bool ProcCall::codegen_type_dltype(Scope& scope, TypeNode& node, TypeRef& type)
         {
             if (type->ty != dltype)
@@ -2918,6 +3099,8 @@ namespace nn
                 return codegen_type_tuple(scope, node, type);
             case TypeNode::Type::STRUCT:
                 return codegen_type_struct(scope, node, type);
+            case TypeNode::Type::ENUM:
+                return codegen_type_enum(scope, node, type);
             case TypeNode::Type::DLTYPE:
                 return codegen_type_dltype(scope, node, type);
             default:
@@ -3292,6 +3475,158 @@ namespace nn
             rets.push_back(ret_type);
             return
                 scope.add(var_name, ret_type, *ret_node->node_info);
+        }
+
+        bool EnumCall::init(const AstEnum& sig, size_t idx)
+        {
+            ast_enum = &sig;
+            node_info = &sig.node_info;
+            tag_val = idx + 1;  // 0 is reserved for uninitialized enums
+
+            std::vector<std::string> old_ns = cg_ns;
+            cg_ns = sig_ns;
+
+            // Building the nodes for the cargs and building the struct's cargs along the way
+            ret_node = next_type();
+            new (&ret_node->type_struct) EnumType();
+            ret_node->ty = TypeNode::Type::ENUM;
+            ret_node->node_info = &sig.node_info;
+            ret_node->type_enum.ast = &sig;
+            Scope init_scope{ nullptr };
+            for (const auto& arg_decl : sig.signature.cargs)
+            {
+                if (carg_nodes.contains(arg_decl.var_name))
+                    return error::compiler(arg_decl.node_info, "Naming conflict for argument '%' in cargs", arg_decl.var_name);
+
+                ValNode* node;
+                TypeRef type;
+                if (create_arg(init_scope, arg_decl, node) ||
+                    arg_type(type, init_scope, arg_decl) ||
+                    init_scope.add(arg_decl.var_name, type, arg_decl.node_info) ||
+                    init_scope.push()
+                    ) return true;
+
+                if (arg_decl.default_expr)
+                {
+                    if (arg_decl.is_packed)
+                        return error::compiler(arg_decl.node_info, "Packed arguments cannot have default values");
+                    if (codegen_expr_single_ret<TypeInfo::NonVirtual>(init_scope, *arg_decl.default_expr, node->val_arg.default_type))
+                        return true;
+                }
+                carg_nodes[arg_decl.var_name] = node;
+                carg_stack.push_back(arg_decl.var_name);
+                ret_node->type_struct.cargs[arg_decl.var_name] = node;
+            }
+
+            // Building the vargs
+            for (const auto& line : sig.entries[idx].lines)
+            {
+                if (line.ty != LineType::EXPR)
+                    return error::compiler(line.node_info, "An enum entry body must only contain variable declarations");
+                const auto& decl = line.line_expr.line;
+                if (decl.ty != ExprType::VAR_DECL)
+                    return error::compiler(decl.node_info, "An enum entry must only contain variable declarations");
+
+                // For now, I'll keep this in since the values might get index via the scope during codegen,
+                // but this really shouldn't be nessisary - this was the comment for struct where I copied this code from.
+                // And I think this is even less nessisary for enums, but I just wanna get something working, so screw it
+                if (carg_nodes.contains(decl.expr_name.val))
+                    return error::compiler(decl.node_info, "Naming conflict for argument '%' between cargs and vargs", decl.expr_name.val);
+                if (varg_nodes.contains(decl.expr_name.val))
+                    return error::compiler(decl.node_info, "Naming conflict for argument '%' in vargs", decl.expr_name.val);
+
+                ValNode* node;
+                if (create_arg(init_scope, decl, node))
+                    return true;
+                varg_nodes[decl.expr_name.val] = node;
+                varg_stack.push_back(decl.expr_name.val);
+            }
+
+            cg_ns = old_ns;  // Putting the old namespace back
+            return false;
+        }
+
+        bool EnumCall::apply_args(const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs, const std::vector<TypeRef>& vargs)
+        {
+            // Checking to make sure all the provided cargs are in the signature
+            for (const auto& [name, type] : cargs)
+                if (!carg_nodes.contains(name))
+                    return error::compiler(node_info, "The provided carg '%' does not exist in the signature", name);
+            // Checking to make sure all the vargs are provided
+            if (vargs.size() < varg_stack.size())
+                return error::compiler(node_info, "Too few vargs provided in call");
+            if (vargs.size() > varg_stack.size())
+                return error::compiler(node_info, "Too many vargs provided in call");
+            assert(vargs.size() == varg_stack.size());
+
+            // Putting the carg exprs into the nodes
+            for (const auto& [name, expr] : cargs)
+                carg_nodes[name]->val = expr;
+
+            // Putting the varg exprs into the nodes
+            for (size_t i = 0; i < vargs.size(); i++)
+                varg_nodes[varg_stack[i]]->val = vargs[i];
+            return false;
+        }
+
+        bool EnumCall::codegen(Scope& scope, std::vector<TypeRef>& rets)
+        {
+            // codegening all the nodes
+            for (auto& [name, node] : carg_nodes)
+                if (node->is_root && codegen_root_arg(scope, *node))
+                    return true;
+            for (auto& [name, node] : varg_nodes)
+                if (node->is_root && codegen_root_arg(scope, *node))
+                    return true;
+
+            // Adding the enum's tag onto the stack
+            size_t tag_addr;
+            if (bc->add_obj_int(tag_addr, tag_val) ||
+                body->add_instruction(instruction::New(*node_info, tag_addr)) ||
+                scope.push()
+                ) return true;
+
+            // codegening each of the vargs onto the stack
+            for (const std::string& name : varg_stack)
+            {
+                // everything's pass-by-reference for struct initialization, otherwise structs containing structs
+                // couldn't be a thing.  This means that the common varg process where the is_constref flag
+                // is used to determine whether or not the varg is passed by reference would be wrong
+
+                const ValNode& node = *varg_nodes.at(name);
+                if (!node.val)
+                    return error::compiler(*node.node_info, "Missing required varg '%'", name);
+
+                if (node.val->codegen(scope))
+                    return true;
+            }
+
+            // combining everything down into a single value on the stack
+            if (body->add_instruction(instruction::Agg(*node_info, varg_stack.size())) ||
+                body->add_instruction(instruction::Agg(*node_info, 2))
+                ) return true;
+
+            // Update the stack pointers, because of the enum tag, this is a bit different than struct
+            if (scope.pop(varg_stack.size()))
+                return true;
+
+            // Adding the struct to the scope
+            std::string var_name = scope.generate_var_name();
+            CodegenCallback codegen = [node_info{ ret_node->node_info }, var_name](Scope& scope) -> bool {
+                Scope::StackVar var;
+                if (scope.at(var_name, var))
+                    return error::compiler(*node_info, "Unable to resolve identifier %", var_name);
+                return
+                    body->add_instruction(instruction::Dup(*node_info, var.ptr)) ||
+                    scope.push();
+            };
+            TypeRef ret_type = ret_node->as_type(*ret_node->node_info);
+            if (!ret_type)
+                return true;
+            ret_type->cat = TypeInfo::Category::DEFAULT;
+            ret_type->codegen = codegen;
+            rets.push_back(ret_type);
+            return scope.add(var_name, ret_type, *ret_node->node_info);
         }
 
         bool IntrCall::init(const AstBlock& sig)
@@ -4499,6 +4834,98 @@ namespace nn
             return false;
         }
 
+        bool resolve_lookup(Scope& scope, const AstNodeInfo& node_info, const std::string& name,
+            const CodeModule::LookupResult& lookup, std::vector<TypeRef>& rets)
+        {
+            // inits shadow structs which shadow enums, so check the inits first for match.
+            std::vector<const AstInit*> init_matches;
+            for (const AstInit* init_elem : lookup.inits)
+                if (init_elem->signature.cargs.size() == 0)
+                    init_matches.push_back(init_elem);
+            if (init_matches.size() > 1)
+                return error::compiler(node_info, "Reference to init '%' is ambiguous", name);
+            if (init_matches.size() == 1)
+            {
+                // Perfect match, return it
+                rets.push_back(type_manager->create_init(
+                    TypeInfo::Category::CONST,
+                    [&node_info, &name](Scope& scope) {
+                        size_t addr;
+                        return
+                            bc->add_obj_str(addr, name) ||
+                            body->add_instruction(instruction::New(node_info, addr)) ||
+                            body->add_instruction(instruction::Ini(node_info)) ||
+                            scope.push();
+                    }));
+                return !rets.back();
+            }
+
+            // No init matches were found, look for struct matches
+            std::vector<const AstStruct*> struct_matches;
+            for (const AstStruct* struct_elem : lookup.structs)
+                if (struct_elem->signature.cargs.size() == 0)
+                    struct_matches.push_back(struct_elem);
+            if (struct_matches.size() > 1)
+                return error::compiler(node_info, "Reference to struct '%' is ambiguous", name);
+            if (struct_matches.size() == 1)
+            {
+                // Perfect match, return it
+                TypeRef tmp = type_manager->create_lazystruct(struct_matches[0], {});
+                if (!tmp) return true;
+                if (!lazy_types)
+                {
+                    // Note that since this is a lone struct reference, this is basically declaration without
+                    // initialization, so the correct behaviour is to put an empty aggregate onto the stack
+                    if (tmp->wake_up_struct(
+                        node_info,
+                        TypeInfo::Category::DEFAULT,
+                        [&node_info](Scope& scope) -> bool {
+                            return
+                                body->add_instruction(instruction::Agg(node_info, 0)) ||
+                                scope.push();
+                        })) return true;
+                }
+                TypeRef type;
+                if (tmp->to_obj(struct_matches[0]->node_info, type))
+                    return true;
+                rets.push_back(type);
+                return false;
+            }
+
+            // No init or struct matches were found, look for enums next
+            std::vector<const AstEnum*> enum_matches;
+            for (const AstEnum* ast_enum : lookup.enums)
+                if (ast_enum->signature.cargs.size() == 0)  // codegen_expr_callee_cargs doesn't resolve lookups
+                    enum_matches.push_back(ast_enum);
+            if (enum_matches.size() > 1)
+                return error::compiler(node_info, "Reference to enum '%' is ambiguous", name);
+            if (enum_matches.size() == 1)
+            {
+                // Perfect match
+                // Also, this is sorta similar to the struct case where a lone enum declaration should
+                // result in an "uninitialized" enum (or in this case initialized with the invalid tag - 0)
+                // But, importantly, this also needs to serve the purpose of allowing a dot operator
+                // to later resolve this type into either a TypeInfoEnumEntry type - presumable to end up
+                // in an EnumCall, or directly in an agg<tag, agg<>> placed on the stack for the trivial case
+                TypeRef tmp = type_manager->create_enum(TypeInfo::Category::VIRTUAL, nullptr, enum_matches.front(), lookup.ns, {});
+                if (!tmp) return true;
+                TypeRef type;
+                if (tmp->to_obj(enum_matches[0]->node_info, type))  // This will make the enum's category default
+                    return true;
+                rets.push_back(type);
+                return false;
+            }
+
+            // No init, struct, or enum matches were found, but it could still be a namespace
+            // or some kind of callable reference type of thing, but that hasn't been implemented yet.
+            // So keep the lookup unresolved for now, and hopefully the caller can figure out what it actually is
+            TypeRef type = type_manager->create_lookup(name, lookup);
+            if (!type)
+                return true;
+            rets.push_back(type);
+            return false;
+        }
+
         bool codegen_expr_callee_kw(Scope& scope, const AstExpr& expr, TypeRef& ret)
         {
             size_t addr;
@@ -5558,43 +5985,33 @@ namespace nn
             case TypeInfo::Type::LOOKUP:
             {
                 const CodeModule::LookupResult& lookup = lhs->type_lookup.lookup;
-                // A dot operator on a lookup operation needs to access a namespace
+
+                // Building a new lookup based on the current access name and resolving it to the best of
+                // our ability at this point.  That means that things like inits, structs, and enums
+                // will get pulled out here, but things that need vargs will get figured out later.
+                // Enum attributes are resolved as a dot operator on a TypeInfo::Type::Enum object
                 CodeModule::LookupResult result;
-                for (const CodeModule::Node* node : lookup.nodes)
+                for (const CodeModule::Namespace* node : lookup.namespaces)
                 {
-                    if (node->attrs.contains(expr.expr_name.val))
+                    if (node->namespaces.contains(expr.expr_name.val))
                     {
-                        for (const auto& attr : node->attrs.at(expr.expr_name.val))
-                        {
-                            switch (attr.index())
-                            {
-                            case CodeModule::AttrType::NODE:
-                                result.nodes.push_back(&std::get<CodeModule::Node>(attr));
-                                break;
-                            case CodeModule::AttrType::STRUCT:
-                                result.structs.push_back(std::get<const AstStruct*>(attr));
-                                break;
-                            case CodeModule::AttrType::FUNC:
-                                result.fns.push_back(std::get<const AstFn*>(attr));
-                                break;
-                            case CodeModule::AttrType::DEF:
-                                result.defs.push_back(std::get<const AstBlock*>(attr));
-                                break;
-                            default:
-                                assert(false);
-                            }
-                        }
+                        for (const auto& sub_node : node->namespaces.at(expr.expr_name.val))
+                            result.namespaces.push_back(&sub_node);
                     }
+                    if (node->structs.contains(expr.expr_name.val))
+                        result.structs = node->structs.at(expr.expr_name.val);
+                    if (node->enums.contains(expr.expr_name.val))
+                        result.enums = node->enums.at(expr.expr_name.val);
+                    if (node->fns.contains(expr.expr_name.val))
+                        result.fns = node->fns.at(expr.expr_name.val);
+                    if (node->defs.contains(expr.expr_name.val))
+                        result.defs = node->defs.at(expr.expr_name.val);
                     if (node->intrs.contains(expr.expr_name.val))
                         result.intrs = node->intrs.at(expr.expr_name.val);
                     if (node->inits.contains(expr.expr_name.val))
                         result.inits = node->inits.at(expr.expr_name.val);
                 }
-                TypeRef type = type_manager->create_lookup(expr.expr_name.val, std::move(result));
-                if (!type)
-                    return true;
-                rets.push_back(type);
-                return false;
+                return resolve_lookup(scope, expr.node_info, expr.expr_name.val, result, rets);
             }
             case TypeInfo::Type::STRUCT:
             {
@@ -5631,11 +6048,48 @@ namespace nn
                 rets.push_back(type);
                 return false;
             }
-            default:
-                return error::compiler(expr.node_info, "Unable to perform a member access operation on the given type");
+            case TypeInfo::Type::TYPE:  // Possibly an enum
+            {
+                if (lhs->type_type.base->ty != TypeInfo::Type::ENUM)
+                    break;
+                lhs = lhs->type_type.base;
+
+                size_t i = 0;
+                for (; i < lhs->type_enum.ast->entries.size(); i++)
+                    if (lhs->type_enum.ast->entries[i].name == expr.expr_name.val)
+                        break;
+                if (i == lhs->type_enum.ast->entries.size())
+                    return error::compiler(expr.node_info, "enum % has no entry %",
+                        lhs->type_enum.ast->signature.name, expr.expr_name.val);
+                TypeRef ret;
+                if (lhs->type_enum.ast->entries[i].lines.size() == 0)
+                {
+                    // It's a trival enum entry, the runtime value can be constructed directly from i
+                    ret = type_manager->duplicate(
+                        TypeInfo::Category::DEFAULT,
+                        [&expr, i](Scope& scope) -> bool {
+                            size_t addr;
+                            return
+                                bc->add_obj_int(addr, i + 1) ||
+                                body->add_instruction(instruction::New(expr.node_info, addr)) ||
+                                body->add_instruction(instruction::Agg(expr.node_info, 0)) ||
+                                body->add_instruction(instruction::Agg(expr.node_info, 2)) ||
+                                scope.push();
+                        }, lhs);
+                }
+                else
+                {
+                    // It's a non-trivial enum entry, so create an enum entry type out of it
+                    // and leave it up to the caller to figure out what to do
+                    ret = type_manager->create_enum_entry(lhs->type_enum.ast, lhs->type_enum.ast_ns, lhs->type_enum.cargs, i);
+                }
+                if (!ret)
+                    return true;
+                rets.push_back(ret);
+                return false;
             }
-            
-            return error::compiler(expr.node_info, "Internal error: not implemented");
+            }
+            return error::compiler(expr.node_info, "Unable to perform a member access operation on the given type");
         }
 
         bool codegen_expr_decl(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
@@ -6234,6 +6688,16 @@ namespace nn
                 }
             }
 
+            if (callee->ty == TypeInfo::Type::ENUMENTRY)
+            {
+                // Enums are weird
+                std::unique_ptr<EnumCall> enum_call = std::make_unique<EnumCall>(callee->type_enum_entry.ast_ns);
+                return
+                    enum_call->init(*callee->type_enum_entry.ast, callee->type_enum_entry.idx) ||
+                    enum_call->apply_args(expr.node_info, callee->type_enum_entry.cargs, param_vargs) ||
+                    enum_call->codegen(scope, rets);
+            }
+
             std::vector<AstExpr> default_cargs = {};
             std::string* name;
             CodeModule::LookupResult* lookup;
@@ -6346,6 +6810,10 @@ namespace nn
                     struct_call->apply_args(expr.node_info, struct_matches.front().second, param_vargs) ||
                     struct_call->codegen(scope, rets);
             }
+
+            // If you were expecting enums here, sorry.  Enums are a bit weird with the whole tagged union thing,
+            // so they're actually at the top of this function - they get resolved to a TypeInfoEnumEntry type
+            // before getting to this function, so they're not even a lookup type.
 
             return error::compiler(expr.node_info, "Unable to find a suitable overload for varg call to '%'", *name);
         }
@@ -6567,66 +7035,9 @@ namespace nn
                 return error::compiler(expr.node_info, "Unresolved identifier: %", expr.expr_string);
             }
 
-            // It isn't a callee, otherwise codegen_expr_callee_var would've been called instead
-            // so the var needs to match either a cargless struct or a cargless init.
-            // inits shadow structs, so check the inits first for match.
-            std::vector<const AstInit*> init_matches;
-            for (const AstInit* init_elem : lookup.inits)
-                if (init_elem->signature.cargs.size() == 0)
-                    init_matches.push_back(init_elem);
-            if (init_matches.size() > 1)
-                return error::compiler(expr.node_info, "Reference to init '%' is ambiguous", expr.expr_string);
-            if (init_matches.size() == 1)
-            {
-                // Perfect match, return it
-                rets.push_back(type_manager->create_init(
-                    TypeInfo::Category::CONST,
-                    [&expr](Scope& scope) {
-                        size_t addr;
-                        return
-                            bc->add_obj_str(addr, expr.expr_string) ||
-                            body->add_instruction(instruction::New(expr.node_info, addr)) ||
-                            body->add_instruction(instruction::Ini(expr.node_info)) ||
-                            scope.push();
-                    }));
-                return !rets.back();
-            }
-
-            // No init matches were found, look for struct matches
-            std::vector<const AstStruct*> struct_matches;
-            for (const AstStruct* struct_elem : lookup.structs)
-                if (struct_elem->signature.cargs.size() == 0)
-                    struct_matches.push_back(struct_elem);
-            if (struct_matches.size() > 1)
-                return error::compiler(expr.node_info, "Reference to struct '%' is ambiguous", expr.expr_string);
-            if (struct_matches.size() == 1)
-            {
-                // Perfect match, return it
-                TypeRef tmp = type_manager->create_lazystruct(struct_matches[0], {});
-                if (!tmp) return true;
-                if (!lazy_types)
-                {
-                    // Note that since this is a lone struct reference, this is basically declaration without
-                    // initialization, so the correct behaviour is to put an empty aggregate onto the stack
-                    if (tmp->wake_up_struct(
-                        expr.node_info,
-                        TypeInfo::Category::DEFAULT,
-                        [&expr](Scope& scope) -> bool {
-                            return
-                                body->add_instruction(instruction::Agg(expr.node_info, 0)) ||
-                                scope.push();
-                        })) return true;
-                }
-                TypeRef type;
-                if (tmp->to_obj(struct_matches[0]->node_info, type))
-                    return true;
-                rets.push_back(type);
-                return false;
-            }
-            
-            // No struct matches were found.  It could still be a def or fn reference type of thing
-            // but that hasn't been implemented yet.  More than likely its just a user error
-            return error::compiler(expr.node_info, "Unable to find a cargless init or struct which matches identifier '%'", expr.expr_string);
+            // It isn't a callee, otherwise codegen_expr_callee_var would've been called instead.
+            // So attempt to resolve the lookup to an unambiguous reference using the shadowing rules
+            return resolve_lookup(scope, expr.node_info, expr.expr_name.val, lookup, rets);
         }
 
         bool codegen_expr(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
@@ -7017,6 +7428,216 @@ namespace nn
             return error::compiler(line.node_info, "Internal error: body_type enum was out of range");
         }
 
+        bool codegen_line_match(Scope& scope, const AstLine& line)
+        {
+            TypeRef arg;
+            if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, line.line_match.arg, arg))
+                return true;
+            if (arg->ty != TypeInfo::Type::ENUM)
+                return error::compiler(line.line_match.arg.node_info, "Expected enum, recieved %", arg);
+
+            // Making a mapping of match statement elements to reduce time complexity.
+            // And along the way, catching duplicate elements and checking for invalid labels
+            bool ret = false;
+            std::unordered_map<std::string, const AstMatchElem*> elem_map;
+            for (const AstMatchElem& elem : line.line_match.elems)
+            {
+                // Building elem_map + duplicate checking
+                if (elem_map.contains(elem.label))
+                    ret = error::compiler(elem.node_info, "Found label '%' redefinition in match statement", elem.label);
+                else
+                    elem_map[elem.label] = &elem;
+                // Invalid entry checking
+                if (elem.label != "else" && !arg->type_enum.ast->entry_map.contains(elem.label))
+                    ret = error::compiler(elem.node_info, "Found invalid label '%' in match statement", elem.label);
+            }
+
+            // along the way, building out the jump table
+            std::string lbl_prefix = label_prefix(line.node_info);
+            std::string invalid_label = lbl_prefix + "invalid";
+            std::string else_label = lbl_prefix + "else";
+            std::vector<std::string> jump_table;
+            jump_table.push_back(invalid_label);
+            for (const auto& entry : arg->type_enum.ast->entries)
+            {
+                if (elem_map.contains(entry.name))
+                    jump_table.push_back(lbl_prefix + "branch_" + entry.name);
+                else
+                {
+                    if (elem_map.contains("else"))
+                        jump_table.push_back(else_label);
+                    else
+                        ret = error::compiler(line.node_info, "Missing label for enum entry % in match statement", entry.name);
+                }
+            }
+
+            // If any of the above code found issues in the code, don't compile the match statement
+            if (ret)
+                return true;
+
+            // Setting up the stack as [enum, enum_tag]
+            size_t int_addr;
+            size_t zero_addr;
+            size_t one_addr;  // Used later in the match elem blocks
+            if (arg->codegen(scope) ||
+                bc->add_type_int(int_addr) ||
+                bc->add_obj_int(zero_addr, 0) ||
+                bc->add_obj_int(one_addr, 1) ||
+                body->add_instruction(instruction::Dup(line.node_info, 0)) ||          // dup  0
+                body->add_instruction(instruction::New(line.node_info, zero_addr)) ||  // new  int 0
+                body->add_instruction(instruction::New(line.node_info, int_addr)) ||   // new  type int
+                body->add_instruction(instruction::Aty(line.node_info, 0)) ||          // aty  0
+                body->add_instruction(instruction::Aty(line.node_info, 2)) ||          // aty  2
+                body->add_instruction(instruction::Idx(line.node_info))                // idx
+                ) return true;
+            // I don't need to push the scope here since the enum_tag's gonna get popped off in the
+            // individual match elem blocks anyways
+
+            // Making an inefficient jump table
+            for (size_t tag = 0; tag < jump_table.size(); tag++)
+            {
+                size_t tag_addr;
+                if (bc->add_obj_int(tag_addr, tag) ||
+                    body->add_instruction(instruction::Dup(line.node_info, 0)) ||             // dup  <enum-tag>
+                    body->add_instruction(instruction::New(line.node_info, tag_addr)) ||      // new  int <tag>
+                    body->add_instruction(instruction::New(line.node_info, int_addr)) ||      // new  type int
+                    body->add_instruction(instruction::Eq(line.node_info)) ||                 // eq
+                    body->add_instruction(instruction::Brt(line.node_info, jump_table[tag]))  // brt  <tag-branch>
+                    ) return true;
+            }
+
+            // If code execution falls through the brt's above, it means that the tag was out of the enum range.
+            // Which at that point should just be a runtime error
+            size_t oormsg_addr;
+            if (bc->add_obj_str(oormsg_addr, "Found out of range enum tag in match statement") ||
+                body->add_instruction(instruction::New(line.node_info, oormsg_addr)) ||
+                body->add_instruction(instruction::Err(line.node_info))
+                ) return true;
+
+            // Generating the code for the invalid tag (uninitialized enum)
+            size_t uinitmsg_addr;
+            if (bc->add_obj_str(uinitmsg_addr, "Found uninitialized enum in match statement") ||
+                body->add_label(line.node_info, invalid_label) ||
+                body->add_instruction(instruction::New(line.node_info, uinitmsg_addr)) ||
+                body->add_instruction(instruction::Err(line.node_info))
+                ) return true;
+
+            // Generating the code for all the other tags
+            std::string end_label = lbl_prefix + "end";
+            for (const AstMatchElem& elem : line.line_match.elems)
+            {
+                if (elem.label == "else") continue;  // Adding the else block last
+
+                // Setting up the label and popping enum_tag
+                if (body->add_label(elem.node_info, lbl_prefix + "branch_" + elem.label) ||
+                    body->add_instruction(instruction::Pop(elem.node_info, 0))
+                    ) return true;
+
+                // Setup for adding each of the fields from the enum entry onto the stack
+                // To do this efficiently, first get the aggregate and its type onto the stack
+                // so that those objects can get re-used via dup while expanding the aggregate
+                if (// Putting the enum aggregate onto the stack
+                    body->add_instruction(instruction::Dup(elem.node_info, 0)) ||         // dup  0
+                    body->add_instruction(instruction::New(elem.node_info, one_addr)) ||  // new  int 1
+                    body->add_instruction(instruction::New(elem.node_info, int_addr)) ||  // new  type int
+                    body->add_instruction(instruction::Aty(elem.node_info, 0)) ||         // aty  0
+                    body->add_instruction(instruction::Aty(elem.node_info, 2)) ||         // aty  2
+                    body->add_instruction(instruction::Idx(elem.node_info))               // idx
+                    ) return true;
+
+                // For indexing, it doesn't really matter what each of the elements are in the aggregate type
+                // See AggType::idx for details on this, but basically that means I can sorta cheat here and
+                // put a bunch of nulls on the stack to get the size check to go though at runtime.
+                // This will 100% come back to bite me later, but for now it means I can do things slightly more
+                // efficiently at both compile time and run time since I don't need to keep scope valid for codegens
+                assert(arg->type_enum.ast->entry_map.contains(elem.label));
+                const AstEnumEntry* entry = arg->type_enum.ast->entry_map.at(elem.label);
+                for (size_t i = 0; i < entry->lines.size(); i++)
+                    if (body->add_instruction(instruction::Nul(elem.node_info)))
+                        return true;
+                if (body->add_instruction(instruction::Aty(elem.node_info, entry->lines.size())))
+                    return true;
+                // The stack is now [enum, enum_agg, type<enum_agg>]
+
+                // Putting the fields on the stack by indexing into the aggregate
+                for (size_t i = 0; i < entry->lines.size(); i++)
+                {
+                    size_t idx_addr;
+                    if (bc->add_obj_int(idx_addr, i) ||
+                        body->add_instruction(instruction::Dup(elem.node_info, i + 1)) ||
+                        body->add_instruction(instruction::New(elem.node_info, idx_addr)) ||
+                        body->add_instruction(instruction::Dup(elem.node_info, i + 2)) ||
+                        body->add_instruction(instruction::Idx(elem.node_info))
+                        ) return true;
+                }
+                // The stack is now [enum, enum_agg, type<enum_agg>, *enum_agg]
+
+                // Getting rid of the stack setup stuff
+                if (body->add_instruction(instruction::Pop(elem.node_info, entry->lines.size())) ||
+                    body->add_instruction(instruction::Pop(elem.node_info, entry->lines.size()))
+                    ) return true;
+                // The stack is now [enum, *enum_agg]
+
+                // Starting the new scope for the body of the match elem block that'll contain the enum entry fields
+                Scope elem_scope{ &scope };
+
+                // Getting the types of the fields and putting them onto the stack. Coming out of codegen_fields,
+                // they'll all be virtual types, but thats fine since they'll be redirected at stack variables.
+                // Also, I'm not fully sure about why this works, I basically just copied what I did for structs
+                std::vector<std::pair<std::string, TypeRef>> fields;
+                if (codegen_fields("An enum", elem.node_info, arg->type_enum.cargs, entry->lines, fields))
+                    return true;
+                for (const auto& [field_name, field_type] : fields)
+                {
+                    TypeRef type = type_manager->duplicate(
+                        arg->cat,
+                        [&field_name, &elem](Scope& scope) -> bool {
+                            Scope::StackVar var;
+                            if (scope.at(field_name, var))
+                                return error::compiler(elem.node_info, "Unresolved reference to variable %", field_name);
+                            return
+                                body->add_instruction(instruction::Dup(elem.node_info, var.ptr)) ||
+                                scope.push();
+                        }, field_type);
+                    if (!type ||
+                        elem_scope.push() ||
+                        elem_scope.add(field_name, type, elem.node_info)
+                        ) return true;
+                }
+
+                // Everything's now set up, codegen the body of the match elem
+                // This will also get rid of all the fields I put on the stack, so it's ok to immediately jump
+                // to the end label after the codegen_lines call
+                if (codegen_lines(elem_scope, elem.body) ||
+                    body->add_instruction(instruction::Jmp(elem.node_info, end_label))
+                    ) return true;
+            }
+
+            // Generating the else block (if one's present)
+            if (elem_map.contains("else"))
+            {
+                const AstMatchElem& elem = *elem_map.at("else");
+
+                // Setting up the label and popping enum_tag
+                if (body->add_label(elem.node_info, else_label) ||
+                    body->add_instruction(instruction::Pop(elem.node_info, 0))
+                    ) return true;
+
+                // Don't need to worry about putting anything on the stack for an else block,
+                // instead I can go directly into codegenning the body
+                Scope else_scope{ &scope };
+                if (codegen_lines(else_scope, elem.body) ||
+                    body->add_instruction(instruction::Jmp(elem.node_info, end_label))
+                    ) return true;
+            }
+
+            // Generating the end block, and popping enum off the stack
+            return
+                body->add_label(line.node_info, end_label) ||
+                body->add_instruction(instruction::Pop(line.node_info, 0)) ||
+                scope.pop();
+        }
+
         bool codegen_line_branch(Scope& scope, const AstLine& line, const std::string& end_label)
         {
             Scope block_scope{ &scope };
@@ -7117,32 +7738,70 @@ namespace nn
                 ) return error::compiler(line.node_info, "Unable to compile for loop collection");
             
             // assignment
-            if (line.line_for.decl.ty == ExprType::VAR)
+            const AstExpr* decl = &line.line_for.decl;
+            bool is_ref   = decl->ty == ExprType::UNARY_REF;
+            bool is_const = decl->ty == ExprType::UNARY_CONST;
+            if (is_ref || is_const)
+                decl = decl->expr_unary.expr.get();
+            if (decl->ty == ExprType::VAR)
             {
                 // implicit declaration
-                if (block_scope.contains(line.line_for.decl.expr_string))
-                    return error::compiler(line.line_for.decl.node_info, "Unable to use an already defined variable as in for loop");
+                if (block_scope.contains(decl->expr_string))
+                    return error::compiler(decl->node_info, "Unable to use an already defined variable as in for loop");
                 // Creating a type for the iterator
                 TypeRef elem_type = type_manager->duplicate(
                     TypeInfo::Category::DEFAULT,
-                    [&line](Scope& scope) -> bool {
+                    [decl](Scope& scope) -> bool {
                         Scope::StackVar var;
                         return
-                            scope.at(line.line_for.decl.expr_string, var) ||
-                            body->add_instruction(instruction::Dup(line.node_info, var.ptr)) ||
+                            scope.at(decl->expr_string, var) ||
+                            body->add_instruction(instruction::Dup(decl->node_info, var.ptr)) ||
                             scope.push();
                     }, ret->type_array.elem);
                 if (!elem_type)
                     return true;
+                
                 // Indexing into iter and putting the variable onto the stack
-                if (body->add_instruction(instruction::Dup(line.node_info, 2)) ||
-                    body->add_instruction(instruction::Dup(line.node_info, 1)) ||
-                    body->add_instruction(instruction::Nul(line.node_info)) ||
-                    body->add_instruction(instruction::Arr(line.node_info)) ||
-                    body->add_instruction(instruction::Idx(line.node_info)) ||
-                    block_scope.push() ||
-                    block_scope.add(line.line_for.decl.expr_string, elem_type, line.node_info)
+                if (body->add_instruction(instruction::Dup(decl->node_info, 2)) ||
+                    body->add_instruction(instruction::Dup(decl->node_info, 1)) ||
+                    body->add_instruction(instruction::Nul(decl->node_info)) ||
+                    body->add_instruction(instruction::Arr(decl->node_info)) ||
+                    body->add_instruction(instruction::Idx(decl->node_info)) ||
+                    block_scope.push()
                     ) return true;
+
+                // This is basically a copy/paste of codegen_expr_assign
+                if (is_const)
+                    elem_type->cat = TypeInfo::Category::CONST;
+                else if (is_ref)
+                {
+                    if (!ret->in_category<TypeInfo::Mutable>())
+                        return error::compiler(decl->node_info, "Unable to take a reference of an immutable object");
+                    elem_type->cat = TypeInfo::Category::REF;
+                }
+                else
+                {
+                    // Objects that are handled by the graph builder
+                    // don't have runtime type objects, and can't be copied.
+                    // But default assignment should still be valid semantics for them
+                    if (!elem_type->check_dl())
+                    {
+                        if (!elem_type->check_cpy())  // For example, you can't copy structs
+                            return error::compiler(decl->node_info, "Unable to copy type %", elem_type->to_string());
+                        // copying the object during assignment
+                        TypeRef type;
+                        if (elem_type->to_obj(decl->node_info, type) ||
+                            type->codegen(scope) ||
+                            body->add_instruction(instruction::Cpy(decl->node_info)) ||
+                            scope.pop()
+                            ) return true;
+                    }
+                    elem_type->cat = TypeInfo::Category::DEFAULT;
+                }
+
+                // Now with the type category resolved, I can finally add it to the scope
+                if (block_scope.add(decl->expr_string, elem_type, line.node_info))
+                    return true;
             }
             else
                 return error::compiler(line.line_for.decl.node_info, "Internal error: not implemented");
@@ -7216,6 +7875,8 @@ namespace nn
                 return codegen_line_print(scope, line);
             case LineType::RETURN:
                 return codegen_line_return(scope, line);
+            case LineType::MATCH:
+                return codegen_line_match(scope, line);
             case LineType::IF:
                 return error::compiler(line.node_info, "Internal error: recieved dependent line type 'if' in codegen_line");
             case LineType::ELIF:
@@ -7708,35 +8369,29 @@ namespace nn
                 bc->add_block(intr_name, *body);
         }
 
-        bool codegen_attr(const std::string& name, const CodeModule::Attr& attr, std::vector<std::string>& ns)
+        bool codegen_namespace(const CodeModule::Namespace& node, std::vector<std::string>& ns)
         {
+            // Structs, enums, and inits don't need to be codegenned
+            // Explicit declaration usually results in a null pointer on the stack
+            // And construction via a call results in inline code
             bool ret = false;
-            switch (attr.index())
+            for (const auto& [name, fns] : node.fns)
+                for (const AstFn* fn : fns)
+                    ret = codegen_func(name, *fn, ns) || ret;
+            for (const auto& [name, defs] : node.defs)
+                for (const AstBlock* def : defs)
+                    ret = codegen_def(name, *def, ns) || ret;
+            for (const auto& [name, intrs] : node.intrs)
+                for (const AstBlock* intr : intrs)
+                    ret = codegen_intr(name, *intr, ns) || ret;
+            for (const auto& [name, sub_nodes] : node.namespaces)
             {
-            case CodeModule::AttrType::NODE:
-                for (const auto& [name, intrs] : std::get<CodeModule::Node>(attr).intrs)
-                    for (const AstBlock* intr : intrs)
-                        ret = codegen_intr(name, *intr, ns) || ret;
-                for (const auto& [node_name, node_attrs] : std::get<CodeModule::Node>(attr).attrs)
-                {
-                    ns.push_back(node_name);
-                    for (const auto& node_attr : node_attrs)
-                        ret = codegen_attr(node_name, node_attr, ns) || ret;
-                    ns.pop_back();
-                }
-                return ret;
-            case CodeModule::AttrType::STRUCT:
-                // Struct's don't need to be codegenned
-                // Explicit declaration results in a null pointer on the stack
-                // And construction via a call results in inline code
-                return false;
-            case CodeModule::AttrType::FUNC:
-                return codegen_func(name, *std::get<const AstFn*>(attr), ns);
-            case CodeModule::AttrType::DEF:
-                return codegen_def(name, *std::get<const AstBlock*>(attr), ns);
+                ns.push_back(name);
+                for (const CodeModule::Namespace& sub_node : sub_nodes)
+                    ret = codegen_namespace(sub_node, ns);
+                ns.pop_back();
             }
-            assert(false);
-            return true;
+            return ret;
         }
 
         bool codegen_module(ByteCodeModule& inp_bc, ModuleInfo& info, AstModule& ast, const std::vector<std::string>& imp_dirs)
@@ -7752,13 +8407,7 @@ namespace nn
 
             bool ret = false;
             std::vector<std::string> ns;
-            for (auto& [name, intrs] : mod->root.intrs)
-                for (const AstBlock* intr : intrs)
-                    ret = codegen_intr(name, *intr, ns) || ret;
-            for (const auto& [name, attrs] : mod->root.attrs)
-                for (const auto& attr : attrs)
-                    ret = codegen_attr(name, attr, ns) || ret;
-            return ret;
+            return codegen_namespace(mod->root, ns);
         }
     }
 }
