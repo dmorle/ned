@@ -1,9 +1,9 @@
 add_library(
-	nvmext_basic SHARED
-	
-	"include/basic.h"
+    nvmext_basic SHARED
+    
+    "include/basic.h"
 
-	"source/basic.cpp"
+    "source/basic.cpp"
 )
 
 set_property(TARGET nvmext_basic PROPERTY LINKER_LANGUAGE CXX)

@@ -5,41 +5,41 @@
 #     relu(inp)
 
 .proc relu
-	dup 1
-	ret
+    dup 1
+    ret
 
 .proc model  # stack: inp, ~block
-	...
+    ...
 
-	new fp f32
-	new int 5
-	new int 5
-	agg 2
-	dup $inp
-	dup $~block
-	call relu
+    new fp f32
+    new int 5
+    new int 5
+    agg 2
+    dup $inp
+    dup $~block
+    call relu
 
 def f1<type T, array<T> arr>():
-	return
+    return
 
 def f2():
-	f1<int, [1]>()
+    f1<int, [1]>()
 
 struct s1<int a, int b>
-	...
+    ...
 
 struct s2<int x>
-	...
+    ...
 
 def f1<int a, int b, s1<a, b> s>() -> s2<a + b>:
-	...
+    ...
 
 def f2():
-	s = s1<5, 5>
-	f1<s=s1>()
+    s = s1<5, 5>
+    f1<s=s1>()
 
 def f():
-	i = int j + 6
+    i = int j + 6
 
 
 # intr sum<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
@@ -54,118 +54,118 @@ def f():
 #     return out
 
 .proc model
-	# setup
-	...
+    # setup
+    ...
 
-	# body
-	# fp<*shape> out
+    # body
+    # fp<*shape> out
 
-	# codegening everythin
-	dup    5            # fty fp
-	dup    5            # int *shape
+    # codegening everythin
+    dup    5            # fty fp
+    dup    5            # int *shape
 
-	# determining the rank of the tensor
-	new    int 0        # n - accumulator for the rank of the edge
-	dup    0
-	dup    2
-	len
-	new    type int
-	iadd
+    # determining the rank of the tensor
+    new    int 0        # n - accumulator for the rank of the edge
+    dup    0
+    dup    2
+    len
+    new    type int
+    iadd
 
-	tsr                 # creating an empty tensor from the backward/forward edge pair
-	
-	# setup for forward edge generation
-	dup    3            # fp
-	dup    2            # n
-	dup    4            # int *shape
+    tsr                 # creating an empty tensor from the backward/forward edge pair
+    
+    # setup for forward edge generation
+    dup    3            # fp
+    dup    2            # n
+    dup    4            # int *shape
 
-	new    int 0        # i - index into shape
+    new    int 0        # i - index into shape
 
 :loop
-	# break condition for the loop over shape
-	dup    1            # int *shape
-	new    type int
-	arr
-	len                 # len(shape)
-	dup    1            # i
-	new    type int
-	eq                  # i == len(shape)
-	brt    end          # if i == len(shape): goto end
+    # break condition for the loop over shape
+    dup    1            # int *shape
+    new    type int
+    arr
+    len                 # len(shape)
+    dup    1            # i
+    new    type int
+    eq                  # i == len(shape)
+    brt    end          # if i == len(shape): goto end
 
-	# placing the next element from shape on the stack
-	dup    1            # int *shape
-	dup    1            # i
-	new    type int
-	arr
-	idx                 # shape[i]
+    # placing the next element from shape on the stack
+    dup    1            # int *shape
+    dup    1            # i
+    new    type int
+    arr
+    idx                 # shape[i]
 
-	# reorganizing the stack
-	dup    3            # n
-	pop    4            # n
-	dup    3            # int *shape
-	pop    4            # int *shape
-	dup    3            # i
-	pop    4            # i
+    # reorganizing the stack
+    dup    3            # n
+    pop    4            # n
+    dup    3            # int *shape
+    pop    4            # int *shape
+    dup    3            # i
+    pop    4            # i
 
-	# incrementing i
-	dup    0            # i
-	new    int 1
-	new    type int
-	iadd                # i += 1
-	jmp    loop
+    # incrementing i
+    dup    0            # i
+    new    int 1
+    new    type int
+    iadd                # i += 1
+    jmp    loop
 
 :end
-	pop    0            # i
-	pop    0            # int *shape
+    pop    0            # i
+    pop    0            # int *shape
     edg                 # creating the forward edge
     sfwd                # binding the forward edge to the tensor
 
-	# setup for backward edge generation
-	dup    3            # fp
-	dup    2            # n
-	dup    4            # int *shape
+    # setup for backward edge generation
+    dup    3            # fp
+    dup    2            # n
+    dup    4            # int *shape
 
-	new    int 0        # i - index into shape
+    new    int 0        # i - index into shape
 
 :loop
-	# break condition for the loop over shape
-	dup    1            # int *shape
-	new    type int
-	arr
-	len                 # len(shape)
-	dup    1            # i
-	new    type int
-	eq                  # i == len(shape)
-	brt    end          # if i == len(shape): goto end
+    # break condition for the loop over shape
+    dup    1            # int *shape
+    new    type int
+    arr
+    len                 # len(shape)
+    dup    1            # i
+    new    type int
+    eq                  # i == len(shape)
+    brt    end          # if i == len(shape): goto end
 
-	# placing the next element from shape on the stack
-	dup    1            # int *shape
-	dup    1            # i
-	new    type int
-	arr
-	idx                 # shape[i]
+    # placing the next element from shape on the stack
+    dup    1            # int *shape
+    dup    1            # i
+    new    type int
+    arr
+    idx                 # shape[i]
 
-	# reorganizing the stack
-	dup    3            # n
-	pop    4            # n
-	dup    3            # int *shape
-	pop    4            # int *shape
-	dup    3            # i
-	pop    4            # i
+    # reorganizing the stack
+    dup    3            # n
+    pop    4            # n
+    dup    3            # int *shape
+    pop    4            # int *shape
+    dup    3            # i
+    pop    4            # i
 
-	# incrementing i
-	dup    0            # i
-	new    int 1
-	new    type int
-	iadd                # i += 1
-	jmp    loop
+    # incrementing i
+    dup    0            # i
+    new    int 1
+    new    type int
+    iadd                # i += 1
+    jmp    loop
 
 :end
-	pop    0            # i
-	pop    0            # int *shape
+    pop    0            # i
+    pop    0            # int *shape
     edg                 # creating the backward edge
     sbwd                # binding the backward edge to the tensor
 
-	pop    1            # n
-	pop    1            # int *shape
-	pop    1            # fp
+    pop    1            # n
+    pop    1            # int *shape
+    pop    1            # fp

@@ -23,52 +23,52 @@
 
 namespace npx
 {
-	struct OpDesc
-	{
-		bool supports_inplace = false;
-		bool pointwise_output = false;
-		bool pointwise_input = false;
-	};
+    struct OpDesc
+    {
+        bool supports_inplace = false;
+        bool pointwise_output = false;
+        bool pointwise_input = false;
+    };
 
-	constexpr size_t op = sizeof(OpDesc);
+    constexpr size_t op = sizeof(OpDesc);
 
-	class Op
-	{
-	public:
-		virtual size_t nthreads() = 0;
+    class Op
+    {
+    public:
+        virtual size_t nthreads() = 0;
 
-		bool run_hardware_test(llvm::LLVMContext& ctx);
-		virtual bool compile(llvm::LLVMContext& ctx, llvm::IRBuilder<>& builder,
-			llvm::Function* caller, llvm::Function* kernel) = 0;
+        bool run_hardware_test(llvm::LLVMContext& ctx);
+        virtual bool compile(llvm::LLVMContext& ctx, llvm::IRBuilder<>& builder,
+            llvm::Function* caller, llvm::Function* kernel) = 0;
 
-		virtual OpDesc describe();
-		
-		std::string name;
+        virtual OpDesc describe();
+        
+        std::string name;
 
-	protected:
-		virtual void compile_hardware_test(llvm::LLVMContext& ctx) = 0;
+    protected:
+        virtual void compile_hardware_test(llvm::LLVMContext& ctx) = 0;
 
-		void generate_caller(llvm::IRBuilder<>& builder, llvm::Module& mod);
-	};
+        void generate_caller(llvm::IRBuilder<>& builder, llvm::Module& mod);
+    };
 
-	namespace ops
-	{
-		class PWAdd :
-			public Op
-		{
-		public:
-			PWAdd(nn::core::EdgeFty fty, size_t nelem);
+    namespace ops
+    {
+        class PWAdd :
+            public Op
+        {
+        public:
+            PWAdd(nn::core::EdgeFty fty, size_t nelem);
 
-			virtual size_t nthreads() override;
+            virtual size_t nthreads() override;
 
-		protected:
-			virtual void compile_hardware_test(llvm::LLVMContext& ctx) override;
+        protected:
+            virtual void compile_hardware_test(llvm::LLVMContext& ctx) override;
 
-		private:
-			nn::core::EdgeFty fty;
-			size_t nelem;
-		};
-	}
+        private:
+            nn::core::EdgeFty fty;
+            size_t nelem;
+        };
+    }
 }
 
 #endif

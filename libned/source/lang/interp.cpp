@@ -1702,7 +1702,7 @@ namespace nn
         }
 
         bool exec(CallStack& stack, ProgramHeap& heap, GraphBuilder& builder, ByteCode& byte_code, std::string entry_point)
-		{
+        {
             if (!byte_code.proc_offsets.contains(entry_point))
                 return error::runtime("Unable to find entry point '%'", entry_point);
 
@@ -2025,6 +2025,6 @@ namespace nn
             }
 
             return true;
-		}
-	}
+        }
+    }
 }

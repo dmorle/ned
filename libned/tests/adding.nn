@@ -7,17 +7,17 @@ fn len<type T>(array<T> arr) -> int:
         ret
 
 fn range(int n) -> array<int>:
-	i = 0
-	array<int> result
-	while i < n:
-		result += [i]
-		i += 1
-	return result
+    i = 0
+    array<int> result
+    while i < n:
+        result += [i]
+        i += 1
+    return result
 
 init gaussian<float mean, float stddev>
 
 intr __cast__<fty out_fp, int *out_shape, fty inp_fp, int *inp_shape>(inp_fp<*inp_shape> inp) -> out:
-	print "Entering intr __cast__"
+    print "Entering intr __cast__"
     inp_size = 1
     for dim_size in inp_shape:
         inp_size *= dim_size
@@ -32,7 +32,7 @@ intr __cast__<fty out_fp, int *out_shape, fty inp_fp, int *inp_shape>(inp_fp<*in
         else:
             out_size *= out_shape[i]
 
-	actual_shape = out_shape  # copying out_shape
+    actual_shape = out_shape  # copying out_shape
     if unknown_idx != -1:
         actual_shape[unknown_idx] = inp_size / out_size
         out_size *= actual_shape[unknown_idx]
@@ -40,80 +40,80 @@ intr __cast__<fty out_fp, int *out_shape, fty inp_fp, int *inp_shape>(inp_fp<*in
     if out_size != inp_size:
         raise "Unable to transform tensor with size " + str::inp_size + " to size " + str::out_size
     out_fp<*actual_shape> out
-	print "Exiting intr __cast__"
+    print "Exiting intr __cast__"
     return out
 
 def __cast__<fty out_fp, int *out_shape, fty inp_fp, int *inp_shape>(inp_fp<*inp_shape> inp) -> out:
-	print "Entering def __cast__"
-	inp_size = 1
-	for dim_size in inp_shape:
-		inp_size *= dim_size
+    print "Entering def __cast__"
+    inp_size = 1
+    for dim_size in inp_shape:
+        inp_size *= dim_size
 
-	out_size = 1
-	unknown_idx = -1
-	for i in range(len(out_shape)):
-		if out_shape[i] == -1:
-			if unknown_idx != -1:
-				raise "Multiple -1 values in output shape"
-			unknown_idx = i
-		else:
-			out_size *= out_shape[i]
+    out_size = 1
+    unknown_idx = -1
+    for i in range(len(out_shape)):
+        if out_shape[i] == -1:
+            if unknown_idx != -1:
+                raise "Multiple -1 values in output shape"
+            unknown_idx = i
+        else:
+            out_size *= out_shape[i]
 
-	actual_shape = out_shape
-	if unknown_idx != -1:
-		actual_shape[unknown_idx] = inp_size / out_size
-		out_size *= actual_shape[unknown_idx]
+    actual_shape = out_shape
+    if unknown_idx != -1:
+        actual_shape[unknown_idx] = inp_size / out_size
+        out_size *= actual_shape[unknown_idx]
 
-	if out_size != inp_size:
-		raise "Unable to transform tensor with size " + str::inp_size + " to size " + str::out_size
+    if out_size != inp_size:
+        raise "Unable to transform tensor with size " + str::inp_size + " to size " + str::out_size
 
-	out_fp<*actual_shape> out
-	out.forward = out_fp<*actual_shape>::inp.forward
-	inp.backward = inp_fp<*inp_shape>::out.backward
-	print "Exiting def __cast__"
-	return out
+    out_fp<*actual_shape> out
+    out.forward = out_fp<*actual_shape>::inp.forward
+    inp.backward = inp_fp<*inp_shape>::out.backward
+    print "Exiting def __cast__"
+    return out
 
 intr __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
-	print "Entering intr __add__"
-	fp<*shape> out
-	print "Exiting intr __add__"
-	return out
+    print "Entering intr __add__"
+    fp<*shape> out
+    print "Exiting intr __add__"
+    return out
 
 def __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> sum:
-	print "Entering def __add__"
-	fp<*shape> out
-	out.forward = lhs.forward + rhs.forward
-	lhs.backward = out.backward
-	rhs.backward = out.backward
-	print "Exiting def __add__"
-	return out
+    print "Entering def __add__"
+    fp<*shape> out
+    out.forward = lhs.forward + rhs.forward
+    lhs.backward = out.backward
+    rhs.backward = out.backward
+    print "Exiting def __add__"
+    return out
 
 def model<fty fp, int *shape>(fp<*shape> lhs) -> out:
-	print "Entering def model"
-	fp<*shape> rhs
-	extern gaussian<0.0, 1.0> rhs
-	result = fp<*shape>::(fp<-1>::lhs + fp<-1>::rhs)
-	print "Exiting def model"
-	return result
+    print "Entering def model"
+    fp<*shape> rhs
+    extern gaussian<0.0, 1.0> rhs
+    result = fp<*shape>::(fp<-1>::lhs + fp<-1>::rhs)
+    print "Exiting def model"
+    return result
 
 # Figuring out optimizers
 
 intr const_val<float val, fty fp, int *shape>() -> val:
-	print "const_val"
+    print "const_val"
     return fp<*shape> out
 
 intr __mul__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
-	print "__mul__"
+    print "__mul__"
     return fp<*shape> out
 
 intr __sync<str name, fty fp, int *shape>(fp<*shape> val) -> val:
-	print "__sync"
-	return fp<*shape> out
+    print "__sync"
+    return fp<*shape> out
 
 def SGD<float lr, fty fp, int *shape>() -> weight:
-	fp<*shape> weight
-	print "declared weight"
-	val = const_val<lr, fp, *shape>()
-	print "got val"
-	weight.forward = __sync<"step">(val * weight.backward)
-	return weight
+    fp<*shape> weight
+    print "declared weight"
+    val = const_val<lr, fp, *shape>()
+    print "got val"
+    weight.forward = __sync<"step">(val * weight.backward)
+    return weight

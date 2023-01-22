@@ -1,39 +1,39 @@
 .proc factorial
-	# if n == 0:
-	dup 0
-	new int 0
-	new type int
-	eq
-	brt base_case
+    # if n == 0:
+    dup 0
+    new int 0
+    new type int
+    eq
+    brt base_case
 
-	# return n * factorial(n - 1)
-	dup 0
-	dup 1
-	new int 1
-	new type int
-	sub
-	new proc factorial
-	call
-	pop 1
-	new type int
-	add
-	ret
+    # return n * factorial(n - 1)
+    dup 0
+    dup 1
+    new int 1
+    new type int
+    sub
+    new proc factorial
+    call
+    pop 1
+    new type int
+    add
+    ret
 
-	# return 1
+    # return 1
 :base_case
-	new int 1
-	ret
+    new int 1
+    ret
 
 .proc test
-	# print("result: " + factorial(n))
-	new str "result: "
-	dup 2
-	new proc factorial
-	call
-	pop 1
-	new type int
-	xstr
-	new type str
-	add
-	dsp
-	ret
+    # print("result: " + factorial(n))
+    new str "result: "
+    dup 2
+    new proc factorial
+    call
+    pop 1
+    new type int
+    xstr
+    new type str
+    add
+    dsp
+    ret

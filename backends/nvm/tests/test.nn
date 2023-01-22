@@ -1,51 +1,51 @@
 intr __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> sum:
-	return fp<*shape> out
+    return fp<*shape> out
 
 intr __mul__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
     return fp<*shape> out
 
 def __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> sum:
-	fp<*shape> out
-	out.forward = lhs.forward + rhs.forward
-	lhs.backward = out.backward
-	rhs.backward = out.backward
-	return out
+    fp<*shape> out
+    out.forward = lhs.forward + rhs.forward
+    lhs.backward = out.backward
+    rhs.backward = out.backward
+    return out
 
 def __mul__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
-	fp<*shape> out
-	out.forward = lhs.forward * rhs.forward
-	lhs.backward = out.backward * rhs.forward
-	rhs.backward = out.backward * lhs.forward
-	return out
+    fp<*shape> out
+    out.forward = lhs.forward * rhs.forward
+    lhs.backward = out.backward * rhs.forward
+    rhs.backward = out.backward * lhs.forward
+    return out
 
 intr transpose<fty fp, int M, int N>(fp<M, N> inp) -> out:
-	__add_intr_info "nvm" : cfg::"test"
+    __add_intr_info "nvm" : cfg::"test"
     return fp<N, M> out
 
 def transpose<fty fp, int M, int N>(fp<M, N> inp) -> out:
-	fp<M, N> out
-	out.forward = transpose(inp.forward)
-	inp.backward = transpose(out.backward)
-	return out
+    fp<M, N> out
+    out.forward = transpose(inp.forward)
+    inp.backward = transpose(out.backward)
+    return out
 
 intr matmul<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> prod:
-	return fp<M, N> prod
+    return fp<M, N> prod
 
 def matmul<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> out:
-	fp<M, N> out
-	out.forward = matmul(lhs.forward, rhs.forward)
-	lhs.backward = matmul(out.backward, transpose(rhs.forward))
-	rhs.backward = matmul(transpose(lhs.forward), out.backward)
-	return out
+    fp<M, N> out
+    out.forward = matmul(lhs.forward, rhs.forward)
+    lhs.backward = matmul(out.backward, transpose(rhs.forward))
+    rhs.backward = matmul(transpose(lhs.forward), out.backward)
+    return out
 
 intr sync<str name, fty fp, int *shape>(fp<*shape> inp) -> out:
-	return fp<*shape> out
+    return fp<*shape> out
 
 def add_model<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
-	return lhs + rhs
+    return lhs + rhs
 
 def tr_model<fty fp, int M, int N>(fp<M, N> inp) -> out:
-	return transpose(inp)
+    return transpose(inp)
 
 def mm_model<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> out:
     return matmul(lhs, rhs)
@@ -56,22 +56,22 @@ def lin_model<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs, fp<M, N> 
 init zeros
 
 def linear<fty fp, int N, int inp_sz, int out_sz, bool bias=true>(fp<N, inp_sz> inp) -> out:
-	fp<inp_sz, out_sz> w
-	extern zeros w
-	if bias:
-		# Yes, this is not how a linear layer actually works, but I don't want to implement broadcasting yet
-		fp<N, out_sz> b
-		extern zeros b
-		return matmul(inp, w) + b
-	return matmul(inp, w)
+    fp<inp_sz, out_sz> w
+    extern zeros w
+    if bias:
+        # Yes, this is not how a linear layer actually works, but I don't want to implement broadcasting yet
+        fp<N, out_sz> b
+        extern zeros b
+        return matmul(inp, w) + b
+    return matmul(inp, w)
 
 def linear_no_bias_pls<fty fp, int N, int inp_sz, int out_sz>(fp<N, inp_sz> inp) -> out:
-	fp<inp_sz, out_sz> w
-	extern zeros w
-	return matmul(inp, w)
+    fp<inp_sz, out_sz> w
+    extern zeros w
+    return matmul(inp, w)
 
 def opt_model<fty fp, int N, int inp_sz, int out_sz>(fp<N, inp_sz> x) -> y:
-	return linear_no_bias_pls<out_sz=out_sz>(x)
+    return linear_no_bias_pls<out_sz=out_sz>(x)
 
 # Optimizer stuff
 
@@ -79,7 +79,7 @@ intr const_val<float val, fty fp, int *shape>() -> val:
     return fp<*shape> out
 
 def SGD<float lr, fty fp, int *shape>() -> weight:
-	fp<*shape> weight
-	val = const_val<lr, fp, *shape>()
-	weight.forward = sync<"step">(weight.forward + val * weight.backward)
-	return weight
+    fp<*shape> weight
+    val = const_val<lr, fp, *shape>()
+    weight.forward = sync<"step">(weight.forward + val * weight.backward)
+    return weight

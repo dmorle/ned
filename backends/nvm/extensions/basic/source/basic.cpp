@@ -14,18 +14,18 @@ void register_node_impl(nvm::NodeImplMap& nodes)
 
 NVM_INIT(error_fn, nodes)
 {
-	error = error_fn;
-	add_node(       AddImpl );
-	add_node(       MulImpl );
-	add_node(  ConstValImpl );
-	add_node( TransposeImpl );
-	add_node(    MatmulImpl );
-	return false;
+    error = error_fn;
+    add_node(       AddImpl );
+    add_node(       MulImpl );
+    add_node(  ConstValImpl );
+    add_node( TransposeImpl );
+    add_node(    MatmulImpl );
+    return false;
 }
 
 const std::vector<std::pair<std::string, nn::core::ConfigType>> AddImpl::cargs = {
-	{ "fp", nn::core::ConfigType::make_fty() },
-	{ "shape", nn::core::ConfigType::make_arr(nn::core::ConfigType::make_int()) }
+    { "fp", nn::core::ConfigType::make_fty() },
+    { "shape", nn::core::ConfigType::make_arr(nn::core::ConfigType::make_int()) }
 };
 
 const std::vector<std::pair<std::string, nn::core::ConfigType>> MulImpl::cargs = {

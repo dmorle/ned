@@ -11,8 +11,8 @@ void checkCudaErrors(CUresult err) { assert(err == CUDA_SUCCESS); }
 
 namespace npx
 {
-	bool Op::run_hardware_test(llvm::LLVMContext& ctx)
-	{
+    bool Op::run_hardware_test(llvm::LLVMContext& ctx)
+    {
         CUdevice    device;
         CUmodule    cudaModule;
         CUcontext   context;
@@ -102,28 +102,28 @@ namespace npx
         checkCudaErrors(cuCtxDestroy(context));
 
         return false;
-	}
+    }
 
-	void Op::generate_caller(llvm::IRBuilder<>& builder, llvm::Module& mod)
-	{
-		// External function declarations needed from the cuda driver
-		llvm::FunctionType* func_ty = llvm::FunctionType::get(llvm::Type::getInt32Ty(mod.getContext()), false);
-		llvm::Function* func = llvm::Function::Create(func_ty, llvm::GlobalValue::LinkageTypes::ExternalLinkage, "main", &mod);
-		
-		//mod.getOrInsertFunction()
-	}
+    void Op::generate_caller(llvm::IRBuilder<>& builder, llvm::Module& mod)
+    {
+        // External function declarations needed from the cuda driver
+        llvm::FunctionType* func_ty = llvm::FunctionType::get(llvm::Type::getInt32Ty(mod.getContext()), false);
+        llvm::Function* func = llvm::Function::Create(func_ty, llvm::GlobalValue::LinkageTypes::ExternalLinkage, "main", &mod);
+        
+        //mod.getOrInsertFunction()
+    }
 
-	namespace ops
-	{
-		PWAdd::PWAdd(nn::core::EdgeFty fty, size_t nelem) :
-			fty(fty), nelem(nelem) {}
+    namespace ops
+    {
+        PWAdd::PWAdd(nn::core::EdgeFty fty, size_t nelem) :
+            fty(fty), nelem(nelem) {}
 
-		void PWAdd::compile_hardware_test(llvm::LLVMContext& ctx)
-		{
-			auto* builder = new llvm::IRBuilder<>(ctx);
-			auto* mod = new llvm::Module("kernel", ctx);
-			
+        void PWAdd::compile_hardware_test(llvm::LLVMContext& ctx)
+        {
+            auto* builder = new llvm::IRBuilder<>(ctx);
+            auto* mod = new llvm::Module("kernel", ctx);
+            
 
-		}
-	}
+        }
+    }
 }

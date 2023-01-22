@@ -33,10 +33,10 @@
 #    int size
 
 fn print(const str msg):
-	:begin
-		dup 0
-		dsp
-		ret
+    :begin
+        dup 0
+        dsp
+        ret
 
 enum Message:
     quit

@@ -1,13 +1,13 @@
 intr add<fty fp, int N>(fp<N> lhs, fp<N> rhs) -> sum:
-	__add_intr_info "nvm": cfg::"hello nvm!"
-	return fp<N> out
+    __add_intr_info "nvm": cfg::"hello nvm!"
+    return fp<N> out
 
 def add<fty fp, int N>(fp<N> lhs, fp<N> rhs) -> sum:
-	fp<N> out
-	out.forward = add(lhs.forward, rhs.forward)
-	lhs.backward = out.backward
-	rhs.backward = out.backward
-	return out
+    fp<N> out
+    out.forward = add(lhs.forward, rhs.forward)
+    lhs.backward = out.backward
+    rhs.backward = out.backward
+    return out
 
 def model<fty fp, int N>(fp<N> lhs, fp<N> rhs) -> out:
-	return add(lhs, rhs)
+    return add(lhs, rhs)
