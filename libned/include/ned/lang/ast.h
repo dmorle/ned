@@ -127,6 +127,7 @@ namespace nn
             STR,
             ARRAY,
             TUPLE,
+            CFG,
             F16,
             F32,
             F64
@@ -222,8 +223,7 @@ namespace nn
             CONTINUE,
             EXPORT,
             EXTERN,
-            RAISE,
-            PRINT,
+            INTRINFO,
             RETURN,
             MATCH,
             IF,
@@ -255,10 +255,16 @@ namespace nn
             AstExpr init_expr;
         };
 
-        // raise / return / print statement
+        // return statement
         struct AstLineUnaryFunc
         {
             AstExpr expr;
+        };
+
+        struct AstLineIntrInfo
+        {
+            AstExpr name_expr;
+            AstExpr cfg_expr;
         };
 
         // match statement
@@ -314,6 +320,7 @@ namespace nn
                 AstLineExport     line_export;
                 AstLineExtern     line_extern;
                 AstLineUnaryFunc  line_func;
+                AstLineIntrInfo   line_intrinfo;
                 AstLineMatch      line_match;
                 AstLineBranch     line_branch;
                 AstLineBlock      line_block;

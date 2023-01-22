@@ -147,6 +147,16 @@ namespace nn
                 add_static_obj(obj, addr);
         }
 
+        bool ByteCodeModule::add_type_cfg(size_t& addr)
+        {
+            statics_strings.push_back("type cfg");
+
+            Obj obj;
+            return
+                heap.create_type_cfg(obj) ||
+                add_static_obj(obj, addr);
+        }
+
         bool ByteCodeModule::add_obj_bool(size_t& addr, BoolObj val)
         {
             statics_strings.push_back(std::string("bool ") + (val ? "true" : "false"));
@@ -350,6 +360,7 @@ namespace nn
             template<> std::string ins_str<InstructionType::LE   >() { return "le"   ; }
             template<> std::string ins_str<InstructionType::IDX  >() { return "idx"  ; }
             template<> std::string ins_str<InstructionType::LEN  >() { return "len"  ; }
+            template<> std::string ins_str<InstructionType::XCFG >() { return "xcfg" ; }
             template<> std::string ins_str<InstructionType::XSTR >() { return "xstr" ; }
             template<> std::string ins_str<InstructionType::XFLT >() { return "xflt" ; }
             template<> std::string ins_str<InstructionType::XINT >() { return "xint" ; }
@@ -411,6 +422,8 @@ namespace nn
                     return mod.add_type_float(addr);
                 case TokenType::KW_STR:
                     return mod.add_type_str(addr);
+                case TokenType::KW_CFG:
+                    return mod.add_type_cfg(addr);
                 }
                 return error::syntax(tarr[0], "Invalid static type '%'", to_string(tarr[1]));
             case TokenType::KW_BOOL:
@@ -659,6 +672,10 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(Len(tarr[0]));
+            case hash("xcfg"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(XCfg(tarr[0]));
             case hash("xstr"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");

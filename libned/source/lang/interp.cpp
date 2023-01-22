@@ -1345,6 +1345,16 @@ namespace nn
                 stack.push(dst);
         }
 
+        inline bool exec_xcfg(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj type, src, dst;
+            return
+                stack.pop(type) ||
+                stack.pop(src) ||
+                type.type_obj->xcfg(heap, dst, src) ||
+                stack.push(dst);
+        }
+
         inline bool exec_xstr(CallStack& stack, ProgramHeap& heap)
         {
             Obj type, src, dst;
@@ -1562,49 +1572,34 @@ namespace nn
 
         inline bool exec_ndcfg(CallStack& stack)
         {
-            Obj node, name, type, obj;
-            core::ConfigVal cfg_val;
-            core::ConfigType cfg_type;
+            Obj node, name, obj;
             return
                 stack.pop(name) ||
-                stack.pop(type) ||
                 stack.pop(obj) ||
                 stack.pop(node) ||
-                type.type_obj->cfg_val(cfg_val, obj) ||
-                type.type_obj->cfg_type(cfg_type) ||
-                pbuilder->add_ndcfg(*name.str_obj, node.ptr, { cfg_val, cfg_type }) ||
+                pbuilder->add_ndcfg(*name.str_obj, node.ptr, *obj.cfg_obj) ||
                 stack.push(node);
         }
 
         inline bool exec_bkcfg(CallStack& stack)
         {
-            Obj block, name, type, obj;
-            core::ConfigVal cfg_val;
-            core::ConfigType cfg_type;
+            Obj block, name, obj;
             return
                 stack.pop(name) ||
-                stack.pop(type) ||
                 stack.pop(obj) ||
                 stack.pop(block) ||
-                type.type_obj->cfg_val(cfg_val, obj) ||
-                type.type_obj->cfg_type(cfg_type) ||
-                pbuilder->add_bkcfg(*name.str_obj, block.ptr, { cfg_val, cfg_type }) ||
+                pbuilder->add_bkcfg(*name.str_obj, block.ptr, *obj.cfg_obj) ||
                 stack.push(block);
         }
 
         inline bool exec_incfg(CallStack& stack)
         {
-            Obj init, name, type, obj;
-            core::ConfigVal cfg_val;
-            core::ConfigType cfg_type;
+            Obj init, name, obj;
             return
                 stack.pop(name) ||
-                stack.pop(type) ||
                 stack.pop(obj) ||
                 stack.pop(init) ||
-                type.type_obj->cfg_val(cfg_val, obj) ||
-                type.type_obj->cfg_type(cfg_type) ||
-                pbuilder->add_incfg(*name.str_obj, init.ptr, { cfg_val, cfg_type }) ||
+                pbuilder->add_incfg(*name.str_obj, init.ptr, *obj.cfg_obj) ||
                 stack.push(init);
         }
 
@@ -1868,6 +1863,10 @@ namespace nn
                     if (exec_len(stack, heap))
                         goto runtime_error;
                     break;
+                case InstructionType::XCFG:
+                    if (exec_xcfg(stack, heap))
+                        goto runtime_error;
+                    break;
                 case InstructionType::XSTR:
                     if (exec_xstr(stack, heap))
                         goto runtime_error;
@@ -2018,7 +2017,7 @@ namespace nn
             return false;
 
         runtime_error:
-            // TODO: unwind the call stack with location type
+            // Unwinding the stack, adding a runtime error at every level
             while (pc_stack.size() != 0)
             {
                 exec_ret(stack);

@@ -1,3 +1,9 @@
+fn print(const str msg):
+	:begin
+		dup 0
+		dsp
+		ret
+
 struct Node:
     Node next
     int data
@@ -11,45 +17,46 @@ fn ll_new() -> LinkedList:
     return LinkedList(head, 0)
 
 fn impl_append(int idx, ref Node nd, int val):
-    print "Entered impl_append"
+    print("Entered impl_append")
     if idx == 0:
-        print "idx == 0"
+        print("idx == 0")
         Node tail
         nd = Node(tail, val)
         return void
 
-    print "idx != 0"
+    print("idx != 0")
     impl_append(idx - 1, nd.next, val)
     return void
 
 fn ll_append(ref LinkedList self, int val):
-    print "Entered ll_append"
+    print("Entered ll_append")
     impl_append(self.size, self.head, val)
     self.size += 1
     return void
 
 fn impl_str(int idx, ref Node nd) -> str:
-    print "Entered impl_str"
-    if idx == 0:
-        print "idx == 0"
-        return ""
-    print "idx != 0"
-    return str::nd.data + ", " + impl_str(idx - 1, nd.next)
+    print("Entered impl_str")
+    if idx == 1:
+        return str::nd.data
+    else:
+        return str::nd.data + ", " + impl_str(idx - 1, nd.next)
 
 fn ll_str(const LinkedList self) -> str:
-    print "Entered ll_str"
+    if self.size == 0:
+        return "LinkedList()"
+    print("Entered ll_str")
     return "LinkedList(" + impl_str(self.size, self.head) + ")"
 
 fn main():
     ref lst = ll_new()
 
     ll_append(lst, 1)
-    print str::lst.size
-    print ""
+    print(str::lst.size)
+    print("")
     ll_append(lst, 2)
-    print str::lst.size
-    print ""
-    print ll_str(lst)
+    print(str::lst.size)
+    print("")
+    print(ll_str(lst))
 
     return void
 

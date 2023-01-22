@@ -240,6 +240,7 @@ namespace nn
             case TypeInfo::Type::INT:
             case TypeInfo::Type::FLOAT:
             case TypeInfo::Type::STR:
+            case TypeInfo::Type::CFG:
                 break;
             case TypeInfo::Type::ARRAY:
                 type_array.~TypeInfoArray();
@@ -298,6 +299,7 @@ namespace nn
             case TypeInfo::Type::INT:
             case TypeInfo::Type::FLOAT:
             case TypeInfo::Type::STR:
+            case TypeInfo::Type::CFG:
                 break;
             case TypeInfo::Type::ARRAY:
                 new (&type_array) decltype(type_array)(std::move(type.type_array));
@@ -506,6 +508,28 @@ namespace nn
             return false;
         }
 
+        bool TypeInfo::check_xcfg() const
+        {
+            switch (ty)
+            {
+            case TypeInfo::Type::FTY:
+            case TypeInfo::Type::BOOL:
+            case TypeInfo::Type::INT:
+            case TypeInfo::Type::FLOAT:
+            case TypeInfo::Type::STR:
+            case TypeInfo::Type::CFG:
+                return true;
+            case TypeInfo::Type::ARRAY:
+                return type_array.elem->check_xcfg();
+            case TypeInfo::Type::TUPLE:
+                for (TypeRef elem : type_tuple.elems)
+                    if (!elem->check_xcfg())
+                        return false;
+                return true;
+            }
+            return false;
+        }
+
         bool TypeInfo::check_xstr() const
         {
             switch (ty)
@@ -686,6 +710,8 @@ namespace nn
                 return "float";
             case TypeInfo::Type::STR:
                 return "str";
+            case TypeInfo::Type::CFG:
+                return "cfg";
             case TypeInfo::Type::ARRAY:
                 return format("array<%>", type_array.elem->to_string());
             case TypeInfo::Type::TUPLE:
@@ -852,6 +878,18 @@ namespace nn
                             scope.push();
                     }, tmp);
                 break;
+            case TypeInfo::Type::CFG:
+                tmp = type_manager->create_config(TypeInfo::Category::VIRTUAL, nullptr);  // cfg declarations aren't allowed
+                if (!tmp) return true;
+                type = type_manager->create_type(
+                    TypeInfo::Category::CONST,
+                    [&node_info](Scope& scope) -> bool {
+                        size_t addr;
+                        return
+                            bc->add_type_cfg(addr) ||
+                            body->add_instruction(instruction::New(node_info, addr)) ||
+                            scope.push();
+                    }, tmp);
             case TypeInfo::Type::ARRAY:
             {
                 tmp = type_manager->create_array(
@@ -1070,6 +1108,7 @@ namespace nn
             case TypeInfo::Type::INT:
             case TypeInfo::Type::FLOAT:
             case TypeInfo::Type::STR:
+            case TypeInfo::Type::CFG:
                 return true;
             case TypeInfo::Type::ARRAY:
                 return lhs->type_array.elem == rhs->type_array.elem;
@@ -1341,6 +1380,16 @@ namespace nn
             TypeRef type = next();
             if (!type) return type;
             type->ty = TypeInfo::Type::STR;
+            type->cat = cat;
+            type->codegen = codegen;
+            return type;
+        }
+
+        TypeRef TypeManager::create_config(TypeInfo::Category cat, CodegenCallback codegen)
+        {
+            TypeRef type = next();
+            if (!type) return type;
+            type->ty = TypeInfo::Type::CFG;
             type->cat = cat;
             type->codegen = codegen;
             return type;
@@ -1856,6 +1905,7 @@ namespace nn
             case TypeNode::Type::INT:
             case TypeNode::Type::FLOAT:
             case TypeNode::Type::STRING:
+            case TypeNode::Type::CONFIG:
                 break;
             case TypeNode::Type::GENERIC:
             case TypeNode::Type::UNPACK:
@@ -1896,6 +1946,7 @@ namespace nn
             case TypeNode::Type::INT:
             case TypeNode::Type::FLOAT:
             case TypeNode::Type::STRING:
+            case TypeNode::Type::CONFIG:
                 break;
             case TypeNode::Type::GENERIC:
             case TypeNode::Type::UNPACK:
@@ -1942,6 +1993,8 @@ namespace nn
                 return type_manager->create_float(TypeInfo::Category::VIRTUAL, nullptr);
             case TypeNode::Type::STRING:
                 return type_manager->create_string(TypeInfo::Category::VIRTUAL, nullptr);
+            case TypeNode::Type::CONFIG:
+                return type_manager->create_config(TypeInfo::Category::VIRTUAL, nullptr);
             case TypeNode::Type::GENERIC:
                 assert(type_val.val->ty == ValNode::Type::ARG_VAL);  // any generic types should be a reference to the cargs
                 if (type_val.val->val)
@@ -2034,6 +2087,7 @@ namespace nn
             case ProcCall::TypeNode::Type::INT:
             case ProcCall::TypeNode::Type::FLOAT:
             case ProcCall::TypeNode::Type::STRING:
+            case ProcCall::TypeNode::Type::CONFIG:
                 eq = true;
                 return false;
             case ProcCall::TypeNode::Type::GENERIC:
@@ -2262,37 +2316,6 @@ namespace nn
             return error::compiler(node_info, "Unresolved reference to user type %", name);
         }
 
-        bool codegen_fields(const std::string& container_type, const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs,
-            const std::vector<AstLine>& lines, std::vector<std::pair<std::string, TypeRef>>& fields)
-        {
-            // The fields of the struct or enum can be virtual - they'll never get codegened,
-            // so any codegen callbacks don't need a valid scope to index into.
-            // Because of this, I can just make a new scope to handle cargs here
-            Scope fields_scope{ nullptr };
-            for (const auto& [carg_name, carg_val] : cargs)
-                if (fields_scope.add(carg_name, carg_val, node_info))
-                    return true;
-
-            for (const auto& line : lines)
-            {
-                if (line.ty != LineType::EXPR)
-                    return error::compiler(line.node_info, "% body must only contain variable declarations", container_type);
-                const auto& decl_expr = line.line_expr.line;
-                if (decl_expr.ty != ExprType::VAR_DECL)
-                    return error::compiler(decl_expr.node_info, "% body must only contain variable declarations", container_type);
-                TypeRef decl_type;
-                lazy_types = true;
-                bool ret = codegen_expr_single_ret<TypeInfo::AllowAll>(fields_scope, *decl_expr.expr_name.expr, decl_type);
-                lazy_types = false;
-                if (ret) return true;
-                if (decl_type->ty != TypeInfo::Type::TYPE)
-                    return error::compiler(decl_expr.expr_name.expr->node_info, "Expected a type in variable declaration");
-                decl_type->cat = TypeInfo::Category::VIRTUAL;  // Making sure that any field codegens fail
-                fields.push_back({ decl_expr.expr_name.val, decl_type->type_type.base });
-            }
-            return false;
-        }
-
         bool ProcCall::create_arg(Scope& scope, const AstArgDecl& decl, ValNode*& node)
         {
             return create_arg(scope,
@@ -2495,6 +2518,9 @@ namespace nn
                     return false;
                 case ExprKW::STR:
                     node->ty = TypeNode::Type::STRING;
+                    return false;
+                case ExprKW::CFG:
+                    node->ty = TypeNode::Type::CONFIG;
                     return false;
                 default:
                     return error::compiler(expr.node_info, "Invalid use of keyword '%'", to_string(expr.expr_kw));
@@ -3295,15 +3321,14 @@ namespace nn
                     return error::compiler(*node->node_info, "Unable to deduce a value for carg '%'", name);
                 
                 // init cargs don't need to be copied since they go directly into configs
-                TypeRef type;
                 size_t name_addr;
-                if (val->to_obj(*node->node_info, type) ||
+                TypeRef cfg;
+                if (codegen_xcfg(scope, *node->node_info, val, cfg) ||
+                    cfg->codegen(scope) ||
                     bc->add_obj_str(name_addr, name) ||
-                    val->codegen(scope) ||
-                    type->codegen(scope) ||
                     body->add_instruction(instruction::New(*node->node_info, name_addr)) ||
                     body->add_instruction(instruction::InCfg(*node->node_info)) ||
-                    scope.pop(2)
+                    scope.pop()
                     ) return error::compiler(*node->node_info, "Unable to compile the configuration for init carg '%'", name);
             }
             
@@ -4323,53 +4348,6 @@ namespace nn
             return buf;
         }
 
-        template<class allowed>
-        bool codegen_expr_single_ret(Scope& scope, const AstExpr& expr, TypeRef& ret)
-        {
-            std::vector<TypeRef> rets;
-            if (codegen_expr(scope, expr, rets))
-                return true;
-            if (rets.size() != 1)
-                return error::compiler(expr.node_info, "Expected a single value, recieved % values", rets.size());
-            if (!allowed::has_default && rets[0]->cat == TypeInfo::Category::DEFAULT)
-                return error::compiler(expr.node_info, "Expected a non-default value");
-            if (!allowed::has_const && rets[0]->cat == TypeInfo::Category::CONST)
-                return error::compiler(expr.node_info, "Expected a non-constant value");
-            if (!allowed::has_ref && rets[0]->cat == TypeInfo::Category::REF)
-                return error::compiler(expr.node_info, "Expected a non-reference value");
-            if (!allowed::has_virtual && rets[0]->cat == TypeInfo::Category::VIRTUAL)
-            {
-                // See if the ret can be disambiguated to a 
-                return error::compiler(expr.node_info, "Expected a non-virtual value");
-            }
-            ret = rets[0];
-            return false;
-        }
-
-        template<class allowed>
-        bool codegen_expr_multi_ret(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
-        {
-            if (codegen_expr(scope, expr, rets))
-                return true;
-            if (!allowed::has_default)
-                for (const auto& ret : rets)
-                    if (ret->cat == TypeInfo::Category::DEFAULT)
-                        return error::compiler(expr.node_info, "Expected a non-default value");
-            if (!allowed::has_const)
-                for (const auto& ret : rets)
-                    if (ret->cat == TypeInfo::Category::CONST)
-                        return error::compiler(expr.node_info, "Expected a non-constant value");
-            if (!allowed::has_ref)
-                for (const auto& ret : rets)
-                    if (ret->cat == TypeInfo::Category::REF)
-                        return error::compiler(expr.node_info, "Expected a non-reference value");
-            if (!allowed::has_virtual)
-                for (const auto& ret : rets)
-                    if (ret->cat == TypeInfo::Category::VIRTUAL)
-                        return error::compiler(expr.node_info, "Expected a non-virtual value");
-            return false;
-        }
-
         bool arg_type(TypeRef& type, Scope& scope, const AstArgDecl& arg)
         {
             TypeRef explicit_type;
@@ -4926,6 +4904,444 @@ namespace nn
             return false;
         }
 
+        bool codegen_fields(const std::string& container_type, const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs,
+            const std::vector<AstLine>& lines, std::vector<std::pair<std::string, TypeRef>>& fields)
+        {
+            // The fields of the struct or enum can be virtual - they'll never get codegened,
+            // so any codegen callbacks don't need a valid scope to index into.
+            // Because of this, I can just make a new scope to handle cargs here
+            Scope fields_scope{ nullptr };
+            for (const auto& [carg_name, carg_val] : cargs)
+                if (fields_scope.add(carg_name, carg_val, node_info))
+                    return true;
+
+            for (const auto& line : lines)
+            {
+                if (line.ty != LineType::EXPR)
+                    return error::compiler(line.node_info, "% body must only contain variable declarations", container_type);
+                const auto& decl_expr = line.line_expr.line;
+                if (decl_expr.ty != ExprType::VAR_DECL)
+                    return error::compiler(decl_expr.node_info, "% body must only contain variable declarations", container_type);
+                TypeRef decl_type;
+                lazy_types = true;
+                bool ret = codegen_expr_single_ret<TypeInfo::AllowAll>(fields_scope, *decl_expr.expr_name.expr, decl_type);
+                lazy_types = false;
+                if (ret) return true;
+                if (decl_type->ty != TypeInfo::Type::TYPE)
+                    return error::compiler(decl_expr.expr_name.expr->node_info, "Expected a type in variable declaration");
+                decl_type->cat = TypeInfo::Category::VIRTUAL;  // Making sure that any field codegens fail
+                fields.push_back({ decl_expr.expr_name.val, decl_type->type_type.base });
+            }
+            return false;
+        }
+
+        bool codegen_xint(Scope& scope, const AstNodeInfo& node_info, TypeRef arg, TypeRef& ret)
+        {
+            size_t type_addr;
+            switch (arg->ty)
+            {
+            case TypeInfo::Type::INT:
+                ret = arg;
+                return false;
+            case TypeInfo::Type::FLOAT:
+                if (bc->add_type_float(type_addr)) return true;
+                goto primitive_int;
+            case TypeInfo::Type::STR:
+                if (bc->add_type_str(type_addr)) return true;
+                goto primitive_int;
+            default:
+                goto lookup_int;
+            }
+
+        primitive_int:
+            // Primitive types
+            ret = type_manager->create_int(
+                TypeInfo::Category::DEFAULT,
+                [&node_info, arg, type_addr](Scope& scope) -> bool {
+                    return
+                        arg->codegen(scope) ||
+                        body->add_instruction(instruction::New(node_info, type_addr)) ||
+                        body->add_instruction(instruction::XInt(node_info));
+                });
+            return !ret;
+
+        lookup_int:
+            // Try to convert it using user-defined functions
+            CodeModule::LookupResult lookup;
+            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.end() }, "__int__", lookup))
+            {
+                // No user-defined casting functions were found
+                return error::compiler(node_info, "Unable to cast type '%' to int", arg);
+            }
+            // Matching the signatures
+            std::vector<std::tuple<const AstFn*, std::map<std::string, TypeRef>, std::vector<TypeRef>>> fn_matches;
+            for (const AstFn* fn : lookup.fns)
+            {
+                // On top of the signature matching, for conversion, the function also needs to return a single int value
+                if (fn->signature.rets.size() != 1)
+                    continue;
+                const AstExpr& ret_expr = fn->signature.rets.front();
+                // I might just remove this restriction altogether in the future
+                if (ret_expr.ty != ExprType::KW ||
+                    ret_expr.expr_kw != ExprKW::INT  // Maybe I want to also match it with generics, idk tho
+                    ) continue;
+
+                // The return value is correct, try to match the signature now
+                std::map<std::string, TypeRef> cargs;
+                std::vector<TypeRef> vargs;
+                Scope sig_scope{ nullptr };
+                if (!match_fn_sig(scope, sig_scope, *fn, {}, { arg }, cargs, vargs))
+                    fn_matches.push_back({ fn, std::move(cargs), std::move(vargs) });
+            }
+            if (fn_matches.size() > 1)
+                return error::compiler(node_info, "Unable to cast type '%' to int - found multiple valid casting functions", arg);
+            if (fn_matches.size() == 1)
+            {
+                // Perfect match
+                std::vector<TypeRef> rets;
+                std::unique_ptr<FnCall> fn_call = std::make_unique<FnCall>(lookup.ns);
+                if (fn_call->init(*std::get<0>(fn_matches.front())) ||
+                    fn_call->apply_args(node_info, std::get<1>(fn_matches.front()), std::get<2>(fn_matches.front())) ||
+                    fn_call->codegen(scope, rets)
+                    ) return true;
+                if (rets.size() != 1)
+                    return error::compiler(node_info, "Internal error: __int__ call returned % values", rets.size());
+                ret = rets[0];
+                return false;
+            }
+            return error::compiler(node_info, "Unable to cast type '%' to int", arg);
+        }
+        
+        bool codegen_xflt(Scope& scope, const AstNodeInfo& node_info, TypeRef arg, TypeRef& flt)
+        {
+            size_t type_addr;
+            switch (arg->ty)
+            {
+            case TypeInfo::Type::INT:
+                if (bc->add_type_int(type_addr)) return true;
+                goto primitive_float;
+            case TypeInfo::Type::FLOAT:
+                flt = arg;
+                return false;
+            case TypeInfo::Type::STR:
+                if (bc->add_type_str(type_addr)) return true;
+                goto primitive_float;
+            default:
+                goto lookup_float;
+            }
+
+        primitive_float:
+            // Primitive types
+            flt = type_manager->create_float(
+                TypeInfo::Category::DEFAULT,
+                [&node_info, arg, type_addr](Scope& scope) -> bool {
+                    return
+                        arg->codegen(scope) ||
+                        body->add_instruction(instruction::New(node_info, type_addr)) ||
+                        body->add_instruction(instruction::XFlt(node_info));
+                });
+            return !flt;
+
+        lookup_float:
+            // Try to convert it using user-defined functions
+            CodeModule::LookupResult lookup;
+            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.end() }, "__float__", lookup))
+            {
+                // No user-defined casting functions were found
+                return error::compiler(node_info, "Unable to cast type '%' to float", arg);
+            }
+            // Matching the signatures
+            std::vector<std::tuple<const AstFn*, std::map<std::string, TypeRef>, std::vector<TypeRef>>> fn_matches;
+            for (const AstFn* fn : lookup.fns)
+            {
+                // On top of the signature matching, for conversion, the function also needs to return a single float value
+                if (fn->signature.rets.size() != 1)
+                    continue;
+                const AstExpr& ret_expr = fn->signature.rets.front();
+                if (ret_expr.ty != ExprType::KW ||
+                    ret_expr.expr_kw != ExprKW::FLOAT  // Maybe I want to also match it with generics, idk tho
+                    ) continue;
+
+                // The return value is correct, try to match the signature now
+                std::map<std::string, TypeRef> cargs;
+                std::vector<TypeRef> vargs;
+                Scope sig_scope{ nullptr };
+                if (!match_fn_sig(scope, sig_scope, *fn, {}, { arg }, cargs, vargs))
+                    fn_matches.push_back({ fn, std::move(cargs), std::move(vargs) });
+            }
+            if (fn_matches.size() > 1)
+                return error::compiler(node_info, "Unable to cast type '%' to float - found multiple valid casting functions", arg);
+            if (fn_matches.size() == 1)
+            {
+                // Perfect match
+                std::vector<TypeRef> rets;
+                std::unique_ptr<FnCall> fn_call = std::make_unique<FnCall>(lookup.ns);
+                if (fn_call->init(*std::get<0>(fn_matches.front())) ||
+                    fn_call->apply_args(node_info, std::get<1>(fn_matches.front()), std::get<2>(fn_matches.front())) ||
+                    fn_call->codegen(scope, rets)
+                    ) return true;
+                if (rets.size() != 1)
+                    return error::compiler(node_info, "Internal error: __float__ call returned % values", rets.size());
+                flt = rets[0];
+                return false;
+            }
+            return error::compiler(node_info, "Unable to cast type '%' to float", arg);
+        }
+
+        bool codegen_xstr(Scope& scope, const AstNodeInfo& node_info, TypeRef arg, TypeRef& str)
+        {
+            size_t type_addr;
+            switch (arg->ty)
+            {
+            case TypeInfo::Type::FTY:
+                if (bc->add_type_fty(type_addr)) return true;
+                goto primitive_string;
+            case TypeInfo::Type::BOOL:
+                if (bc->add_type_bool(type_addr)) return true;
+                goto primitive_string;
+            case TypeInfo::Type::INT:
+                if (bc->add_type_int(type_addr)) return true;
+                goto primitive_string;
+            case TypeInfo::Type::FLOAT:
+                if (bc->add_type_float(type_addr)) return true;
+                goto primitive_string;
+            case TypeInfo::Type::STR:
+                str = arg;
+                return false;
+            case TypeInfo::Type::ARRAY:
+            case TypeInfo::Type::TUPLE:
+                if (!arg->check_xstr())
+                    goto lookup_string;
+                {
+                    // Non-primitives, but still built into the interpreter
+                    TypeRef arg_type;
+                    if (arg->to_obj(node_info, arg_type))
+                        return true;
+                    str = type_manager->create_string(
+                        TypeInfo::Category::DEFAULT,
+                        [&node_info, arg, arg_type](Scope& scope) -> bool {
+                            return
+                                arg->codegen(scope) ||
+                                arg_type->codegen(scope) ||
+                                body->add_instruction(instruction::XStr(node_info)) ||
+                                scope.pop();
+                        });
+                    return !str;
+                }
+            default:
+                goto lookup_string;
+            }
+
+        primitive_string:
+            // Primitive types
+            str = type_manager->create_string(
+                TypeInfo::Category::DEFAULT,
+                [&node_info, arg, type_addr](Scope& scope) -> bool {
+                    return
+                        arg->codegen(scope) ||
+                        body->add_instruction(instruction::New(node_info, type_addr)) ||
+                        body->add_instruction(instruction::XStr(node_info));
+                });
+            return !str;
+
+        lookup_string:
+            // Try to convert it using user-defined functions
+            CodeModule::LookupResult lookup;
+            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.end() }, "__str__", lookup))
+            {
+                // No user-defined casting functions were found
+                return error::compiler(node_info, "Unable to cast type '%' to string", arg);
+            }
+            // Matching the signatures
+            std::vector<std::tuple<const AstFn*, std::map<std::string, TypeRef>, std::vector<TypeRef>>> fn_matches;
+            for (const AstFn* fn : lookup.fns)
+            {
+                // On top of the signature matching, for conversion, the function also needs to return a single string value
+                if (fn->signature.rets.size() != 1)
+                    continue;
+                const AstExpr& ret_expr = fn->signature.rets.front();
+                if (ret_expr.ty != ExprType::KW ||
+                    ret_expr.expr_kw != ExprKW::STR  // Maybe I want to also match it with generics, idk tho
+                    ) continue;
+
+                // The return value is correct, try to match the signature now
+                std::map<std::string, TypeRef> cargs;
+                std::vector<TypeRef> vargs;
+                Scope sig_scope{ nullptr };
+                if (!match_fn_sig(scope, sig_scope, *fn, {}, { arg }, cargs, vargs))
+                    fn_matches.push_back({ fn, std::move(cargs), std::move(vargs) });
+            }
+            if (fn_matches.size() > 1)
+                return error::compiler(node_info, "Unable to cast type '%' to string - found multiple valid casting functions", arg);
+            if (fn_matches.size() == 1)
+            {
+                // Perfect match
+                std::vector<TypeRef> rets;
+                std::unique_ptr<FnCall> fn_call = std::make_unique<FnCall>(lookup.ns);
+                if (fn_call->init(*std::get<0>(fn_matches.front())) ||
+                    fn_call->apply_args(node_info, std::get<1>(fn_matches.front()), std::get<2>(fn_matches.front())) ||
+                    fn_call->codegen(scope, rets)
+                    ) return true;
+                if (rets.size() != 1)
+                    return error::compiler(node_info, "Internal error: __str__ call returned % values", rets.size());
+                str = rets[0];
+                return false;
+            }
+            return error::compiler(node_info, "Unable to cast type '%' to string", arg);
+        }
+
+        bool codegen_xcfg(Scope& scope, const AstNodeInfo& node_info, TypeRef arg, TypeRef& cfg)
+        {
+            size_t type_addr;
+            switch (arg->ty)
+            {
+            case TypeInfo::Type::FTY:
+                if (bc->add_type_fty(type_addr)) return true;
+                goto primitive_config;
+            case TypeInfo::Type::BOOL:
+                if (bc->add_type_bool(type_addr)) return true;
+                goto primitive_config;
+            case TypeInfo::Type::INT:
+                if (bc->add_type_int(type_addr)) return true;
+                goto primitive_config;
+            case TypeInfo::Type::FLOAT:
+                if (bc->add_type_float(type_addr)) return true;
+                goto primitive_config;
+            case TypeInfo::Type::STR:
+                if (bc->add_type_str(type_addr)) return true;
+                goto primitive_config;
+            case TypeInfo::Type::CFG:
+                cfg = arg;
+                return false;
+            case TypeInfo::Type::ARRAY:
+            case TypeInfo::Type::TUPLE:
+                if (!arg->check_xcfg())
+                    goto lookup_config;
+                {
+                    // Non-primitives, but still built into the interpreter
+                    TypeRef arg_type;
+                    if (arg->to_obj(node_info, arg_type))
+                        return true;
+                    cfg = type_manager->create_config(
+                        TypeInfo::Category::DEFAULT,
+                        [&node_info, arg, arg_type](Scope& scope) -> bool {
+                            return
+                                arg->codegen(scope) ||
+                                arg_type->codegen(scope) ||
+                                body->add_instruction(instruction::XCfg(node_info)) ||
+                                scope.pop();
+                        });
+                    return !cfg;
+                }
+            default:
+                goto lookup_config;
+            }
+
+        primitive_config:
+            // Primitive types
+            cfg = type_manager->create_config(
+                TypeInfo::Category::DEFAULT,
+                [&node_info, arg, type_addr](Scope& scope) -> bool {
+                    return
+                        arg->codegen(scope) ||
+                        body->add_instruction(instruction::New(node_info, type_addr)) ||
+                        body->add_instruction(instruction::XCfg(node_info));
+                });
+            return !cfg;
+
+        lookup_config:
+            // Try to convert it using user-defined functions
+            CodeModule::LookupResult lookup;
+            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.end() }, "__cfg__", lookup))
+            {
+                // No user-defined casting functions were found
+                return error::compiler(node_info, "Unable to cast type '%' to config", arg);
+            }
+            // Matching the signatures
+            std::vector<std::tuple<const AstFn*, std::map<std::string, TypeRef>, std::vector<TypeRef>>> fn_matches;
+            for (const AstFn* fn : lookup.fns)
+            {
+                // On top of the signature matching, for conversion, the function also needs to return a single cfg value
+                if (fn->signature.rets.size() != 1)
+                    continue;
+                const AstExpr& ret_expr = fn->signature.rets.front();
+                if (ret_expr.ty != ExprType::KW ||
+                    ret_expr.expr_kw != ExprKW::CFG  // Maybe I want to also match it with generics, idk tho
+                    ) continue;
+
+                // The return value is correct, try to match the signature now
+                std::map<std::string, TypeRef> cargs;
+                std::vector<TypeRef> vargs;
+                Scope sig_scope{ nullptr };
+                if (!match_fn_sig(scope, sig_scope, *fn, {}, { arg }, cargs, vargs))
+                    fn_matches.push_back({ fn, std::move(cargs), std::move(vargs) });
+            }
+            if (fn_matches.size() > 1)
+                return error::compiler(node_info, "Unable to cast type '%' to config - found multiple valid casting functions", arg);
+            if (fn_matches.size() == 1)
+            {
+                // Perfect match
+                std::vector<TypeRef> rets;
+                std::unique_ptr<FnCall> fn_call = std::make_unique<FnCall>(lookup.ns);
+                if (fn_call->init(*std::get<0>(fn_matches.front())) ||
+                    fn_call->apply_args(node_info, std::get<1>(fn_matches.front()), std::get<2>(fn_matches.front())) ||
+                    fn_call->codegen(scope, rets)
+                    ) return true;
+                if (rets.size() != 1)
+                    return error::compiler(node_info, "Internal error: __cfg__ call returned % values", rets.size());
+                cfg = rets[0];
+                return false;
+            }
+            return error::compiler(node_info, "Unable to cast type '%' to config", arg);
+        }
+
+        template<class allowed>
+        bool codegen_expr_single_ret(Scope& scope, const AstExpr& expr, TypeRef& ret)
+        {
+            std::vector<TypeRef> rets;
+            if (codegen_expr(scope, expr, rets))
+                return true;
+            if (rets.size() != 1)
+                return error::compiler(expr.node_info, "Expected a single value, recieved % values", rets.size());
+            if (!allowed::has_default && rets[0]->cat == TypeInfo::Category::DEFAULT)
+                return error::compiler(expr.node_info, "Expected a non-default value");
+            if (!allowed::has_const && rets[0]->cat == TypeInfo::Category::CONST)
+                return error::compiler(expr.node_info, "Expected a non-constant value");
+            if (!allowed::has_ref && rets[0]->cat == TypeInfo::Category::REF)
+                return error::compiler(expr.node_info, "Expected a non-reference value");
+            if (!allowed::has_virtual && rets[0]->cat == TypeInfo::Category::VIRTUAL)
+            {
+                // See if the ret can be disambiguated to a 
+                return error::compiler(expr.node_info, "Expected a non-virtual value");
+            }
+            ret = rets[0];
+            return false;
+        }
+
+        template<class allowed>
+        bool codegen_expr_multi_ret(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
+        {
+            if (codegen_expr(scope, expr, rets))
+                return true;
+            if (!allowed::has_default)
+                for (const auto& ret : rets)
+                    if (ret->cat == TypeInfo::Category::DEFAULT)
+                        return error::compiler(expr.node_info, "Expected a non-default value");
+            if (!allowed::has_const)
+                for (const auto& ret : rets)
+                    if (ret->cat == TypeInfo::Category::CONST)
+                        return error::compiler(expr.node_info, "Expected a non-constant value");
+            if (!allowed::has_ref)
+                for (const auto& ret : rets)
+                    if (ret->cat == TypeInfo::Category::REF)
+                        return error::compiler(expr.node_info, "Expected a non-reference value");
+            if (!allowed::has_virtual)
+                for (const auto& ret : rets)
+                    if (ret->cat == TypeInfo::Category::VIRTUAL)
+                        return error::compiler(expr.node_info, "Expected a non-virtual value");
+            return false;
+        }
+
         bool codegen_expr_callee_kw(Scope& scope, const AstExpr& expr, TypeRef& ret)
         {
             size_t addr;
@@ -4943,6 +5359,8 @@ namespace nn
                 if (bc->add_obj_fty(addr, core::EdgeFty::F64))
                     return true;
                 break;
+            default:
+                return error::compiler(expr.node_info, "Internal error: not implemented");
             }
             ret = type_manager->create_fty(
                 TypeInfo::Category::CONST,
@@ -5771,14 +6189,14 @@ namespace nn
 
         bool codegen_expr_cast(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
         {
-            TypeRef lhs_type, rhs_type;
-            if (codegen_expr_single_ret<TypeInfo::AllowAll>(scope, *expr.expr_binary.left, lhs_type))
+            TypeRef lhs, rhs;
+            if (codegen_expr_single_ret<TypeInfo::AllowAll>(scope, *expr.expr_binary.left, lhs))
                 return error::compiler(expr.node_info, "Unable to compile the left hand side of the cast operation");
-            if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, *expr.expr_binary.right, rhs_type))
+            if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, *expr.expr_binary.right, rhs))
                 return error::compiler(expr.node_info, "Unable to compile the right hand side of the cast operation");
 
             // TODO: implement ellipses in reshaping
-            if (lhs_type->ty == TypeInfo::Type::DLTYPE)
+            if (lhs->ty == TypeInfo::Type::DLTYPE)
             {
                 // Its a reshape operation
                 AstExpr lookup_expr;
@@ -5790,7 +6208,7 @@ namespace nn
                 if (codegen_expr_callee_var(scope, lookup_expr, ret))
                     return true;
 
-                if (rhs_type->ty == TypeInfo::Type::TENSOR)
+                if (rhs->ty == TypeInfo::Type::TENSOR)
                 {
                     if (ret->ty != TypeInfo::Type::LOOKUP)
                         return error::compiler(expr.node_info, "def __cast__ overload is shadowed in the local scope for tensor cast operation");
@@ -5810,12 +6228,12 @@ namespace nn
                     return
                         call->init(__cast__) ||
                         call->apply_args(expr.node_info, {
-                                { "out_fp", lhs_type->type_dltype.fp },
-                                { "out_shape", lhs_type->type_dltype.shape },
-                            }, { rhs_type }) ||
+                                { "out_fp", lhs->type_dltype.fp },
+                                { "out_shape", lhs->type_dltype.shape },
+                            }, { rhs }) ||
                         call->codegen(scope, rets);
                 }
-                if (rhs_type->ty == TypeInfo::Type::EDGE)
+                if (rhs->ty == TypeInfo::Type::EDGE)
                 {
                     if (ret->ty != TypeInfo::Type::LOOKUP)
                         return error::compiler(expr.node_info, "intr __cast__ overload is shadowed in the local scope for edge cast operation");
@@ -5835,65 +6253,38 @@ namespace nn
                     return
                         call->init(__cast__) ||
                         call->apply_args(expr.node_info, {
-                                { "out_fp", lhs_type->type_dltype.fp },
-                                { "out_shape", lhs_type->type_dltype.shape },
-                            }, { rhs_type }) ||
+                                { "out_fp", lhs->type_dltype.fp },
+                                { "out_shape", lhs->type_dltype.shape },
+                            }, { rhs }) ||
                         call->codegen(scope, rets);
                 }
                 return error::compiler(expr.expr_binary.right->node_info, "Expected either a tensor or an edge in a reshape cast operation");
             }
 
             // Normal cast
-            if (lhs_type->ty != TypeInfo::Type::TYPE)
+            if (lhs->ty != TypeInfo::Type::TYPE)
                 return error::compiler(expr.expr_binary.left->node_info, "Expected a type as the left side of a cast operation");
 
             TypeRef type, ret;
-            if (rhs_type->to_obj(expr.node_info, type))
+            if (rhs->to_obj(expr.node_info, type))
                 return true;
 
-            switch (lhs_type->type_type.base->ty)
+            switch (lhs->type_type.base->ty)
             {
             case TypeInfo::Type::INT:
-                if (!rhs_type->check_xint())
-                    return error::compiler(expr.node_info, "Unable to cast type '%' to int", rhs_type->to_string());
-                ret = type_manager->create_int(
-                    TypeInfo::Category::CONST,
-                    [&expr, rhs_type, type](Scope& scope) -> bool {
-                        return
-                            rhs_type->codegen(scope) ||
-                            type->codegen(scope) ||
-                            body->add_instruction(instruction::XInt(expr.node_info)) ||
-                            scope.pop();
-                    });
+                if (codegen_xint(scope, expr.node_info, rhs, ret)) return true;
                 break;
             case TypeInfo::Type::FLOAT:
-                if (!rhs_type->check_xflt())
-                    return error::compiler(expr.node_info, "Unable to cast type '%' to float", rhs_type->to_string());
-                ret = type_manager->create_float(
-                    TypeInfo::Category::CONST,
-                    [&expr, rhs_type, type](Scope& scope) -> bool {
-                        return
-                            rhs_type->codegen(scope) ||
-                            type->codegen(scope) ||
-                            body->add_instruction(instruction::XFlt(expr.node_info)) ||
-                            scope.pop();
-                    });
+                if (codegen_xflt(scope, expr.node_info, rhs, ret)) return true;
                 break;
             case TypeInfo::Type::STR:
-                if (!rhs_type->check_xstr())
-                    return error::compiler(expr.node_info, "Unable to cast type '%' to string", rhs_type->to_string());
-                ret = type_manager->create_string(
-                    TypeInfo::Category::CONST,
-                    [&expr, rhs_type, type](Scope& scope) -> bool {
-                        return
-                            rhs_type->codegen(scope) ||
-                            type->codegen(scope) ||
-                            body->add_instruction(instruction::XStr(expr.node_info)) ||
-                            scope.pop();
-                    });
+                if (codegen_xstr(scope, expr.node_info, rhs, ret)) return true;
+                break;
+            case TypeInfo::Type::CFG:
+                if (codegen_xcfg(scope, expr.node_info, rhs, ret)) return true;
                 break;
             default:
-                return error::compiler(expr.expr_binary.left->node_info, "Casting to type '%' is not supported", lhs_type->type_type.base->to_string());
+                return error::compiler(expr.expr_binary.left->node_info, "Casting to type '%' is not supported", lhs->type_type.base->to_string());
             }
             if (!ret)
                 return true;
@@ -6875,8 +7266,7 @@ namespace nn
                             bc->add_type_fty(addr) ||
                             body->add_instruction(instruction::New(expr.node_info, addr)) ||
                             scope.push();
-                    },
-                    tmp);
+                    }, tmp);
                 break;
             case ExprKW::BOOL:
                 tmp = type_manager->create_bool(
@@ -6897,8 +7287,7 @@ namespace nn
                             bc->add_type_bool(addr) ||
                             body->add_instruction(instruction::New(expr.node_info, addr)) ||
                             scope.push();
-                    },
-                    tmp);
+                    }, tmp);
                 break;
             case ExprKW::INT:
                 tmp = type_manager->create_int(
@@ -6919,8 +7308,7 @@ namespace nn
                             bc->add_type_int(addr) ||
                             body->add_instruction(instruction::New(expr.node_info, addr)) ||
                             scope.push();
-                    },
-                    tmp);
+                    }, tmp);
                 break;
             case ExprKW::FLOAT:
                 tmp = type_manager->create_float(
@@ -6941,8 +7329,7 @@ namespace nn
                             bc->add_type_float(addr) ||
                             body->add_instruction(instruction::New(expr.node_info, addr)) ||
                             scope.push();
-                    },
-                    tmp);
+                    }, tmp);
                 break;
             case ExprKW::STR:
                 tmp = type_manager->create_string(
@@ -6963,8 +7350,7 @@ namespace nn
                             bc->add_type_str(addr) ||
                             body->add_instruction(instruction::New(expr.node_info, addr)) ||
                             scope.push();
-                    },
-                    tmp);
+                    }, tmp);
                 break;
             case ExprKW::ARRAY:
                 // Handled in codegen_expr_cargs
@@ -6972,6 +7358,19 @@ namespace nn
             case ExprKW::TUPLE:
                 // Handled in codegen_expr_cargs
                 return error::compiler(expr.node_info, "Invalid use of keyword 'tuple'");
+            case ExprKW::CFG:
+                tmp = type_manager->create_config(TypeInfo::Category::VIRTUAL, nullptr);
+                if (!tmp) return true;
+                type = type_manager->create_type(
+                    TypeInfo::Category::CONST,
+                    [&expr](Scope& scope) {
+                        size_t addr;
+                        return
+                            bc->add_type_cfg(addr) ||
+                            body->add_instruction(instruction::New(expr.node_info, addr)) ||
+                            scope.push();
+                    }, tmp);
+                break;
             case ExprKW::F16:
                 type = type_manager->create_fty(
                     TypeInfo::Category::CONST,
@@ -7216,32 +7615,6 @@ namespace nn
             return false;
         }
 
-        bool codegen_line_raise(Scope& scope, const AstLine& line)
-        {
-            TypeRef ret;
-            if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, line.line_func.expr, ret))
-                return true;
-            if (ret->ty != TypeInfo::Type::STR)
-                return error::compiler(line.line_func.expr.node_info, "raise expected string, recieved %", ret->to_string());
-            return
-                ret->codegen(scope) ||
-                body->add_instruction(instruction::Err(line.node_info)) ||
-                scope.pop();
-        }
-
-        bool codegen_line_print(Scope& scope, const AstLine& line)
-        {
-            TypeRef ret;
-            if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, line.line_func.expr, ret))
-                return true;
-            if (ret->ty != TypeInfo::Type::STR)
-                return error::compiler(line.line_func.expr.node_info, "print expected string, recieved %", ret->to_string());
-            return
-                ret->codegen(scope) ||
-                body->add_instruction(instruction::Dsp(line.node_info)) ||
-                scope.pop();
-        }
-
         bool codegen_line_retdef(Scope& scope, const AstLine& line)
         {
             if (!ret_label)
@@ -7426,6 +7799,37 @@ namespace nn
                 return codegen_line_retintr(scope, line);
             }
             return error::compiler(line.node_info, "Internal error: body_type enum was out of range");
+        }
+
+        bool codegen_line_intrinfo(Scope& scope, const AstLine& line)
+        {
+            if (body_type != BodyType::INTR)
+                return error::compiler(line.node_info, "An __add_intr_info statement is only valid in an intr block");
+
+            TypeRef name;
+            TypeRef cfg;
+            if (codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, line.line_intrinfo.name_expr, name) ||
+                codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, line.line_intrinfo.cfg_expr, cfg)
+                ) return true;
+
+            if (name->ty != TypeInfo::Type::STR)
+                return error::compiler(line.line_intrinfo.name_expr.node_info,
+                    "__add_intr_info name expression must resolve to a string, recieved %", name);
+            if (cfg->ty != TypeInfo::Type::CFG)
+                return error::compiler(line.line_intrinfo.cfg_expr.node_info,
+                    "__add_intr_info cfg expression must resolve to a config, recieved %", cfg);
+            
+            Scope::StackVar var;
+            if (scope.at("~node", var))
+                return error::compiler(line.node_info, "Internal error: unable to find variable ~node in intr scope");
+
+            return
+                body->add_instruction(instruction::Dup(line.node_info, var.ptr)) ||
+                cfg->codegen(scope) ||
+                name->codegen(scope) ||
+                body->add_instruction(instruction::NdCfg(line.node_info)) ||
+                body->add_instruction(instruction::Pop(line.node_info, 0)) ||
+                scope.pop(2);
         }
 
         bool codegen_line_match(Scope& scope, const AstLine& line)
@@ -7869,12 +8273,10 @@ namespace nn
                 return codegen_line_export(scope, line);
             case LineType::EXTERN:
                 return codegen_line_extern(scope, line);
-            case LineType::RAISE:
-                return codegen_line_raise(scope, line);
-            case LineType::PRINT:
-                return codegen_line_print(scope, line);
             case LineType::RETURN:
                 return codegen_line_return(scope, line);
+            case LineType::INTRINFO:
+                return codegen_line_intrinfo(scope, line);
             case LineType::MATCH:
                 return codegen_line_match(scope, line);
             case LineType::IF:
@@ -8161,10 +8563,9 @@ namespace nn
                 // Assume it's type can be a runtime object.
                 // If it can't, it shouldn't have been in the cargs, so to_obj will generate an error
                 size_t addr;
-                TypeRef ty;
-                if (body->add_instruction(instruction::Dup(arg.node_info, var.ptr)) ||
-                    var.type->to_obj(arg.node_info, ty) ||
-                    ty->codegen(scope) ||
+                TypeRef cfg;
+                if (codegen_xcfg(scope, arg.node_info, var.type, cfg) ||
+                    cfg->codegen(scope) ||
                     bc->add_obj_str(addr, arg.var_name) ||
                     body->add_instruction(instruction::New(arg.node_info, addr)) ||
                     body->add_instruction(instruction::BkCfg(arg.node_info)) ||
@@ -8308,10 +8709,9 @@ namespace nn
                 // Assume it's type can be a runtime object.
                 // If it can't, it shouldn't have been in the cargs, so to_obj will generate an error
                 size_t addr;
-                TypeRef ty;
-                if (body->add_instruction(instruction::Dup(arg.node_info, var.ptr)) ||
-                    var.type->to_obj(arg.node_info, ty) ||
-                    ty->codegen(scope) ||
+                TypeRef cfg;
+                if (codegen_xcfg(scope, arg.node_info, var.type, cfg) ||
+                    cfg->codegen(scope) ||
                     bc->add_obj_str(addr, arg.var_name) ||
                     body->add_instruction(instruction::New(arg.node_info, addr)) ||
                     body->add_instruction(instruction::NdCfg(arg.node_info)) ||

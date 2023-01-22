@@ -84,12 +84,12 @@ namespace nn
             KW_STR,
             KW_ARRAY,
             KW_TUPLE,
+            KW_CFG,
             KW_REF,
             KW_CONST,
             KW_NULL,
             KW_TRUE,
             KW_FALSE,
-            KW_RAISE,
             KW_EXPORT,
             KW_EXTERN,
             KW_FORWARD,
@@ -97,10 +97,10 @@ namespace nn
             KW_F16,
             KW_F32,
             KW_F64,
-            KW_PRINT,
             KW_AND,
             KW_OR,
             KW_NOT,
+            KW_ADD_INTR_INFO,
         };
 
         class Token;

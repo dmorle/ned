@@ -176,6 +176,7 @@ namespace nn
                 INT,         // Integer
                 FLOAT,       // Floating point
                 STR,         // String
+                CFG,         // Config
 
                 ARRAY,       // Array
                 TUPLE,       // Tuple
@@ -264,15 +265,17 @@ namespace nn
             bool check_gt() const;
             bool check_lt() const;
 
-            bool check_xstr() const;  // whether the type can be converted into a string
-            bool check_xint() const;  // whether the type can be converted into an int
-            bool check_xflt() const;  // whether the type can be converted into a float
+            bool check_xcfg() const;  // whether the type can be converted into a config by the interpreter
+            bool check_xstr() const;  // whether the type can be converted into a string by the interpreter
+            bool check_xint() const;  // whether the type can be converted into an int by the interpreter
+            bool check_xflt() const;  // whether the type can be converted into a float by the interpreter
             bool check_cpy() const;
             bool check_idx() const;
             bool check_dl() const;
 
             std::string encode() const;
             std::string to_string() const;
+            bool to_cfg(const AstNodeInfo& node_info, TypeRef& cfg) const;   // converts the underlying object into a cfg
             bool to_obj(const AstNodeInfo& node_info, TypeRef& type) const;  // converts the type into a runtime object
             bool wake_up_struct(const AstNodeInfo& node_info);  // wakes up a lazy struct as an uninitialized struct declaration
             bool wake_up_struct(const AstNodeInfo& node_info, TypeInfo::Category cat, CodegenCallback codegen);  // wakes up a lazy struct, leaving it's elements still lazy though
@@ -322,6 +325,7 @@ namespace nn
             TypeRef create_int         (TypeInfo::Category cat, CodegenCallback codegen);
             TypeRef create_float       (TypeInfo::Category cat, CodegenCallback codegen);
             TypeRef create_string      (TypeInfo::Category cat, CodegenCallback codegen);
+            TypeRef create_config      (TypeInfo::Category cat, CodegenCallback codegen);
             TypeRef create_array       (TypeInfo::Category cat, CodegenCallback codegen, TypeRef elem);
             TypeRef create_tuple       (TypeInfo::Category cat, CodegenCallback codegen, std::vector<TypeRef> elems);
             
@@ -508,6 +512,7 @@ namespace nn
                     INT,
                     FLOAT,
                     STRING,
+                    CONFIG,
                     GENERIC,  // a compile time variable type
                     UNPACK,  // Unpacked types
                     ARRAY,
@@ -796,7 +801,6 @@ namespace nn
 
         std::string label_prefix(const AstNodeInfo& info);
 
-        bool parse_cargs(const std::vector<AstExpr>& args, std::map<std::string, const AstExpr*>& cargs);
         bool arg_type(TypeRef& type, Scope& scope, const AstArgDecl& arg);
         bool match_elems(const std::vector<AstExpr>& lhs, const std::vector<TypeRef>& rhs, CodegenCallback& setup_fn, std::vector<CodegenCallback>& elem_fns);
         bool match_arg(const TypeRef& arg_type, const TypeRef& param_type, std::map<std::string, TypeRef>& generics);
@@ -816,9 +820,15 @@ namespace nn
         bool codegen_fields(const std::string& container_type, const AstNodeInfo& node_info, const std::map<std::string, TypeRef>& cargs,
             const std::vector<AstLine>& lines, std::vector<std::pair<std::string, TypeRef>>& fields);
 
+        bool codegen_xint(Scope& scope, const AstNodeInfo& node_info, TypeRef arg, TypeRef& cfg);
+        bool codegen_xflt(Scope& scope, const AstNodeInfo& node_info, TypeRef arg, TypeRef& cfg);
+        bool codegen_xstr(Scope& scope, const AstNodeInfo& node_info, TypeRef arg, TypeRef& cfg);
+        bool codegen_xcfg(Scope& scope, const AstNodeInfo& node_info, TypeRef arg, TypeRef& cfg);
+
         template<class allowed> bool codegen_expr_single_ret(Scope& scope, const AstExpr& expr, TypeRef& ret);
         template<class allowed> bool codegen_expr_multi_ret(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
-
+        
+        bool codegen_expr_callee_kw    (Scope& scope, const AstExpr& expr, TypeRef& ret);
         bool codegen_expr_callee_var   (Scope& scope, const AstExpr& expr, TypeRef& ret);
         bool codegen_expr_callee_dot   (Scope& scope, const AstExpr& expr, TypeRef& ret);
         bool codegen_expr_callee_cargs (Scope& scope, const AstExpr& expr, TypeRef& ret);
@@ -841,6 +851,7 @@ namespace nn
         bool codegen_expr_assign   (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
         bool codegen_expr_and      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
         bool codegen_expr_or       (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
+        bool codegen_expr_cast     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
         bool codegen_expr_idx      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
         bool codegen_expr_dot      (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
         bool codegen_expr_decl     (Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets);
@@ -858,9 +869,8 @@ namespace nn
         bool codegen_line_continue (Scope& scope, const AstLine& line);
         bool codegen_line_export   (Scope& scope, const AstLine& line);
         bool codegen_line_extern   (Scope& scope, const AstLine& line);
-        bool codegen_line_raise    (Scope& scope, const AstLine& line);
-        bool codegen_line_print    (Scope& scope, const AstLine& line);
         bool codegen_line_return   (Scope& scope, const AstLine& line);
+        bool codegen_line_intrinfo (Scope& scope, const AstLine& line);
         bool codegen_line_match    (Scope& scope, const AstLine& line);
         bool codegen_line_branch   (Scope& scope, const AstLine& line, const std::string& end_label);  // if or elif statement
         bool codegen_line_block    (Scope& scope, const AstLine& line);

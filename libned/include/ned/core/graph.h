@@ -21,7 +21,7 @@ namespace nn
 
         struct InitImpl
         {
-            std::map<std::string, ConfigType> signature;
+            std::map<std::string, Config> signature;
             std::function<void* (EdgeFty, const Init&, const EdgeInfo&)> init;
         };
         inline std::map<std::string, InitImpl> inits = {};

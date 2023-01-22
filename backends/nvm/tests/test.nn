@@ -19,6 +19,7 @@ def __mul__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
 	return out
 
 intr transpose<fty fp, int M, int N>(fp<M, N> inp) -> out:
+	__add_intr_info "nvm" : cfg::"test"
     return fp<N, M> out
 
 def transpose<fty fp, int M, int N>(fp<M, N> inp) -> out:

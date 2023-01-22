@@ -3,6 +3,7 @@
 
 #include <ned/lang/ast.h>
 #include <ned/core/graph.h>
+#include <ned/core/config.h>
 
 #include <string>
 #include <sstream>
@@ -21,6 +22,7 @@ namespace nn
         using FloatObj = double;
         using StrObj = std::string;
         using AggObj = std::vector<Obj>;
+        using CfgObj = core::Config;
 
         union Obj
         {
@@ -31,6 +33,7 @@ namespace nn
             FloatObj  *float_obj;
             StrObj    *str_obj;
             AggObj    *agg_obj;
+            CfgObj    *cfg_obj;
             uint64_t   ptr;  // this field is use for code pointers, data pointers, and all graph stuff
         };
 
@@ -41,6 +44,7 @@ namespace nn
         class StrType;
         class ArrType;
         class AggType;
+        class CfgType;
 
         class ProgramHeap
         {
@@ -51,6 +55,7 @@ namespace nn
             std::vector<StrType*>   str_types;
             std::vector<ArrType*>   arr_types;
             std::vector<AggType*>   agg_types;
+            std::vector<CfgType*>   cfg_types;
 
             std::vector<BoolObj*>   bool_objs;
             std::vector<FtyObj*>    fty_objs;
@@ -58,6 +63,7 @@ namespace nn
             std::vector<FloatObj*>  float_objs;
             std::vector<StrObj*>    str_objs;
             std::vector<AggObj*>    agg_objs;
+            std::vector<CfgObj*>    cfg_objs;
             // The program heap isn't responsible for managing the deep learning stuff.
             // That responsibility falls on the graph builder.
 
@@ -71,6 +77,7 @@ namespace nn
             bool create_type_str   (Obj& obj);
             bool create_type_arr   (Obj& obj, TypeObj* ty);
             bool create_type_agg   (Obj& obj, std::vector<TypeObj*> tys);
+            bool create_type_cfg   (Obj& obj);
 
             bool create_obj_bool   (Obj& obj, BoolObj val);
             bool create_obj_fty    (Obj& obj, FtyObj val);
@@ -78,6 +85,7 @@ namespace nn
             bool create_obj_float  (Obj& obj, FloatObj val);
             bool create_obj_str    (Obj& obj, const StrObj& val);
             bool create_obj_agg    (Obj& obj, const AggObj& val);
+            bool create_obj_cfg    (Obj& obj, const CfgObj& val);
         };
 
         class CallStack;
@@ -113,12 +121,10 @@ namespace nn
             virtual bool idx  (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs);
             virtual bool len  (ProgramHeap& heap, Obj& dst, const Obj src);
             virtual bool neg  (ProgramHeap& heap, Obj& dst, const Obj src);
+            virtual bool xcfg(ProgramHeap& heap, Obj& dst, const Obj src) = 0;
             virtual bool xstr (ProgramHeap& heap, Obj& dst, const Obj src);
             virtual bool xflt (ProgramHeap& heap, Obj& dst, const Obj src);
             virtual bool xint (ProgramHeap& heap, Obj& dst, const Obj src);
-            
-            virtual bool cfg_val(core::ConfigVal& val, const Obj src) = 0;
-            virtual bool cfg_type(core::ConfigType& type) = 0;
         };
 
         class BoolType :
@@ -134,10 +140,8 @@ namespace nn
             virtual bool ne   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool land (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool lor  (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool xcfg (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xstr (ProgramHeap& heap, Obj& dst, const Obj src) override;
-            
-            virtual bool cfg_val(core::ConfigVal& val, const Obj src) override;
-            virtual bool cfg_type(core::ConfigType& type) override;
         };
 
         class FtyType :
@@ -146,15 +150,13 @@ namespace nn
             friend bool ProgramHeap::create_type_fty(Obj& obj);
             FtyType() = default;
         public:
-            virtual bool cpy  (ProgramHeap& heap, Obj& dst, const Obj src)  override;
+            virtual bool cpy  (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool inst (ProgramHeap& heap, Obj& dst) override;
             virtual bool set  (ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
             virtual bool eq   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool ne   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool xcfg (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xstr (ProgramHeap& heap, Obj& dst, const Obj src) override;
-            
-            virtual bool cfg_val(core::ConfigVal& val, const Obj src) override;
-            virtual bool cfg_type(core::ConfigType& type) override;
         };
 
         class IntType :
@@ -163,7 +165,7 @@ namespace nn
             friend bool ProgramHeap::create_type_int(Obj& obj);
             IntType() = default;
         public:
-            virtual bool cpy  (ProgramHeap& heap, Obj& dst, const Obj src)  override;
+            virtual bool cpy  (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool inst (ProgramHeap& heap, Obj& dst) override;
             virtual bool set  (ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
             virtual bool iadd (ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
@@ -185,12 +187,10 @@ namespace nn
             virtual bool gt   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool lt   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool neg  (ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool xcfg (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xstr (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xflt (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xint (ProgramHeap& heap, Obj& dst, const Obj src) override;
-            
-            virtual bool cfg_val(core::ConfigVal& val, const Obj src) override;
-            virtual bool cfg_type(core::ConfigType& type) override;
         };
 
         class FloatType :
@@ -199,7 +199,7 @@ namespace nn
             friend bool ProgramHeap::create_type_float(Obj& obj);
             FloatType() = default;
         public:
-            virtual bool cpy  (ProgramHeap& heap, Obj& dst, const Obj src)  override;
+            virtual bool cpy  (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool inst (ProgramHeap& heap, Obj& dst) override;
             virtual bool set  (ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
             virtual bool iadd (ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
@@ -219,12 +219,10 @@ namespace nn
             virtual bool gt   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool lt   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool neg  (ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool xcfg (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xstr (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xflt (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xint (ProgramHeap& heap, Obj& dst, const Obj src) override;
-            
-            virtual bool cfg_val(core::ConfigVal& val, const Obj src) override;
-            virtual bool cfg_type(core::ConfigType& type) override;
         };
 
         class StrType :
@@ -233,7 +231,7 @@ namespace nn
             friend bool ProgramHeap::create_type_str(Obj& obj);
             StrType() = default;
         public:
-            virtual bool cpy  (ProgramHeap& heap, Obj& dst, const Obj src)  override;
+            virtual bool cpy  (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool inst (ProgramHeap& heap, Obj& dst) override;
             virtual bool set  (ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
             virtual bool iadd (ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
@@ -245,12 +243,10 @@ namespace nn
             virtual bool gt   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool lt   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool idx  (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
+            virtual bool xcfg (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xstr (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xflt (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xint (ProgramHeap& heap, Obj& dst, const Obj src) override;
-            
-            virtual bool cfg_val  (core::ConfigVal & val , const Obj src) override;
-            virtual bool cfg_type (core::ConfigType& type) override;
         };
 
         class ArrType :  // arrays only.  inst -> agg
@@ -270,10 +266,8 @@ namespace nn
             virtual bool ne   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool idx  (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool len  (ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool xcfg (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xstr (ProgramHeap& heap, Obj& dst, const Obj src) override;
-            
-            virtual bool cfg_val(core::ConfigVal& val, const Obj src) override;
-            virtual bool cfg_type(core::ConfigType& type) override;
         };
 
         class AggType :  // Tuples and structs.  inst -> agg
@@ -284,17 +278,27 @@ namespace nn
             friend bool ProgramHeap::create_type_agg(Obj& obj, std::vector<TypeObj*> tys);
             AggType() = default;
         public:
-            virtual bool cpy  (ProgramHeap& heap, Obj& dst, const Obj src)  override;
+            virtual bool cpy  (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool inst (ProgramHeap& heap, Obj& dst) override;
             virtual bool set  (ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
             virtual bool eq   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool ne   (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool idx  (ProgramHeap& heap, Obj& dst, const Obj lhs, const Obj rhs) override;
             virtual bool len  (ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool xcfg (ProgramHeap& heap, Obj& dst, const Obj src) override;
             virtual bool xstr (ProgramHeap& heap, Obj& dst, const Obj src) override;
-            
-            virtual bool cfg_val(core::ConfigVal& val, const Obj src) override;
-            virtual bool cfg_type(core::ConfigType& type) override;
+        };
+
+        class CfgType :
+            public TypeObj
+        {
+            friend bool ProgramHeap::create_type_cfg(Obj& obj);
+            CfgType() = default;
+        public:
+            virtual bool cpy  (ProgramHeap& heap, Obj& dst, const Obj src) override;
+            virtual bool inst (ProgramHeap& heap, Obj& dst) override;
+            virtual bool set  (ProgramHeap& heap, Obj& lhs, const Obj rhs) override;
+            virtual bool xcfg (ProgramHeap& heap, Obj& dst, const Obj src) override;
         };
     }
 }

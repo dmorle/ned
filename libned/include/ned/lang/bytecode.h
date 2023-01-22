@@ -110,6 +110,7 @@ namespace nn
             bool add_type_int   (size_t& addr);
             bool add_type_float (size_t& addr);
             bool add_type_str   (size_t& addr);
+            bool add_type_cfg   (size_t& addr);
 
             bool add_obj_bool   (size_t& addr, BoolObj val);
             bool add_obj_fty    (size_t& addr, FtyObj val);
@@ -170,6 +171,7 @@ namespace nn
             LE,
             IDX,
             LEN,
+            XCFG,
             XSTR,
             XFLT,
             XINT,
@@ -333,6 +335,7 @@ namespace nn
             using Lt    = Implicit < LT    >;
             using Idx   = Implicit < IDX   >;
             using Len   = Implicit < LEN   >;
+            using XCfg  = Implicit < XCFG  >;
             using XStr  = Implicit < XSTR  >;
             using XFlt  = Implicit < XFLT  >;
             using XInt  = Implicit < XINT  >;
@@ -431,9 +434,10 @@ namespace nn
 * idx          Retrieves the left at the index of the right
 * len          Retrieves the length of the tos
 * 
-* xstr         Converts any object to a string object
-* xflt         Converts any object to a float object
-* xint         Converts any object to an int object
+* xcfg         Converts an object to a config object
+* xstr         Converts an object to a string object
+* xflt         Converts an object to a float object
+* xint         Converts an object to an int object
 * 
 * dsp          Prints a string at tos to stdout
 * err          Raises a runtime error

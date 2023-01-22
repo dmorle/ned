@@ -169,6 +169,8 @@ namespace nn
                 return "keyword array";
             case TokenType::KW_TUPLE:
                 return "keyword tuple";
+            case TokenType::KW_CFG:
+                return "keyword cfg";
             case TokenType::KW_REF:
                 return "keyword ref";
             case TokenType::KW_CONST:
@@ -177,8 +179,6 @@ namespace nn
                 return "keyword true";
             case TokenType::KW_FALSE:
                 return "keyword false";
-            case TokenType::KW_RAISE:
-                return "keyword raise";
             case TokenType::KW_EXPORT:
                 return "keyword export";
             case TokenType::KW_EXTERN:
@@ -193,14 +193,14 @@ namespace nn
                 return "keyword f32";
             case TokenType::KW_F64:
                 return "keyword f64";
-            case TokenType::KW_PRINT:
-                return "keyword print";
             case TokenType::KW_AND:
                 return "keyword and";
             case TokenType::KW_OR:
                 return "keyword or";
             case TokenType::KW_NOT:
                 return "keyword not";
+            case TokenType::KW_ADD_INTR_INFO:
+                return "keyword __add_intr_info";
             default:
                 return "UNKNOWN TOKEN - LEXER BUG";
             }
@@ -334,6 +334,8 @@ namespace nn
                 return "array ";
             case TokenType::KW_TUPLE:
                 return "tuple ";
+            case TokenType::KW_CFG:
+                return "cfg ";
             case TokenType::KW_REF:
                 return "ref ";
             case TokenType::KW_CONST:
@@ -342,8 +344,6 @@ namespace nn
                 return "true ";
             case TokenType::KW_FALSE:
                 return "false ";
-            case TokenType::KW_RAISE:
-                return "raise ";
             case TokenType::KW_EXPORT:
                 return "export ";
             case TokenType::KW_EXTERN:
@@ -358,14 +358,14 @@ namespace nn
                 return "f32 ";
             case TokenType::KW_F64:
                 return "f64 ";
-            case TokenType::KW_PRINT:
-                return "print ";
             case TokenType::KW_AND:
                 return " and ";
             case TokenType::KW_OR:
                 return " or ";
             case TokenType::KW_NOT:
                 return " not ";
+            case TokenType::KW_ADD_INTR_INFO:
+                return "__add_intr_info";
             default:
                 return "unknown";
             }
@@ -937,6 +937,9 @@ namespace nn
                     case hash("tuple"):
                         tarr.push_back(TokenImp<TokenType::KW_TUPLE>(fname, line_num, col_num));
                         continue;
+                    case hash("cfg"):
+                        tarr.push_back(TokenImp<TokenType::KW_CFG>(fname, line_num, col_num));
+                        continue;
                     case hash("ref"):
                         tarr.push_back(TokenImp<TokenType::KW_REF>(fname, line_num, col_num));
                         continue;
@@ -951,9 +954,6 @@ namespace nn
                         continue;
                     case hash("false"):
                         tarr.push_back(TokenImp<TokenType::KW_FALSE>(fname, line_num, col_num));
-                        continue;
-                    case hash("raise"):
-                        tarr.push_back(TokenImp<TokenType::KW_RAISE>(fname, line_num, col_num));
                         continue;
                     case hash("export"):
                         tarr.push_back(TokenImp<TokenType::KW_EXPORT>(fname, line_num, col_num));
@@ -976,9 +976,6 @@ namespace nn
                     case hash("f64"):
                         tarr.push_back(TokenImp<TokenType::KW_F64>(fname, line_num, col_num));
                         continue;
-                    case hash("print"):
-                        tarr.push_back(TokenImp<TokenType::KW_PRINT>(fname, line_num, col_num));
-                        continue;
                     case hash("and"):
                         tarr.push_back(TokenImp<TokenType::KW_AND>(fname, line_num, col_num));
                         continue;
@@ -987,6 +984,9 @@ namespace nn
                         continue;
                     case hash("not"):
                         tarr.push_back(TokenImp<TokenType::KW_NOT>(fname, line_num, col_num));
+                        continue;
+                    case hash("__add_intr_info"):
+                        tarr.push_back(TokenImp<TokenType::KW_ADD_INTR_INFO>(fname, line_num, col_num));
                         continue;
                     }
                     

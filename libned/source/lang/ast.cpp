@@ -612,6 +612,10 @@ namespace nn
                 ast_expr.expr_kw = ExprKW::TUPLE;
                 ast_expr.ty = ExprType::KW;
                 return false;
+            case TokenType::KW_CFG:
+                ast_expr.expr_kw = ExprKW::CFG;
+                ast_expr.ty = ExprType::KW;
+                return false;
             case TokenType::KW_F16:
                 ast_expr.expr_kw = ExprKW::F16;
                 ast_expr.ty = ExprType::KW;
@@ -1231,13 +1235,6 @@ namespace nn
                     return error::syntax(tarr[1], "Invalid syntax in weight init expression");
                 break;
 
-            case TokenType::KW_RAISE:
-                new (&ast_line.line_func) AstLineUnaryFunc();
-                ast_line.ty = LineType::RAISE;
-                if (parse_expr({ tarr, i + 1 }, ast_line.line_func.expr))
-                    return error::syntax(tarr[i], "Invalid syntax in raise statement");
-                break;
-
             case TokenType::KW_RETURN:
                 new (&ast_line.line_func) AstLineUnaryFunc();
                 ast_line.ty = LineType::RETURN;
@@ -1245,18 +1242,28 @@ namespace nn
                     return error::syntax(tarr[i], "Invalid syntax in return statement");
                 break;
 
-            case TokenType::KW_PRINT:
-                new (&ast_line.line_func) AstLineUnaryFunc();
-                ast_line.ty = LineType::PRINT;
-                if (parse_expr({ tarr, i + 1 }, ast_line.line_func.expr))
-                    return error::syntax(tarr[i], "Invalid syntax in print statement");
-                break;
+            case TokenType::KW_ADD_INTR_INFO:
+                new (&ast_line.line_intrinfo) AstLineIntrInfo();
+                ast_line.ty = LineType::INTRINFO;
+
+                end = tarr.search(IsSameCriteria(TokenType::COLON), i + 1);
+                if (end == -1)
+                    return error::syntax(tarr[i], "Missing ':' in __add_intr_info statement");
+                if (end == i + 1)
+                    return error::syntax(tarr[i], "Empty name expression in __add_intr_info statement");
+                if (parse_expr({ tarr, i + 1, end }, ast_line.line_intrinfo.name_expr))
+                    return error::syntax(tarr[i], "Invalid syntax in __add_intr_info name expression");
+                if (end + 1 == tarr.size())
+                    return error::syntax(tarr[(size_t)end - 1], "Empty cfg expression in __add_intr_info statement");
+                if (parse_expr({ tarr, end + 1 }, ast_line.line_intrinfo.cfg_expr))
+                    return error::syntax(tarr[end + 1], "Invalid syntax in __add_intr_info cfg expression");
+                return false;
 
             case TokenType::KW_MATCH:
                 new (&ast_line.line_match) AstLineMatch();
                 ast_line.ty = LineType::MATCH;
                 
-                end = tarr.search(IsSameCriteria(TokenType::COLON));
+                end = tarr.search(IsSameCriteria(TokenType::COLON), i + 1);
                 if (end == -1)
                     return error::syntax(tarr[i], "Missing ':' in match statement");
                 if (end == i + 1)
@@ -1276,7 +1283,7 @@ namespace nn
                 new (&ast_line.line_branch) AstLineBranch();
                 ast_line.ty = LineType::IF;
 
-                end = tarr.search(IsSameCriteria(TokenType::COLON));
+                end = tarr.search(IsSameCriteria(TokenType::COLON), i + 1);
                 if (end == -1)
                     return error::syntax(tarr[i], "Missing ':' in if statement");
                 if (end == i + 1)
@@ -1296,7 +1303,7 @@ namespace nn
                 new (&ast_line.line_branch) AstLineBranch();
                 ast_line.ty = LineType::ELIF;
 
-                end = tarr.search(IsSameCriteria(TokenType::COLON));
+                end = tarr.search(IsSameCriteria(TokenType::COLON), i + 1);
                 if (end == -1)
                     return error::syntax(tarr[i], "Missing ':' in elif statement");
                 if (end == i + 1)
@@ -2127,10 +2134,11 @@ namespace nn
             case LineType::EXTERN:
                 line_extern.~AstLineExtern();
                 break;
-            case LineType::RAISE:
-            case LineType::PRINT:
             case LineType::RETURN:
                 line_func.~AstLineUnaryFunc();
+                break;
+            case LineType::INTRINFO:
+                line_intrinfo.~AstLineIntrInfo();
                 break;
             case LineType::MATCH:
                 line_match.~AstLineMatch();
@@ -2175,10 +2183,11 @@ namespace nn
             case LineType::EXTERN:
                 new (&line_extern) decltype(line_extern)(std::move(line.line_extern));
                 break;
-            case LineType::RAISE:
-            case LineType::PRINT:
             case LineType::RETURN:
                 new (&line_func) decltype(line_func)(std::move(line.line_func));
+                break;
+            case LineType::INTRINFO:
+                new (&line_intrinfo) decltype(line_intrinfo)(std::move(line.line_intrinfo));
                 break;
             case LineType::MATCH:
                 new (&line_match) decltype(line_match)(std::move(line.line_match));

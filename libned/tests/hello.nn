@@ -12,6 +12,17 @@ fn len<type T>(array<T> arr) -> int:
         len
         ret
 
+fn print(const str msg):
+	:begin
+		dup 0
+		dsp
+		ret
+
+fn raise(const str msg):
+	:begin
+		dup 0
+		err
+
 fn range(int n) -> array<int>:
 	i = 0
 	array<int> result
@@ -31,8 +42,8 @@ fn concat<type T>(array<T> lhs, array<T> rhs) -> array<T>:
 
 def main<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
 	arr = concat([1, 2, 3], [4, 5, 6])
-	print str::arr
-	print str::index(arr, 0)
-	print str::len(arr)
-	print str::enumerate(arr)
-	print "Hello world"
+	print(str::arr)
+	print(str::index(arr, 0))
+	print(str::len(arr))
+	print(str::enumerate(arr))
+	print("Hello world")

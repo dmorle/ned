@@ -1,4 +1,5 @@
 intr add<fty fp, int N>(fp<N> lhs, fp<N> rhs) -> sum:
+	__add_intr_info "nvm": cfg::"hello nvm!"
 	return fp<N> out
 
 def add<fty fp, int N>(fp<N> lhs, fp<N> rhs) -> sum:

@@ -29,6 +29,8 @@ namespace nn
                 delete ty;
             for (auto* ty : agg_types)
                 delete ty;
+            for (auto* ty : cfg_types)
+                delete ty;
 
             for (auto* obj : bool_objs)
                 delete obj;
@@ -41,6 +43,8 @@ namespace nn
             for (auto* obj : str_objs)
                 delete obj;
             for (auto* obj : agg_objs)
+                delete obj;
+            for (auto* obj : cfg_objs)
                 delete obj;
         }
 
@@ -95,6 +99,13 @@ namespace nn
             return false;
         }
 
+        bool ProgramHeap::create_type_cfg(Obj& obj)
+        {
+            cfg_types.push_back(new CfgType());
+            obj.type_obj = cfg_types.back();
+            return false;
+        }
+
         bool ProgramHeap::create_obj_bool(Obj& obj, BoolObj val)
         {
             bool_objs.push_back(new BoolObj(val));
@@ -134,6 +145,13 @@ namespace nn
         {
             agg_objs.push_back(new AggObj(val));
             obj.agg_obj = agg_objs.back();
+            return false;
+        }
+
+        bool ProgramHeap::create_obj_cfg(Obj& obj, const CfgObj& val)
+        {
+            cfg_objs.push_back(new CfgObj(val));
+            obj.cfg_obj = cfg_objs.back();
             return false;
         }
 
@@ -318,21 +336,14 @@ namespace nn
             return heap.create_obj_bool(dst, *lhs.bool_obj || *rhs.bool_obj);
         }
 
+        bool BoolType::xcfg(ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_cfg(dst, core::Config::make_bool(*src.bool_obj));
+        }
+
         bool BoolType::xstr(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_str(dst, *src.bool_obj ? "true" : "false");
-        }
-
-        bool BoolType::cfg_val(core::ConfigVal& val, const Obj src)
-        {
-            val = core::ConfigVal::make_bool(*src.bool_obj);
-            return false;
-        }
-
-        bool BoolType::cfg_type(core::ConfigType& type)
-        {
-            type = core::ConfigType::make_bool();
-            return false;
         }
 
         bool FtyType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
@@ -361,24 +372,17 @@ namespace nn
             return heap.create_obj_bool(dst, *lhs.fty_obj != *rhs.fty_obj);
         }
 
+        bool FtyType::xcfg(ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_cfg(dst, core::Config::make_fty(*src.fty_obj));
+        }
+
         bool FtyType::xstr(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             std::string str;
             return
                 core::fty_str(*src.fty_obj, str) ||
                 heap.create_obj_str(dst, str);
-        }
-
-        bool FtyType::cfg_val(core::ConfigVal& val, const Obj src)
-        {
-            val = core::ConfigVal::make_fty(*src.fty_obj);
-            return false;
-        }
-
-        bool FtyType::cfg_type(core::ConfigType& type)
-        {
-            type = core::ConfigType::make_fty();
-            return false;
         }
 
         bool IntType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
@@ -499,6 +503,11 @@ namespace nn
             return heap.create_obj_int(dst, -*src.int_obj);
         }
 
+        bool IntType::xcfg(ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_cfg(dst, core::Config::make_int(*src.int_obj));
+        }
+
         bool IntType::xstr(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             // TODO: implement int to string conversion
@@ -514,19 +523,7 @@ namespace nn
         {
             return heap.create_obj_int(dst, *src.int_obj);
         }
-
-        bool IntType::cfg_val(core::ConfigVal& val, const Obj src)
-        {
-            val = core::ConfigVal::make_int(*src.int_obj);
-            return false;
-        }
         
-        bool IntType::cfg_type(core::ConfigType& type)
-        {
-            type = core::ConfigType::make_int();
-            return false;
-        }
-
         bool FloatType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_float(dst, *src.float_obj);
@@ -633,6 +630,11 @@ namespace nn
             return heap.create_obj_float(dst, -*src.float_obj);
         }
 
+        bool FloatType::xcfg(ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_cfg(dst, core::Config::make_float(*src.float_obj));
+        }
+
         bool FloatType::xstr(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             // TODO: implement float to string conversion
@@ -647,18 +649,6 @@ namespace nn
         bool FloatType::xint(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_int(dst, (IntObj)*src.float_obj);
-        }
-
-        bool FloatType::cfg_val(core::ConfigVal& val, const Obj src)
-        {
-            val = core::ConfigVal::make_float(*src.float_obj);
-            return false;
-        }
-
-        bool FloatType::cfg_type(core::ConfigType& type)
-        {
-            type = core::ConfigType::make_float();
-            return false;
         }
 
         bool StrType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
@@ -723,6 +713,11 @@ namespace nn
             return heap.create_obj_str(dst, std::string(1, (*lhs.str_obj)[*rhs.int_obj]));
         }
 
+        bool StrType::xcfg(ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_cfg(dst, core::Config::make_str(*src.str_obj));
+        }
+
         bool StrType::xstr(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             return heap.create_obj_str(dst, *src.str_obj);
@@ -740,18 +735,6 @@ namespace nn
             return heap.create_obj_int(dst, std::stoll(*src.str_obj));
         }
         
-        bool StrType::cfg_val(core::ConfigVal& val, const Obj src)
-        {
-            val = core::ConfigVal::make_str(*src.str_obj);
-            return false;
-        }
-
-        bool StrType::cfg_type(core::ConfigType& type)
-        {
-            type = core::ConfigType::make_str();
-            return false;
-        }
-
         bool ArrType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             std::vector<Obj> objs;
@@ -840,6 +823,20 @@ namespace nn
             return heap.create_obj_int(dst, src.agg_obj->size());
         }
 
+        bool ArrType::xcfg(ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            std::vector<core::Config> cfgs;
+            cfgs.reserve(src.agg_obj->size());
+            for (Obj e : *src.agg_obj)
+            {
+                Obj elem;
+                if (elem_ty->xcfg(heap, elem, e))
+                    return true;
+                cfgs.push_back(std::move(*elem.cfg_obj));
+            }
+            return heap.create_obj_cfg(dst, core::Config::make_list(cfgs));
+        }
+
         bool ArrType::xstr(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             if (src.agg_obj->size() == 0)
@@ -860,30 +857,6 @@ namespace nn
             }
             ss << ']';
             return heap.create_obj_str(dst, ss.str());
-        }
-
-        bool ArrType::cfg_val(core::ConfigVal& val, const Obj src)
-        {
-            std::vector<core::ConfigVal> configs;
-            configs.reserve(src.agg_obj->size());
-            for (Obj e : *src.agg_obj)
-            {
-                core::ConfigVal elem;
-                if (elem_ty->cfg_val(elem, e))
-                    return true;
-                configs.push_back(elem);
-            }
-            val = core::ConfigVal::make_list(configs);
-            return false;
-        }
-
-        bool ArrType::cfg_type(core::ConfigType& type)
-        {
-            core::ConfigType elem_cfg_type;
-            if (elem_ty->cfg_type(elem_cfg_type))
-                return true;
-            type = core::ConfigType::make_arr(std::move(elem_cfg_type));
-            return false;
         }
 
         bool AggType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
@@ -1000,7 +973,7 @@ namespace nn
             return heap.create_obj_str(dst, ss.str());
         }
 
-        bool AggType::cfg_val(core::ConfigVal& val, const Obj src)
+        bool AggType::xcfg(ProgramHeap& heap, Obj& dst, const Obj src)
         {
             if (src.agg_obj->size() != elem_tys.size())
             {
@@ -1009,31 +982,37 @@ namespace nn
                 return error::runtime("type object mismatch in aggregate object");
             }
 
-            std::vector<core::ConfigVal> configs;
-            configs.reserve(src.agg_obj->size());
+            std::vector<core::Config> cfgs;
+            cfgs.reserve(src.agg_obj->size());
             for (size_t i = 0; i < src.agg_obj->size(); i++)
             {
-                core::ConfigVal elem;
-                if (elem_tys[i]->cfg_val(elem, src.agg_obj->operator[](i)))
+                Obj elem;
+                if (elem_tys[i]->xcfg(heap, elem, src.agg_obj->operator[](i)))
                     return true;
-                configs.push_back(elem);
+                cfgs.push_back(std::move(*elem.cfg_obj));
             }
-            val = core::ConfigVal::make_list(configs);
+            return heap.create_obj_cfg(dst, core::Config::make_list(std::move(cfgs)));
+        }
+
+        bool CfgType::cpy(ProgramHeap& heap, Obj& dst, const Obj src)
+        {
+            return heap.create_obj_cfg(dst, *src.cfg_obj);
+        }
+
+        bool CfgType::inst(ProgramHeap& heap, Obj& dst)
+        {
+            return heap.create_obj_cfg(dst, {});  // invalid type and val
+        }
+
+        bool CfgType::set(ProgramHeap& heap, Obj& lhs, const Obj rhs)
+        {
+            *lhs.cfg_obj = *rhs.cfg_obj;  // Copying the core::Config* pointer
             return false;
         }
 
-        bool AggType::cfg_type(core::ConfigType& type)
+        bool CfgType::xcfg(ProgramHeap& heap, Obj& dst, const Obj src)
         {
-            std::vector<core::ConfigType> elem_cfg_types;
-            for (const auto& e : elem_tys)
-            {
-                core::ConfigType elem_cfg_type;
-                if (e->cfg_type(elem_cfg_type))
-                    return true;
-                elem_cfg_types.push_back(std::move(elem_cfg_type));
-            }
-            type = core::ConfigType::make_agg(std::move(elem_cfg_types));
-            return false;
+            return heap.create_obj_cfg(dst, *src.cfg_obj);
         }
     }
 }

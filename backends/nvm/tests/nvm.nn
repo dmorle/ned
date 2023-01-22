@@ -1,0 +1,43 @@
+namespace nvm:
+
+	enum Type:
+		integer:
+			int width
+		float32
+		float64
+		pointer:
+			Type pointee
+
+	struct Value:
+		str name
+		Type ty
+
+	enum Instruction:
+		cint:
+			int val
+		cflt:
+			float val
+		phi:
+			array<tuple<Block, Value>> vals
+		add:
+			Value lhs
+			Value rhs
+		sub:
+			Value lhs
+			Value rhs
+		mul:
+			Value lhs
+			Value rhs
+		div:
+			Value lhs
+			Value rhs
+		br:
+			Value cond
+			Block true_branch
+			Block false_branch
+		jmp:
+			Block dst
+
+	struct Block:
+		str name
+		array<Instruction> instrs

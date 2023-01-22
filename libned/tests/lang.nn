@@ -32,6 +32,12 @@
 #    Node head
 #    int size
 
+fn print(const str msg):
+	:begin
+		dup 0
+		dsp
+		ret
+
 enum Message:
     quit
     move:
@@ -52,7 +58,7 @@ fn msg_str(const Message msg) -> str:
 fn msg_is_quit(const Message msg) -> bool:
     match msg:
         quit:
-            print "I quit!"
+            print("I quit!")
             return true
         else:
             return false
@@ -62,29 +68,33 @@ enum Simp:
     two
     three
 
-fn print_simp(const Simp simp):
+fn __str__(const Simp simp) -> str:
     match simp:
         one:
-            print "one"
+            return "one"
         two:
-            print "two"
+            return "two"
         three:
-            print "three"
-    return void
+            return "three"
+
+fn __cfg__(const Simp simp) -> cfg:
+    return cfg::str::simp
 
 fn get_message() -> array<Message>:
     return [
         Message.quit,
-        Message.move(1, 1)
+        Message.move(1, 1),
+        Message.write("I CAN'T BELIEVE THIS WORKS!!")
     ]
 
 fn main():
     Simp s = Simp.one
-    print_simp(s)
+    print(str::s)
+    cfg::s
 
     ref msgs = get_message()
     for ref msg in msgs:
-        print msg_str(msg)
+        print(msg_str(msg))
 
     return void
 
