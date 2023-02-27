@@ -1,43 +1,509 @@
-namespace nvm:
+print := fn(const str msg):
+    :begin
+        dup 0
+        dsp
+        ret
 
-    enum Type:
+raise := fn(const str msg):
+    :begin
+        dup 0
+        err
+
+len := fn<type T>(array<T> arr) -> int:
+    :begin
+        dup 1
+        dup 3
+        arr
+        len
+        ret
+
+append := fn<T: type>(arr: ref array<T>, t: T) -> void
+    :begin
+        dup 1
+        dup 1
+        app
+        ret
+
+range := fn(int n) -> array<int>:
+    i : mut int = 0
+    result: mut array<int>
+    while i < n:
+        append(result, i)
+        i += 1
+    return result
+
+enumerate := fn<type T>(array<T> arr) -> array<tuple<int, T>>:
+    result : mut array<tuple<int, T>>
+    for i in range(len(arr)):
+        append(result, (i, arr[i]),)
+    return result
+
+zip := fn<type T1, type T2>(arr1: array<T1>, arr2: array<T2>) -> array<tuple<T1, T2>>:
+    result : mut array<tuple<T1, T2>>
+    for i in range(min(len(arr1), len(arr2))):
+        append(result, (arr1[i], arr2[i]),)
+    return result
+
+map := fn<T: type, R: type>(arr: array<T>, key: fn(t: T) -> R, T;, x: int) -> array<R>:
+    ret: mut array<R>
+    for e in arr:
+        append(ret, key(e))
+    return ret
+
+filter := fn<T: type>(arr: array<T>, key: fn(t: T) -> bool;) -> array<T>:
+    ret: mut array<T>
+    for e in arr:
+        if key(e):
+            append(ret, e)
+    return ret
+
+nvm := namespace:
+
+    Type := enum:
         integer:
-            int width
+            width: int
         float32
         float64
-        pointer:
-            Type pointee
+        edge:
+            fp: fty
+            shape: array<int>
 
-    struct Value:
-        str name
-        Type ty
+    Value := struct:
+        name: str
+        ty: Type
 
-    enum Instruction:
-        cint:
-            int val
-        cflt:
-            float val
+    PhiArgs := struct: 
+        arg_ty: Type
+        args: array<tuple<Block, Value>>
+
+    add_arg := fn(args: ref PhiArgs, blk: Block, val: Value):
+        # TODO: check if val matches arg_ty.
+        # To get that done, I prolly need to add in __eq__ overloads in the compiler
+        args += [(blk, val),]
+        return
+
+    ICmpCond := enum:
+        eq
+        ne
+        ugt
+        uge
+        ult
+        ule
+        sgt
+        sge
+        slt
+        sle
+
+    FCmpCond := enum:
+        fls
+        oeq
+        ogt
+        oge
+        olt
+        ole
+        one
+        ord
+        ueq
+        ugt
+        uge
+        ult
+        ule
+        une
+        uno
+        tru
+
+    Instruction := enum:
+        retvoid
         phi:
-            array<tuple<Block, Value>> vals
+            args: ref PhiArgs
+            ret: Value
         add:
-            Value lhs
-            Value rhs
+            lhs: Value
+            rhs: Value
+            ret: Value
         sub:
-            Value lhs
-            Value rhs
+            lhs: Value
+            rhs: Value
+            ret: Value
         mul:
-            Value lhs
-            Value rhs
+            lhs: Value
+            rhs: Value
+            ret: Value
         div:
-            Value lhs
-            Value rhs
+            lhs: Value
+            rhs: Value
+            ret: Value
+        icmp:
+            ICmpCond cond
+            lhs: Value
+            rhs: Value
+            ret: Value
+        fcmp:
+            cond: FCmpCond
+            lhs: Value
+            rhs: Value
+            ret: Value
         br:
-            Value cond
-            Block true_branch
-            Block false_branch
+            cond: Value
+            true_branch: Block
+            false_branch: Block
         jmp:
-            Block dst
+            dst: Block
+        get:  # Load + GEP with edge views
+            edge: Value
+            pos: array<Value>
+            out: Value
+        set:  # GEP + Store with edge views
+            edge: Value
+            pos: array<Value>
+            arg: Value
 
-    struct Block:
+    Block := struct:
         str name
         array<Instruction> instrs
+
+    Edge := struct:
+        fp: fty
+        shape: array<int>
+        val: Value
+
+    Node := struct:
+        blocks: mut array<Block>
+        inps: mut array<Edge>
+        outs: mut array<Edge>
+        const_ints: mut array<tuple<Value, int>>
+        const_flts: mut array<tuple<Value, float>>
+    
+    fty_to_type := fn(const fty fp) -> Type:
+        if fp == f16:
+            raise("Not implemented")
+        if fp == f32:
+            return Type.float32
+        if fp == f64:
+            return Type.float64
+        raise("Unexpected fty value: " + str::fp)
+
+    dereference := fn(ref Type ty) -> Type:
+        match ty:
+            edge:
+                return fty_to_type(fp)
+            else:
+                raise("Unable to dereference type " + str::ty)
+
+    new_node := fn() -> Node:
+        return Node([], [], [], [], [])
+
+    new_inp := fn(node: ref Node, name: str, fp: fty, shape: array<int>) -> Value:
+        val := Value(name, nvm.Type.edge(fp, shape))
+        node.inps += [Edge(fp, shape, val)]
+        return val
+    
+    new_out := fn(node := ref Node, name: str, fp: fty, shape: array<int>) -> Value:
+        val := Value(name, nvm.Type.edge(fp, shape))
+        append(node.outs, (Edge(fp, shape, val),))
+        return val
+
+    new_i1 := fn(node: ref Node, name: str, val: bool) -> Value:
+        ret := Value(name, Type.integer(1))
+        ival : mut = 0
+        if val:
+            ival = 1
+        append(node.const_ints, (ret, ival))
+        return ret
+
+    fn new_i32(ref Node node, const str name, int ival) -> Value:
+        ref ret = Value(name, Type.integer(32))
+        node.const_ints += [(ret, ival),]
+        return ret
+    
+    fn new_f32(ref Node node, const str name, float fval) -> Value:
+        ref ret = Value(name, Type.float32)
+        node.const_flts += [(ret, fval),]
+        return ret
+    
+    fn new_fty(ref Node node, const str name, const fty fp, float fval) -> Value:
+        ret := Value(name, fty_to_type(fp))
+        node.const_flts += [(ret, fval),]
+        return ret
+
+    fn new_block(ref Node node, const str name) -> Block:
+        ref blk = Block(name, [])
+        node.blocks += [blk]
+        return blk
+
+    instr := namespace:
+
+        retvoid := fn(blk: ref Block) -> void:
+            blk.instrs += [Instruction.retvoid]
+            return void
+
+        phi := fn(blk: ref Block, name: str, ty: Type) -> ref PhiArgs, Value:
+            args := PhiArgs([])
+            val := Value(name, ty)
+            append(blk.instrs, Instruction.phi(args, val))
+            return args, val
+
+        fn add(ref Block blk, const str name, const Value lhs, const Value rhs) -> const Value:
+            ref ret = Value(name, lhs.ty)
+            blk.instrs += [Instruction.add(lhs, rhs, ret)]
+            return ret
+        
+        fn icmp(ref Block blk, const str name, ICmpCond cond, const Value lhs, const Value rhs) -> const Value:
+            ret = Value(name, Type.integer(1))
+            blk.instrs += [Instruction.icmp(cond, lhs, rhs, ret)]
+            return ret
+        
+        fn fcmp(ref Block blk, const str name, FCmpCond cond, const Value lhs, const Value rhs) -> const Value:
+            ref ret = Value(name, Type.integer(1))
+            blk.instrs += [Instruction.fcmp(cond, lhs, rhs, ret)]
+            return ret
+
+        fn br(ref Block blk, const Value cond, const Block true_branch, const Block false_branch):
+            blk.instrs += [cond, true_branch, false_branch]
+            return void
+        
+        fn jmp(ref Block blk, const Block dst):
+            blk.instrs += [Instruction.jmp(dst)]
+            return void
+
+        fn get(ref Block blk, const str name, const Value edge, const array<Value> pos) -> const Value:
+            ref out_ty = dereference(edge)
+            ref ret = Value(name, out_ty)
+            blk.instrs += [Instruction.get(edge, pos, ret)]
+            return ret
+    
+        fn set(ref Block blk, const Value edge, const array<Value> pos, const Value arg):
+            blk.instrs += [Instruction.set(edge, pos, arg)]
+            return void
+
+fn __cpy__(const nvm.Type ty) -> nvm.Type:
+    match ty:
+        integer:
+            return nvm.Type.integer(width)
+        float32:
+            return nvm.Type.float32
+        float64:
+            return nvm.Type.float64
+        edge:
+            return nvm.Type.edge(fp, shape)
+
+fn __str__(const nvm.Type ty) -> str:
+    match ty:
+        integer:
+            return "int" + str::width
+        float32:
+            return "float"
+        float64:
+            return "double"
+        edge:
+            return str::fp + "<" + str::shape + ">"
+
+fn __cfg__(const nvm.Type ty) -> cfg:
+    match ty:
+        integer:
+            return cfg::("int", width)
+        float32:
+            return cfg::("float",)
+        float64:
+            return cfg::("double",)
+        edge:
+            return cfg::("edge", fp, shape)
+
+fn __cpy__(const nvm.Value val) -> nvm.Value:
+    return nvm.Value(val.name, val.ty)
+
+fn __str__(const nvm.Value val) -> str:
+    return str::val.ty + " " + val.name
+
+fn __cfg__(const nvm.Value val) -> cfg:
+    return cfg::(cfg::val.name, cfg::val.ty)
+
+fn __cfg__(const nvm.PhiArgs args) -> cfg:
+    array<cfg> cfg_args
+    for const elem in args.args:
+        const blk = elem[0]
+        const val = elem[1]
+        cfg_args += [cfg::(cfg::blk.name, cfg::val),]
+    return cfg::(cfg::args.arg_ty, cfg_args)
+
+fn __cpy__(const nvm.ICmpCond cond) -> nvm.ICmpCond:
+    match cond:
+        eq:
+            return nvm.ICmpCond.eq
+        ne:
+            return nvm.ICmpCond.ne
+        ugt:
+            return nvm.ICmpCond.ugt
+        uge:
+            return nvm.ICmpCond.uge
+        ult:
+            return nvm.ICmpCond.ult
+        ule:
+            return nvm.ICmpCond.ule
+        sgt:
+            return nvm.ICmpCond.sgt
+        sge:
+            return nvm.ICmpCond.sge
+        slt:
+            return nvm.ICmpCond.slt
+        sle:
+            return nvm.ICmpCond.sle
+
+fn __str__(const nvm.ICmpCond cond) -> str:
+    match cond:
+        eq:
+            return "eq"
+        ne:
+            return "ne"
+        ugt:
+            return "ugt"
+        uge:
+            return "uge"
+        ult:
+            return "ult"
+        ule:
+            return "ule"
+        sgt:
+            return "sgt"
+        sge:
+            return "sge"
+        slt:
+            return "slt"
+        sle:
+            return "sle"
+
+fn __cfg__(const nvm.ICmpCond cond) -> cfg:
+    return cfg::str::cond
+
+fn __cpy__(const nvm.FCmpCond cond) -> nvm.FCmpCond:
+    match cond:
+        fls:
+            return nvm.FCmpCond.fls
+        oeq:
+            return nvm.FCmpCond.oeq
+        ogt:
+            return nvm.FCmpCond.ogt
+        oge:
+            return nvm.FCmpCond.oge
+        olt:
+            return nvm.FCmpCond.olt
+        ole:
+            return nvm.FCmpCond.ole
+        one:
+            return nvm.FCmpCond.one
+        ord:
+            return nvm.FCmpCond.ord
+        ueq:
+            return nvm.FCmpCond.ueq
+        ugt:
+            return nvm.FCmpCond.ugt
+        uge:
+            return nvm.FCmpCond.uge
+        ult:
+            return nvm.FCmpCond.ult
+        ule:
+            return nvm.FCmpCond.ule
+        une:
+            return nvm.FCmpCond.une
+        uno:
+            return nvm.FCmpCond.uno
+        tru:
+            return nvm.FCmpCond.tru
+
+fn __str__(const nvm.FCmpCond cond) -> str:
+    match cond:
+        fls:
+            return "fls"
+        oeq:
+            return "oeq"
+        ogt:
+            return "ogt"
+        oge:
+            return "oge"
+        olt:
+            return "olt"
+        ole:
+            return "ole"
+        one:
+            return "one"
+        ord:
+            return "ord"
+        ueq:
+            return "ueq"
+        ugt:
+            return "ugt"
+        uge:
+            return "uge"
+        ult:
+            return "ult"
+        ule:
+            return "ule"
+        une:
+            return "une"
+        uno:
+            return "uno"
+        tru:
+            return "tru"
+
+fn __cfg__(const nvm.FCmpCond cond) -> cfg:
+    return cfg::str::cond
+
+fn __cfg__(const nvm.Instruction ins) -> cfg:
+    match ins:
+        retvoid:
+            return cfg::("retvoid",)
+        phi:
+            return cfg::("phi", cfg::args, cfg::ret)
+        add:
+            return cfg::("add", cfg::lhs, cfg::rhs, cfg::ret)
+        sub:
+            return cfg::("add", cfg::lhs, cfg::rhs, cfg::ret)
+        mul:
+            return cfg::("mul", cfg::lhs, cfg::rhs, cfg::ret)
+        div:
+            return cfg::("div", cfg::lhs, cfg::rhs, cfg::ret)
+        icmp:
+            return cfg::("icmp", cfg::cond, cfg::lhs, cfg::rhs)
+        fcmp:
+            return cfg::("fcmp", cfg::cond, cfg::lhs, cfg::rhs, cfg::ret)
+        br:
+            return cfg::("br", cfg::cond, cfg::true_branch.name, cfg::false_branch.name)
+        jmp:
+            return cfg::("jmp", cfg::dst.name)
+        get:
+            array<cfg> cfg_pos
+            for const val in pos:
+                cfg_pos += [cfg::val]
+            return cfg::("get", cfg::edge, cfg_pos, cfg::out)
+        set:
+            array<cfg> cfg_pos
+            for const val in pos:
+                cfg_pos += [cfg::val]
+            return cfg::("set", cfg::edge, cfg_pos, cfg::arg)
+
+fn __cfg__(const nvm.Block blk) -> cfg:
+    array<cfg> cfg_instrs
+    for const ins in blk.instrs:
+        cfg_instrs += [cfg::ins]
+    return cfg::(blk.name, cfg_instrs)
+
+fn __cfg__(const nvm.Edge edge) -> cfg:
+    return cfg::(edge.fp, edge.shape, cfg::val)
+
+fn __cfg__(const nvm.Node node) -> cfg:
+    array<cfg> cfg_blks
+    for const blk in node.blocks:
+        cfg_blks += [cfg::blk]
+    array<cfg> cfg_inps
+    for const inp in node.inps:
+        cfg_inps += [cfg::inp]
+    array<cfg> cfg_outs
+    for const out in node.outs:
+        cfg_outs += [cfg::out]
+    array<cfg> cfg_cints
+    for const val, cint in node.const_ints:
+        cfg_cints += [cfg::(cfg::val, cint),]
+    array<cfg> cfg_cflts
+    for const val, cflt in node.const_flts:
+        cfg_cflts += [cfg::(cfg::val, cflt),]
+    return cfg::(cfg_blks, cfg_inps, cfg_outs, cfg_cints, cfg_cflts)

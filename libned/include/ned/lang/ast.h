@@ -8,11 +8,15 @@
 #include <memory>
 #include <unordered_map>
 #include <map>
+#include <array>
 
 namespace nn
 {
     namespace lang
     {
+        using PrecTable = std::array<uint8_t, (size_t)TokenType::TOKEN_TYPE_END>;
+        using RtolTable = std::array<bool, 11>;
+
         struct AstNodeInfo
         {
             std::string fname = "";
@@ -23,96 +27,7 @@ namespace nn
         };
 
         struct AstExpr;
-        enum class ExprType
-        {
-            INVALID,
-            VOID,
-            LIT_BOOL,
-            LIT_INT,
-            LIT_FLOAT,
-            LIT_STRING,
-            LIT_ARRAY,
-            LIT_TUPLE,
-            UNARY_POS,
-            UNARY_NEG,
-            UNARY_NOT,
-            UNARY_UNPACK,
-            UNARY_REF,
-            UNARY_CONST,
-            UNARY_FORWARD,
-            UNARY_BACKWARD,
-            BINARY_ADD,
-            BINARY_SUB,
-            BINARY_MUL,
-            BINARY_DIV,
-            BINARY_MOD,
-            BINARY_POW,
-            BINARY_IADD,
-            BINARY_ISUB,
-            BINARY_IMUL,
-            BINARY_IDIV,
-            BINARY_IMOD,
-            BINARY_IPOW,
-            BINARY_ASSIGN,
-            BINARY_AND,
-            BINARY_OR,
-            BINARY_CMP_EQ,
-            BINARY_CMP_NE,
-            BINARY_CMP_GT,
-            BINARY_CMP_LT,
-            BINARY_CMP_GE,
-            BINARY_CMP_LE,
-            BINARY_CAST,
-            INDEX,
-            DOT,
-            VAR_DECL,
-            CARGS_CALL,
-            VARGS_CALL,
-            DEF_DECL,
-            INTR_DECL,
-            FN_DECL,
-            KW,
-            VAR
-        };
-
-        // Code Block signatures
-
-        struct AstArgDecl
-        {
-            AstNodeInfo node_info;
-
-            // for signatures, the type expression will contain the full declaration
-            // and the name will be duplicated into the 
-            bool is_packed = false;
-            std::unique_ptr<AstExpr> type_expr;  // The expression that was used to define the passed type
-            std::string var_name;
-            std::unique_ptr<AstExpr> default_expr;
-        };
-
-        // Top level carg only definition (struct/init)
-        struct AstCargSig
-        {
-            std::string name;
-            std::vector<AstArgDecl> cargs;
-        };
-
-        // Top level function definition (fn)
-        struct AstFnSig
-        {
-            std::string name;
-            std::vector<AstArgDecl> cargs;
-            std::vector<AstArgDecl> vargs;
-            std::vector<AstExpr> rets;
-        };
-
-        // Top level block / intrinsic definition (def/intr)
-        struct AstBlockSig
-        {
-            std::string name;
-            std::vector<AstArgDecl> cargs;
-            std::vector<AstArgDecl> vargs;
-            std::vector<std::string> rets;
-        };
+        struct AstLine;
 
         enum class ExprKW
         {
@@ -125,9 +40,9 @@ namespace nn
             INT,
             FLOAT,
             STR,
+            CFG,
             ARRAY,
             TUPLE,
-            CFG,
             F16,
             F32,
             F64
@@ -184,11 +99,154 @@ namespace nn
             std::vector<AstExpr> args = {};
         };
 
-        struct AstExpr
+        struct AstEnumEntry
         {
             AstNodeInfo node_info;
+            std::string name;
+            std::vector<AstLine> lines;
+        };
 
-            ExprType ty = ExprType::INVALID;
+        struct AstExprEnum
+        {
+            AstCargSig signature;
+            std::vector<AstEnumEntry> entries;
+            // Technically, this is redunant info, but it'll speed up compilation
+            std::unordered_map<std::string, const AstEnumEntry*> entry_map;
+
+            AstExprEnum() {}
+            AstExprEnum(AstExprEnum&& ast_enum) noexcept
+            {
+                // fuck you msvc
+                signature = std::move(ast_enum.signature);
+                entries = std::move(ast_enum.entries);
+                entry_map = std::move(ast_enum.entry_map);
+            }
+        };
+
+        struct AstExprNamespace
+        {
+            std::vector<AstExpr> lines;
+        };
+
+        // Carg only definition (struct/enum/init)
+        struct AstCargSig
+        {
+            std::vector<AstExpr> cargs;
+        };
+
+        // Function definition (fn)
+        struct AstFnSig
+        {
+            std::vector<AstExpr> cargs;
+            std::vector<AstExpr> vargs;
+            std::vector<AstExpr> rets;
+        };
+
+        // Block / intrinsic definition (def/intr)
+        struct AstBlockSig
+        {
+            std::vector<AstExpr> cargs;
+            std::vector<AstExpr> vargs;
+            std::vector<std::string> rets;
+        };
+
+        struct AstExprStruct
+        {
+            AstCargSig signature;
+            std::vector<AstExpr> body;
+        };
+
+        struct AstExprBlock
+        {
+            AstBlockSig signature;
+            bool is_bytecode;
+            std::vector<AstExpr> body;
+            TokenArray tarr = {};
+        };
+
+        struct AstExprFn
+        {
+            AstFnSig signature;
+            bool is_bytecode;
+            std::vector<AstExpr> body;
+            TokenArray tarr = {};
+        };
+
+        struct AstExprInit
+        {
+            AstCargSig signature;
+            bool is_bytecode;
+            std::vector<AstExpr> body;
+            TokenArray tarr = {};
+        };
+
+        struct AstExprImport
+        {
+            std::vector<std::string> imp;
+        };
+
+        struct AstExpr
+        {
+            enum class Type
+            {
+                INVALID,
+                EMPTY,
+                KW,
+                VAR,
+                LIT_BOOL,
+                LIT_INT,
+                LIT_FLOAT,
+                LIT_STRING,
+                LIT_ARRAY,
+                LIT_TUPLE,
+                UNARY_POS,
+                UNARY_NEG,
+                UNARY_NOT,
+                UNARY_UNPACK,
+                UNARY_MUT,
+                UNARY_REF,
+                BINARY_ADD,
+                BINARY_SUB,
+                BINARY_MUL,
+                BINARY_DIV,
+                BINARY_MOD,
+                BINARY_POW,
+                BINARY_IADD,
+                BINARY_ISUB,
+                BINARY_IMUL,
+                BINARY_IDIV,
+                BINARY_IMOD,
+                BINARY_IPOW,
+                BINARY_ASSIGN,
+                BINARY_AND,
+                BINARY_OR,
+                BINARY_CMP_EQ,
+                BINARY_CMP_NE,
+                BINARY_CMP_GT,
+                BINARY_CMP_LT,
+                BINARY_CMP_GE,
+                BINARY_CMP_LE,
+                BINARY_CAST,
+                BINARY_DECL,
+                INDEX,
+                DOT,
+                CALL_CARGS,
+                CALL_VARGS,
+                DEFN_NAMESPACE,
+                DEFN_ENUM,
+                DEFN_STRUCT,
+                DEFN_DEF,
+                DEFN_INTR,
+                DEFN_FN,
+                DEFN_INIT,
+                DECL_DEF,
+                DECL_INTR,
+                DECL_FN,
+                DECL_INIT,
+                IMPORT,
+            } ty = Type::INVALID;
+            AstNodeInfo node_info;
+
             union
             {
                 bool             expr_bool;
@@ -202,17 +260,25 @@ namespace nn
                 AstExprIndex     expr_index;
                 AstExprName      expr_name;
                 AstExprCall      expr_call;
+                AstExprNamespace expr_namespace;
+                AstExprEnum      expr_enum;
+                AstExprStruct    expr_struct;
+                AstExprBlock     expr_block;
+                AstExprFn        expr_fn;
+                AstExprInit      expr_init;
+                AstBlockSig      expr_block_decl;
                 AstFnSig         expr_fn_decl;
-                AstBlockSig      expr_blk_decl;
+                AstCargSig       expr_init_decl;
+                AstExprImport    expr_import;
             };
 
             AstExpr();
-            AstExpr(AstExpr&&);
-            AstExpr& operator=(AstExpr&&) noexcept;
+            AstExpr(AstExpr&& expr) noexcept;             // results in expr.ty <- Type::INVALID
+            AstExpr& operator=(AstExpr&& expr) noexcept;  // results in expr.ty <- Type::INVALID
             ~AstExpr();
 
         private:
-            void do_move(AstExpr&& line) noexcept;
+            void reset() noexcept;
         };
 
         struct AstLine;
@@ -223,16 +289,16 @@ namespace nn
             CONTINUE,
             EXPORT,
             EXTERN,
-            INTRINFO,
+            CFGINFO,
             RETURN,
             MATCH,
             IF,
             ELIF,
-            ELSE,
             WHILE,
+            ELSE,
+            EVALMODE,
             FOR,
             EXPR,
-            EVALMODE
         };
 
         struct AstMatchElem
@@ -261,7 +327,8 @@ namespace nn
             AstExpr expr;
         };
 
-        struct AstLineIntrInfo
+        // __add_cfg_info statement
+        struct AstLineCfgInfo
         {
             AstExpr name_expr;
             AstExpr cfg_expr;
@@ -281,16 +348,16 @@ namespace nn
             std::vector<AstLine> body;
         };
 
+        // else statement
+        struct AstLineBlock
+        {
+            std::vector<AstLine> body;
+        };
+
         // eval mode labeled block
         struct AstLineLabel
         {
             std::string label;
-            std::vector<AstLine> body;
-        };
-
-        // else / forward / backward statement
-        struct AstLineBlock
-        {
             std::vector<AstLine> body;
         };
 
@@ -320,13 +387,13 @@ namespace nn
                 AstLineExport     line_export;
                 AstLineExtern     line_extern;
                 AstLineUnaryFunc  line_func;
-                AstLineIntrInfo   line_intrinfo;
+                AstLineCfgInfo    line_cfginfo;
                 AstLineMatch      line_match;
                 AstLineBranch     line_branch;
                 AstLineBlock      line_block;
+                AstLineLabel      line_label;
                 AstLineFor        line_for;
                 AstLineExpr       line_expr;
-                AstLineLabel      line_label;
             };
 
             AstLine();
@@ -338,111 +405,196 @@ namespace nn
             void do_move(AstLine&& line) noexcept;
         };
 
-        template<typename T>
-        concept CodeBlockSig =
-            std::is_same<T, AstCargSig> ::value ||
-            std::is_same<T, AstFnSig>   ::value ||
-            std::is_same<T, AstBlockSig>::value ;
-
-        // Top level block of code - contains a signature and body
-        template<CodeBlockSig SIG>
-        struct AstCodeBlock
-        {
-            SIG signature;
-            AstNodeInfo node_info;
-            
-            bool is_bytecode;
-            std::vector<AstLine> body;
-            std::unique_ptr<TokenArray> tarr = nullptr;
-        };
-
-        using AstStruct = AstCodeBlock<AstCargSig >;
-        using AstFn     = AstCodeBlock<AstFnSig   >;
-        using AstBlock  = AstCodeBlock<AstBlockSig>;
-
-        struct AstEnumEntry
-        {
-            AstNodeInfo node_info;
-            std::string name;
-            std::vector<AstLine> lines;
-        };
-
-        struct AstEnum
-        {
-            AstNodeInfo node_info;
-            AstCargSig signature;
-            std::vector<AstEnumEntry> entries;
-            // Technically, this is redunant info, but it'll speed up compilation
-            std::unordered_map<std::string, const AstEnumEntry*> entry_map;
-
-            AstEnum() {}
-            AstEnum(AstEnum&& ast_enum) noexcept
-            {
-                // fuck you msvc
-                node_info = std::move(ast_enum.node_info);
-                signature = std::move(ast_enum.signature);
-                entries   = std::move(ast_enum.entries  );
-                entry_map = std::move(ast_enum.entry_map);
-            }
-        };
-
-        struct AstImport
-        {
-            AstNodeInfo node_info;
-            std::vector<std::string> imp;
-        };
-
-        struct AstInit
-        {
-            AstNodeInfo node_info;
-            AstCargSig signature;
-        };
-
-        struct AstNamespace
-        {
-            std::string name;
-            std::vector<AstNamespace> namespaces;
-            std::vector<AstStruct>    structs;
-            std::vector<AstEnum>      enums;
-            std::vector<AstFn>        funcs;
-            std::vector<AstBlock>     defs;
-            std::vector<AstBlock>     intrs;
-            std::vector<AstInit>      inits;
-        };
-
         struct AstModule
         {
             std::string fname;
-            std::vector<AstImport>    imports;
-            std::vector<AstNamespace> namespaces;
-            std::vector<AstStruct>    structs;
-            std::vector<AstEnum>      enums;
-            std::vector<AstFn>        funcs;
-            std::vector<AstBlock>     defs;
-            std::vector<AstBlock>     intrs;
-            std::vector<AstInit>      inits;
+            std::vector<AstExpr> lines;
         };
+
+        /*
+        *
+        * | Precedence |   Operators   | Associativity |
+        * | ---------- | ------------- | ------------- |
+        * | 11.        | expr()        | left-to-right |
+        * |            | expr<>        |               |
+        * |            | expr[]        |               |
+        * |            | expr.idn      |               |
+        * | ---------- | ------------- | ------------- |
+        * | 10.        | namespace     | n/a           |
+        * |            | struct        |               |
+        * |            | enum          |               |
+        * |            | def           |               |
+        * |            | intr          |               |
+        * |            | fn            |               |
+        * |            | init          |               |
+        * |            | import        |               |
+        * |            | + (unary)     |               |
+        * |            | - (unary)     |               |
+        * |            | * (unary)     |               |
+        * |            | not           |               |
+        * |            | mut           |               |
+        * |            | ref           |               |
+        * | ---------- | ------------- | ------------- |
+        * | 9.         | ::            | right-to-left |
+        * | ---------- | ------------- | ------------- |
+        * | 8.         | :             | right-to-left |
+        * | ---------- | ------------- | ------------- |
+        * | 7.         | ^             | left-to-right |
+        * | ---------- | ------------- | ------------- |
+        * | 6.         | *             | left-to-right |
+        * |            | /             |               |
+        * |            | %             |               |
+        * | ---------- | ------------- | ------------- |
+        * | 5.         | +             | left-to-right |
+        * |            | -             |               |
+        * | ---------- | ------------- | ------------- |
+        * | 4.         | ==            | left-to-right |
+        * |            | !=            |               |
+        * |            | <             |               |
+        * |            | >             |               |
+        * |            | <=            |               |
+        * |            | >=            |               |
+        * | ---------- | ------------- | ------------- |
+        * | 3.         | and           | left-to-right |
+        * |            | or            |               |
+        * | ---------- | ------------- | ------------- |
+        * | 2.         | ,             | n/a           |
+        * | ---------- | ------------- | ------------- |
+        * | 1.         | =             | right-to-left |
+        * |            | +=            |               |
+        * |            | -=            |               |
+        * |            | *=            |               |
+        * |            | /=            |               |
+        * |            | %=            |               |
+        * |            | ^=            |               |
+        *
+        */
+
+        constexpr auto default_prec_table = []() {
+            PrecTable ret = {};
+
+            ret[(size_t)TokenType::KW_NAMESPACE] = 10;
+            ret[(size_t)TokenType::KW_STRUCT   ] = 10;
+            ret[(size_t)TokenType::KW_ENUM     ] = 10;
+            ret[(size_t)TokenType::KW_DEF      ] = 10;
+            ret[(size_t)TokenType::KW_INTR     ] = 10;
+            ret[(size_t)TokenType::KW_FN       ] = 10;
+            ret[(size_t)TokenType::KW_INIT     ] = 10;
+            ret[(size_t)TokenType::KW_IMPORT   ] = 10;
+            ret[(size_t)TokenType::CAST        ] = 9;
+            ret[(size_t)TokenType::COLON       ] = 8;
+            ret[(size_t)TokenType::POW         ] = 7;
+            ret[(size_t)TokenType::STAR        ] = 6;
+            ret[(size_t)TokenType::DIV         ] = 6;
+            ret[(size_t)TokenType::MOD         ] = 6;
+            ret[(size_t)TokenType::ADD         ] = 5;
+            ret[(size_t)TokenType::SUB         ] = 5;
+            ret[(size_t)TokenType::CMP_EQ      ] = 4;
+            ret[(size_t)TokenType::CMP_NE      ] = 4;
+            ret[(size_t)TokenType::CMP_GT      ] = 4;
+            ret[(size_t)TokenType::CMP_LT      ] = 4;
+            ret[(size_t)TokenType::CMP_GE      ] = 4;
+            ret[(size_t)TokenType::CMP_LE      ] = 4;
+            ret[(size_t)TokenType::KW_AND      ] = 3;
+            ret[(size_t)TokenType::KW_OR       ] = 3;
+            ret[(size_t)TokenType::COMMA       ] = 2;
+            ret[(size_t)TokenType::ASSIGN      ] = 1;
+            ret[(size_t)TokenType::IADD        ] = 1;
+            ret[(size_t)TokenType::ISUB        ] = 1;
+            ret[(size_t)TokenType::IMUL        ] = 1;
+            ret[(size_t)TokenType::IDIV        ] = 1;
+            ret[(size_t)TokenType::IMOD        ] = 1;
+            ret[(size_t)TokenType::IPOW        ] = 1;
+
+
+            return ret;
+        }();
+
+        constexpr auto args_prec_table = []() {
+            PrecTable ret = {};
+
+            ret[(size_t)TokenType::KW_NAMESPACE] = 10;
+            ret[(size_t)TokenType::KW_STRUCT   ] = 10;
+            ret[(size_t)TokenType::KW_ENUM     ] = 10;
+            ret[(size_t)TokenType::KW_DEF      ] = 10;
+            ret[(size_t)TokenType::KW_INTR     ] = 10;
+            ret[(size_t)TokenType::KW_FN       ] = 10;
+            ret[(size_t)TokenType::KW_INIT     ] = 10;
+            ret[(size_t)TokenType::KW_IMPORT   ] = 10;
+            ret[(size_t)TokenType::CAST        ] = 9;
+            ret[(size_t)TokenType::COLON       ] = 8;
+            ret[(size_t)TokenType::POW         ] = 7;
+            ret[(size_t)TokenType::STAR        ] = 6;
+            ret[(size_t)TokenType::DIV         ] = 6;
+            ret[(size_t)TokenType::MOD         ] = 6;
+            ret[(size_t)TokenType::ADD         ] = 5;
+            ret[(size_t)TokenType::SUB         ] = 5;
+            ret[(size_t)TokenType::CMP_EQ      ] = 4;
+            ret[(size_t)TokenType::CMP_NE      ] = 4;
+            ret[(size_t)TokenType::CMP_GT      ] = 4;
+            ret[(size_t)TokenType::CMP_LT      ] = 4;
+            ret[(size_t)TokenType::CMP_GE      ] = 4;
+            ret[(size_t)TokenType::CMP_LE      ] = 4;
+            ret[(size_t)TokenType::KW_AND      ] = 3;
+            ret[(size_t)TokenType::KW_OR       ] = 3;
+            ret[(size_t)TokenType::ASSIGN      ] = 2;
+            ret[(size_t)TokenType::IADD        ] = 2;
+            ret[(size_t)TokenType::ISUB        ] = 2;
+            ret[(size_t)TokenType::IMUL        ] = 2;
+            ret[(size_t)TokenType::IDIV        ] = 2;
+            ret[(size_t)TokenType::IMOD        ] = 2;
+            ret[(size_t)TokenType::IPOW        ] = 2;
+            ret[(size_t)TokenType::COMMA       ] = 1;
+
+            return ret;
+        }();
+
+        constexpr RtolTable default_rtol_table = []() {
+            RtolTable ret = {};
+
+            ret[(size_t)11 - 1] = false ;
+            ret[(size_t) 9 - 1] = true  ;
+            ret[(size_t) 8 - 1] = true  ;
+            ret[(size_t) 7 - 1] = false ;
+            ret[(size_t) 6 - 1] = false ;
+            ret[(size_t) 5 - 1] = false ;
+            ret[(size_t) 4 - 1] = false ;
+            ret[(size_t) 3 - 1] = false ;
+            ret[(size_t) 1 - 1] = true  ;
+
+            return ret;
+        }();
+
+        constexpr auto args_rtol_table = []() {
+            RtolTable ret = {};
+
+            ret[(size_t)11 - 1] = false ;
+            ret[(size_t) 9 - 1] = true  ;
+            ret[(size_t) 8 - 1] = true  ;
+            ret[(size_t) 7 - 1] = false ;
+            ret[(size_t) 6 - 1] = false ;
+            ret[(size_t) 5 - 1] = false ;
+            ret[(size_t) 4 - 1] = false ;
+            ret[(size_t) 3 - 1] = false ;
+            ret[(size_t) 2 - 1] = true  ;
+
+            return ret;
+        }();
 
         // parse_* functions return true on failure, false on success
 
-        bool parse_expr       (const TokenArray& tarr, AstExpr&);
-
         bool parse_match_elem (const TokenArray& tarr, AstMatchElem&, int indent_level);
-        bool parse_line       (const TokenArray& tarr, AstLine&, int indent_level);
 
-        bool parse_arg_decl   (const TokenArray& tarr, AstArgDecl&);
+        bool parse_signature  (const TokenArray& tarr, AstCargSig  & sig, int indent_level);
+        bool parse_signature  (const TokenArray& tarr, AstBlockSig & sig, int indent_level);
+        bool parse_signature  (const TokenArray& tarr, AstFnSig    & sig, int indent_level);
 
-        template<CodeBlockSig SIG> bool parse_signature  (const TokenArray& tarr, SIG& sig);
-        template<CodeBlockSig SIG> bool parse_code_block (const TokenArray& tarr, AstCodeBlock<SIG>&, int indent_level);
-        
-        bool parse_enum       (const TokenArray& tarr, AstEnum& ast_enum, int indent_level);
-        bool parse_init       (const TokenArray& tarr, AstInit& ast_init);
-        bool parse_import     (const TokenArray& tarr, AstImport& ast_import);
-
-        bool parse_namespace  (const TokenArray& tarr, AstNamespace&, int indent_level);
-        bool parse_import     (const TokenArray& tarr, AstImport&);
-        bool parse_init       (const TokenArray& tarr, AstInit&);
-        bool parse_module     (const TokenArray& tarr, AstModule&);
+        bool parse_line       (const TokenArray& tarr, AstLine& ast_line, int indent_level);
+        template<PrecTable prec_table, RtolTable rtol_table>
+        int  parse_subexpr    (const TokenArray& tarr, AstExpr& ast_expr, int indent_level, int prec);
+        template<PrecTable prec_table = default_prec_table, RtolTable rtol_table = default_rtol_table>
+        bool parse_expr       (const TokenArray& tarr, AstExpr& ast_expr, int indent_level);
+        bool parse_module     (const TokenArray& tarr, AstModule& ast_module);
     }
 }
 

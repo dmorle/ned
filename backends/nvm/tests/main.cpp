@@ -57,7 +57,7 @@ bool generate_graph(core::Graph& graph, std::function<bool(ModuleInfo&)> setup)
     ProgramHeap heap;
     ByteCodeModule bc{ heap };
     ModuleInfo info;
-    if (codegen_module(bc, info, ast, {}))
+    if (codegen_module(bc, info, ast, { TESTS_DIR }))
         return true;
 
     TypeManager manager{};
@@ -302,7 +302,7 @@ bool optimizer_test()
 
 int main()
 {
-    if (linear_test())
+    if (vecadd_test())
     {
         error::print();
         return 1;

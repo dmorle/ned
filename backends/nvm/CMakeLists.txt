@@ -4,11 +4,11 @@ include_directories("include")
 
 add_library(
     libnvm STATIC
-    "source/common.cpp"
+    "source/nodegen.cpp"
     "source/graphgen.cpp"
     "source/runtime.cpp"
 
-    "include/nvm/common.h"
+    "include/nvm/nodegen.h"
     "include/nvm/graphgen.h"
     "include/nvm/runtime.h"
 )
@@ -146,14 +146,6 @@ target_link_libraries(libnvm_tests PRIVATE libnvm)
 
 set_property(TARGET libnvm_tests PROPERTY LINKER_LANGUAGE CXX)
 set_property(TARGET libnvm_tests PROPERTY CXX_STANDARD 20)
-
-add_subdirectory("extensions")
-
-set(nvmexts "basic")
-
-foreach (extname ${nvmexts})
-    add_dependencies(libnvm_tests "nvmext_${extname}")
-endforeach ()
 
 add_executable(
     playground

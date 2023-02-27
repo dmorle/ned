@@ -31,6 +31,7 @@ namespace nn
             ELLIPSES, // ...
             ARROW,    // ->
             COLON,    // :
+            SIGDECL,  // ;
             CAST,     // ::
             COMMA,
             MODE,     // !
@@ -86,21 +87,22 @@ namespace nn
             KW_TUPLE,
             KW_CFG,
             KW_REF,
-            KW_CONST,
+            KW_MUT,
             KW_NULL,
             KW_TRUE,
             KW_FALSE,
             KW_EXPORT,
             KW_EXTERN,
-            KW_FORWARD,
-            KW_BACKWARD,
             KW_F16,
             KW_F32,
             KW_F64,
             KW_AND,
             KW_OR,
             KW_NOT,
-            KW_ADD_INTR_INFO,
+            KW_ADD_CFG_INFO,
+
+            // Special last token type for knowing the number of token types at compile time
+            TOKEN_TYPE_END
         };
 
         class Token;
@@ -143,6 +145,21 @@ namespace nn
                 Token(fname, sizeof(TokenImp<T>), line_num, col_num)
             {
                 ty = T;
+            }
+        };
+
+        template<>
+        class TokenImp<TokenType::INDENT> :
+            public Token
+        {
+        public:
+            uint8_t nind;  // Number of indent levels
+
+            TokenImp(const char* fname, uint32_t line_num, uint32_t col_num) :
+                Token(fname, sizeof(decltype(*this)), line_num, col_num)
+            {
+                ty = TokenType::INDENT;
+                nind = 0;
             }
         };
 
@@ -256,16 +273,22 @@ namespace nn
 
         class TokenArray
         {
+            TokenArray(
+                bool is_slice, size_t mem_sz, size_t rawlen, uint8_t* pbuf,
+                size_t off_cap, size_t off_pos, size_t off_len, size_t* offsets);
+
         public:
             TokenArray(size_t mem_sz=512, size_t off_cap=16);
             TokenArray(const TokenArray& base, int start = 0);  // slice constructor
             TokenArray(const TokenArray& base, int start, int end);  // slice constructor
             ~TokenArray();
 
+            // Cause of slices, the only way to copy a token array is via the copy assignment operator
             TokenArray(TokenArray&&) noexcept;
             TokenArray(const TokenArray&) = delete;
             TokenArray& operator=(TokenArray&&) noexcept;
             TokenArray& operator=(const TokenArray&) = delete;
+            TokenArray copy() const;
             
             TokenArrayIterator begin();
             TokenArrayIterator end();
@@ -277,7 +300,6 @@ namespace nn
             template<TokenType T>
             void push_back(const TokenImp<T>& tk)
             {
-                sizeof(Token);
                 constexpr size_t nsz = sizeof(TokenImp<T>);
                 if (is_slice)
                     throw std::runtime_error("TokenArray slices are immutable");
@@ -290,6 +312,7 @@ namespace nn
                         throw std::bad_alloc();
                     pbuf = (uint8_t*)tmp;
                 }
+                std::memcpy(pbuf + rawlen, &tk, nsz);
                 off_len++;
                 if (off_len == off_cap)
                 {
@@ -299,9 +322,8 @@ namespace nn
                         throw std::bad_alloc();
                     offsets = (size_t*)tmp;
                 }
-                offsets[off_len - 1] = rawlen;
-                std::memcpy(pbuf + rawlen, &tk, nsz);
                 rawlen += nsz;
+                offsets[off_len] = rawlen;
             }
 
             std::string to_string() const noexcept;
@@ -315,7 +337,7 @@ namespace nn
             {
                 // A bit better cache utilization than rfind
                 int idx = start;
-                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
+                const Token* pstart = (*this)[start];
                 while (idx < size())
                 {
                     int ret = sc.accept(pstart, idx);
@@ -335,7 +357,7 @@ namespace nn
                 if (end < 0)
                     end += size();
                 int idx = start;
-                const Token* pstart = reinterpret_cast<const Token*>(this->pbuf + this->offsets[start]);
+                const Token* pstart = (*this)[start];
                 while (idx < end)
                 {
                     int ret = sc.accept(pstart, idx);
@@ -358,7 +380,7 @@ namespace nn
                     start += size();
                 for (int i = start; i >= end; i--)
                 {
-                    int ret = sc.accept(reinterpret_cast<const Token*>(this->pbuf + this->offsets[i]), i);
+                    int ret = sc.accept((*this)[i], i);
                     if (ret >= 0)
                         return ret;
                 }
@@ -373,6 +395,7 @@ namespace nn
             uint8_t* pbuf = nullptr;
             
             size_t off_cap = 0;
+            size_t off_pos = 0;
             size_t off_len = 0;
             size_t* offsets = nullptr;
         };
@@ -419,32 +442,6 @@ namespace nn
         };
 
         /*
-        * Finds the position of the line end after a colon which indicates the start of a block
-        * 
-        * Ex.
-        *   def add<>():
-        *       return
-        * Given the TokenArray as follows:
-        *   def
-        *   add
-        *   <
-        *   >
-        *   (
-        *   )
-        *   :
-        *   endl  <- The criteria will return the position of this token
-        *   tab
-        *   return
-        *   endl
-        */
-        class BlockStartCriteria :
-            public BracketCounter
-        {
-        public:
-            int accept(const Token* ptk, int idx);
-        };
-
-        /*
         * Finds the position of the line end after the last non-whitespace token in the line
         * 
         * Ex1.
@@ -484,9 +481,7 @@ namespace nn
             public BracketCounter
         {
             int target_ilv;
-            int current_ilv = 0;
             int last_endl = -1;
-            bool in_line = false;
 
         public:
             LineEndCriteria(int indent_level);

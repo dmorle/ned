@@ -37,6 +37,16 @@ inline bool is_idnchar(char c)
     return is_numeric(c) || is_idnstart(c);
 }
 
+inline bool is_whitespace(char c)  // Not counting newline characters as whitespace here
+{
+    return
+        c == ' ' ||
+        c == '\t' ||
+        c == '\r' ||
+        c == '\v' ||
+        c == '\f';
+}
+
 namespace nn
 {
     namespace lang
@@ -48,7 +58,7 @@ namespace nn
             case TokenType::INVALID:
                 return "INVALID TOKEN - LEXER BUG";
             case TokenType::INDENT:
-                return "indent '\\t'";
+                return "indent sequence '\\t'";
             case TokenType::ENDL:
                 return "end of line '\\n'";
             case TokenType::ANGLE_O:
@@ -71,6 +81,8 @@ namespace nn
                 return "arrow token '->'";
             case TokenType::COLON:
                 return "colon character ':'";
+            case TokenType::SIGDECL:
+                return "sig decl character ';'";
             case TokenType::COMMA:
                 return "comma character ','";
             case TokenType::MODE:
@@ -173,8 +185,8 @@ namespace nn
                 return "keyword cfg";
             case TokenType::KW_REF:
                 return "keyword ref";
-            case TokenType::KW_CONST:
-                return "keyword const";
+            case TokenType::KW_MUT:
+                return "keyword mut";
             case TokenType::KW_TRUE:
                 return "keyword true";
             case TokenType::KW_FALSE:
@@ -183,10 +195,6 @@ namespace nn
                 return "keyword export";
             case TokenType::KW_EXTERN:
                 return "keyword extern";
-            case TokenType::KW_FORWARD:
-                return "keyword forward";
-            case TokenType::KW_BACKWARD:
-                return "keyword backward";
             case TokenType::KW_F16:
                 return "keyword f16";
             case TokenType::KW_F32:
@@ -199,8 +207,8 @@ namespace nn
                 return "keyword or";
             case TokenType::KW_NOT:
                 return "keyword not";
-            case TokenType::KW_ADD_INTR_INFO:
-                return "keyword __add_intr_info";
+            case TokenType::KW_ADD_CFG_INFO:
+                return "keyword __add_cfg_info";
             default:
                 return "UNKNOWN TOKEN - LEXER BUG";
             }
@@ -213,7 +221,12 @@ namespace nn
             case TokenType::INVALID:
                 return "\nINVALID\n";
             case TokenType::INDENT:
-                return "    ";
+            {
+                std::stringstream ss;
+                for (size_t i = 0; i < ptk->get<TokenType::INDENT>().nind; i++)
+                    ss << "    ";
+                return ss.str();
+            }
             case TokenType::ENDL:
                 return "\n";
             case TokenType::ANGLE_O:
@@ -236,6 +249,8 @@ namespace nn
                 return " -> ";
             case TokenType::COLON:
                 return ":";
+            case TokenType::SIGDECL:
+                return ";";
             case TokenType::COMMA:
                 return ", ";
             case TokenType::MODE:
@@ -338,8 +353,8 @@ namespace nn
                 return "cfg ";
             case TokenType::KW_REF:
                 return "ref ";
-            case TokenType::KW_CONST:
-                return "const ";
+            case TokenType::KW_MUT:
+                return "mut ";
             case TokenType::KW_TRUE:
                 return "true ";
             case TokenType::KW_FALSE:
@@ -348,10 +363,6 @@ namespace nn
                 return "export ";
             case TokenType::KW_EXTERN:
                 return "extern ";
-            case TokenType::KW_FORWARD:
-                return "forward";
-            case TokenType::KW_BACKWARD:
-                return "backward";
             case TokenType::KW_F16:
                 return "f16 ";
             case TokenType::KW_F32:
@@ -364,83 +375,90 @@ namespace nn
                 return " or ";
             case TokenType::KW_NOT:
                 return " not ";
-            case TokenType::KW_ADD_INTR_INFO:
-                return "__add_intr_info";
+            case TokenType::KW_ADD_CFG_INFO:
+                return "__add_cfg_info";
             default:
                 return "unknown";
             }
         }
 
+        TokenArray::TokenArray(
+            bool is_slice, size_t mem_sz, size_t rawlen, uint8_t* pbuf,
+            size_t off_cap, size_t off_pos, size_t off_len, size_t* offsets)
+        {
+            this->is_slice = is_slice;
+            this->mem_sz = mem_sz;
+            this->rawlen = rawlen;
+            this->pbuf = pbuf;
+            this->off_cap = off_cap;
+            this->off_pos = off_pos;
+            this->off_len = off_len;
+            this->offsets = offsets;
+        }
+
         TokenArray::TokenArray(size_t mem_sz, size_t off_cap)
         {
-            this->is_slice = false;
+            is_slice = false;
 
             this->mem_sz = mem_sz;
-            this->rawlen = 0;
-            this->pbuf = (uint8_t*)std::malloc(mem_sz);
-            if (!this->pbuf)
+            rawlen = 0;
+            pbuf = (uint8_t*)std::malloc(mem_sz);
+            if (!pbuf)
                 throw std::bad_alloc();
 
             this->off_cap = off_cap;
-            this->off_len = 0;
-            this->offsets = (size_t*)std::malloc(sizeof(size_t) * off_cap);
-            if (!this->offsets)
+            offsets = (size_t*)std::malloc(sizeof(size_t) * off_cap);
+            if (!offsets)
+            {
+                std::free(pbuf);
+                pbuf = nullptr;
                 throw std::bad_alloc();
+            }
+            offsets[0] = 0;
+            off_len = 0;
         }
 
         TokenArray::TokenArray(const TokenArray& base, int start)
         {
-            size_t base_offset = base.offsets[start];
-            size_t base_buflen = ((Token*)(base.pbuf + base.offsets[base.size() - 1]))->sz + base.offsets[base.size() - 1];
+            is_slice = true;
 
-            this->is_slice = true;
+            mem_sz = 0;
+            rawlen = 0;
+            pbuf = base.pbuf;
 
-            int end = (int)base.size();
-            this->mem_sz = 0;
-            this->rawlen = base_buflen - base_offset;
-            this->pbuf = base.pbuf + base_offset;
-
-            this->off_cap = 0;
-            this->off_len = base.size() - start;
-            this->offsets = (size_t*)std::malloc(sizeof(size_t) * this->off_len);
-            if (!this->offsets)
-                throw std::bad_alloc();
-
-            for (int i = 0; i < this->off_len; i++)
-                this->offsets[i] = base.offsets[start + i] - base_offset;
+            off_cap = 0;
+            off_pos = start + base.off_pos;
+            off_len = base.off_len;
+            offsets = base.offsets;
         }
 
         TokenArray::TokenArray(const TokenArray& base, int start, int end)
         {
+            is_slice = true;
+
+            mem_sz = 0;
+            rawlen = 0;
+            pbuf = base.pbuf;
+
+            off_cap = 0;
+            off_pos = start + base.off_pos;
             if (end < 0)
-                end += (int)base.size();
-
-            size_t base_offset = base.offsets[start];
-            
-            this->is_slice = true;
-
-            this->mem_sz = 0;
-            this->rawlen = base.offsets[end] - base_offset;
-            this->pbuf = base.pbuf + base_offset;
-
-            this->off_cap = 0;
-            this->off_len = (size_t)end - start;
-            this->offsets = (size_t*)std::malloc(sizeof(size_t) * this->off_len);
-            if (!this->offsets)
-                throw std::bad_alloc();
-
-            for (int i = 0; i < this->off_len; i++)
-                this->offsets[i] = base.offsets[(size_t)start + i] - base_offset;
+                off_len = base.off_len + end;
+            else
+                off_len = base.off_pos + end;
+            offsets = base.offsets;
         }
 
         TokenArray::~TokenArray()
         {
             // TODO: call release on each of the individual tokens
             if (!is_slice)
-                std::free(pbuf);
-
-            // offsets are always dynamically allocated
-            std::free(offsets);
+            {
+                if (pbuf)
+                    std::free(pbuf);
+                if (offsets)
+                    std::free(offsets);
+            }
         }
 
         TokenArray::TokenArray(TokenArray&& tarr) noexcept
@@ -448,60 +466,75 @@ namespace nn
             is_slice = tarr.is_slice;
             mem_sz = tarr.mem_sz;
             pbuf = tarr.pbuf;
-            offsets = std::move(tarr.offsets);
+            off_cap = tarr.off_cap;
+            off_pos = tarr.off_pos;
+            off_len = tarr.off_len;
+            offsets = tarr.offsets;
             tarr.pbuf = nullptr;
+            tarr.offsets = nullptr;
         }
-        
+
         TokenArray& TokenArray::operator=(TokenArray&& tarr) noexcept
         {
             if (this == &tarr)
                 return *this;
-
-            std::free(pbuf);
-
-            is_slice = tarr.is_slice;
-            mem_sz = tarr.mem_sz;
-            pbuf = tarr.pbuf;
-            offsets = std::move(tarr.offsets);
-
-            tarr.pbuf = nullptr;
+            this->~TokenArray();
+            new (this)TokenArray(std::move(tarr));
             return *this;
+        }
+
+        TokenArray TokenArray::copy() const
+        {
+            const Token* tk = (*this)[off_len - 1];
+            size_t end = (size_t)tk + tk->sz;
+            size_t start = (size_t)(pbuf + offsets[off_pos]);
+            size_t buf_sz = end - start;
+            uint8_t* new_pbuf = (uint8_t*)std::malloc(buf_sz);
+            if (!new_pbuf)
+                throw std::bad_alloc();
+
+            size_t off_sz = size();
+            size_t* new_offsets = (size_t*)std::malloc(sizeof(size_t) * off_sz);
+            if (!new_offsets)
+            {
+                std::free(new_pbuf);
+                new_pbuf = nullptr;
+                throw std::bad_alloc();
+            }
+
+            memcpy(new_pbuf, (void*)start, buf_sz);
+            memcpy(new_offsets, offsets, sizeof(size_t) * off_sz);
+            return TokenArray(false, buf_sz, buf_sz, new_pbuf, off_sz, 0, off_sz, new_offsets);
         }
 
         TokenArrayIterator TokenArray::begin()
         {
-            return TokenArrayIterator((Token*)pbuf);
+            return TokenArrayIterator((Token*)(pbuf + offsets[off_pos]));
         }
 
         TokenArrayIterator TokenArray::end()
         {
-            if (size() == 0)
-                return reinterpret_cast<Token*>(pbuf);
-            uint8_t* last = pbuf + offsets[off_len - 1];
-            return TokenArrayIterator(reinterpret_cast<Token*>(last + reinterpret_cast<Token*>(last)->sz));
+            return TokenArrayIterator((Token*)(pbuf + offsets[off_len]));
         }
 
         TokenArrayConstIterator TokenArray::begin() const
         {
-            return TokenArrayConstIterator((Token*)pbuf);
+            return TokenArrayConstIterator((Token*)(pbuf + offsets[off_pos]));
         }
 
         TokenArrayConstIterator TokenArray::end() const
         {
-            if (size() == 0)
-                return reinterpret_cast<Token*>(pbuf);
-            uint8_t* last = pbuf + offsets[off_len - 1];
-            return TokenArrayConstIterator(reinterpret_cast<Token*>(last + reinterpret_cast<Token*>(last)->sz));
+            return TokenArrayConstIterator((Token*)(pbuf + offsets[off_len]));
         }
 
         const Token* TokenArray::operator[](size_t idx) const noexcept
         {
-            return (Token*)(pbuf + offsets[idx]);
+            return (Token*)(pbuf + offsets[idx + off_pos]);
         }
 
         size_t TokenArray::size() const
         {
-            return off_len;
+            return off_len - off_pos;
         }
 
         std::string TokenArray::to_string() const noexcept
@@ -522,51 +555,103 @@ namespace nn
         }
 #endif
 
+        uint32_t handle_line_start(
+            const char* fname, char* buf, size_t bufsz, uint32_t i,
+            TokenArray& tarr, uint32_t& line_num, int32_t& line_start)
+        {
+            while (i < bufsz && buf[i] == '\n')
+            {
+                size_t indent_count = 0;
+                while (i < bufsz)
+                {
+                    if (bufsz - i >= 4 &&
+                        buf[i + 0] == ' ' &&
+                        buf[i + 1] == ' ' &&
+                        buf[i + 2] == ' ' &&
+                        buf[i + 3] == ' ')
+                    {
+                        i += 4;
+                        indent_count++;
+                        continue;
+                    }
+                    if (buf[i] == '\t')
+                    {
+                        line_start -= 4 - (i - line_start) % 4;
+                        indent_count++;
+                        i++;
+                        continue;
+                    }
+                    // Fast forwarding i past any remaining whitespace
+                    while (i < bufsz && is_whitespace(buf[i]))
+                    {
+                        if (buf[i] == '\t')
+                            line_start -= 4 - (i - line_start) % 4;
+                        i++;
+                    }
+                    break;
+                }
+                if (i >= bufsz) return bufsz;  // Not counting any indents at the end of the file
+                if (buf[i] == '\n')
+                {
+                    // Ignoring the empty line
+                    line_start = i;
+                    line_num++;
+                    continue;
+                }
+                if (buf[i] == '#')
+                {
+                    // Indented comment, considered the same as an empty line by the lexer
+                    while (i < bufsz && buf[i] != '\n') i++;
+                    if (i >= bufsz) return bufsz;  // Not counting any indents at the end of the file
+                    line_start = i;
+                    line_num++;
+                    continue;
+                }
+                
+                TokenImp<TokenType::INDENT> tk(fname, line_num, i - line_start);
+                tk.nind = indent_count;
+                tarr.push_back(std::move(tk));
+            }
+            return i;
+        }
+
         bool lex_buf(const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num, int32_t line_start)
         {
-            bool use_indents = true;
+            uint32_t i = handle_line_start(fname, buf, bufsz, 0, tarr, line_num, line_start);
+            while (i < bufsz && buf[i] == '\n')
+                i = handle_line_start(fname, buf, bufsz, i, tarr, line_num, line_start);
+            if (i == bufsz) return false;  // empty file
 
-            for (uint32_t i = 0; i < bufsz;)
+            while (i < bufsz)
             {
                 switch (buf[i])
                 {
                 case '#':
                     do { i++; } while (i < bufsz && buf[i] != '\n');
-                    use_indents = true;
+                    tarr.push_back(TokenImp<TokenType::ENDL>(fname, line_num, i - line_start));
                     line_start = i;
                     line_num++;
-                    tarr.push_back(TokenImp<TokenType::ENDL>(fname, line_num, i - line_start));
+                    i = handle_line_start(fname, buf, bufsz, i, tarr, line_num, line_start);
                     break;
+
                 case ' ':
-                    if (use_indents
-                        && bufsz - i >= 4
-                        && buf[i + 1] == ' '
-                        && buf[i + 2] == ' '
-                        && buf[i + 3] == ' '
-                        )
-                    {
-                        tarr.push_back(TokenImp<TokenType::INDENT>(fname, line_num, i - line_start));
-                        i += 4;
-                        continue;
-                    }
-                    break;
-                case '\t':
-                    if (use_indents)
-                        tarr.push_back(TokenImp<TokenType::INDENT>(fname, line_num, i - line_start));
-                    line_start -= 4 - (i - line_start) % 4;  // Its a bit hacky, but it works
-                    break;
                 case '\r':
                 case '\v':
                 case '\f':
                     break;
+
+                case '\t':
+                    line_start -= 4 - (i - line_start) % 4;  // Its a bit hacky, but it works
+                    break;
+
                 case '\n':
-                    use_indents = true;
+                    tarr.push_back(TokenImp<TokenType::ENDL>(fname, line_num, i - line_start));
                     line_start = i;
                     line_num++;
-                    tarr.push_back(TokenImp<TokenType::ENDL>(fname, line_num, i - line_start));
+                    i = handle_line_start(fname, buf, bufsz, i, tarr, line_num, line_start);
                     break;
+
                 case '<':
-                    use_indents = false;
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::CMP_LE>(fname, line_num, i - line_start));
@@ -579,8 +664,8 @@ namespace nn
                     else
                         tarr.push_back(TokenImp<TokenType::ANGLE_O>(fname, line_num, i - line_start));
                     break;
+
                 case '>':
-                    use_indents = false;
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::CMP_GE>(fname, line_num, i - line_start));
@@ -593,37 +678,34 @@ namespace nn
                     else
                         tarr.push_back(TokenImp<TokenType::ANGLE_C>(fname, line_num, i - line_start));
                     break;
+
                 case '(':
-                    use_indents = false;
                     tarr.push_back(TokenImp<TokenType::ROUND_O>(fname, line_num, i - line_start));
                     break;
+
                 case ')':
-                    use_indents = false;
                     tarr.push_back(TokenImp<TokenType::ROUND_C>(fname, line_num, i - line_start));
                     break;
+
                 case '[':
-                    use_indents = false;
                     tarr.push_back(TokenImp<TokenType::SQUARE_O>(fname, line_num, i - line_start));
                     break;
+
                 case ']':
-                    use_indents = false;
                     tarr.push_back(TokenImp<TokenType::SQUARE_C>(fname, line_num, i - line_start));
                     break;
+
                 case '.':
-                    use_indents = false;
-                    tarr.push_back(TokenImp<TokenType::DOT>(fname, line_num, i - line_start));
-                    break;
                     if (bufsz - i >= 3 && buf[i + 1] == '.' && buf[i + 2] == '.')
                     {
                         tarr.push_back(TokenImp<TokenType::ELLIPSES>(fname, line_num, i - line_start));
                         i += 3;
                         continue;
                     }
-                    tarr.push_back(TokenImp<TokenType::ADD>(fname, line_num, i - line_start));
+                    tarr.push_back(TokenImp<TokenType::DOT>(fname, line_num, i - line_start));
                     break;
-                case ':':
-                    use_indents = false;
 
+                case ':':
                     if (bufsz - i >= 2 && buf[i + 1] == ':')
                     {
                         tarr.push_back(TokenImp<TokenType::CAST>(fname, line_num, i - line_start));
@@ -632,13 +714,16 @@ namespace nn
                     }
                     tarr.push_back(TokenImp<TokenType::COLON>(fname, line_num, i - line_start));
                     break;
+
+                case ';':
+                    tarr.push_back(TokenImp<TokenType::SIGDECL>(fname, line_num, i - line_start));
+                    break;
+
                 case ',':
-                    use_indents = false;
                     tarr.push_back(TokenImp<TokenType::COMMA>(fname, line_num, i - line_start));
                     break;
-                case '+':
-                    use_indents = false;
 
+                case '+':
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::IADD>(fname, line_num, i - line_start));
@@ -647,9 +732,8 @@ namespace nn
                     }
                     tarr.push_back(TokenImp<TokenType::ADD>(fname, line_num, i - line_start));
                     break;
-                case '*':
-                    use_indents = false;
 
+                case '*':
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::IMUL>(fname, line_num, i - line_start));
@@ -658,9 +742,8 @@ namespace nn
                     }
                     tarr.push_back(TokenImp<TokenType::STAR>(fname, line_num, i - line_start));
                     break;
-                case '/':
-                    use_indents = false;
 
+                case '/':
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::IDIV>(fname, line_num, i - line_start));
@@ -669,9 +752,8 @@ namespace nn
                     }
                     tarr.push_back(TokenImp<TokenType::DIV>(fname, line_num, i - line_start));
                     break;
-                case '%':
-                    use_indents = false;
 
+                case '%':
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::IMOD>(fname, line_num, i - line_start));
@@ -680,9 +762,8 @@ namespace nn
                     }
                     tarr.push_back(TokenImp<TokenType::MOD>(fname, line_num, i - line_start));
                     break;
-                case '^':
-                    use_indents = false;
 
+                case '^':
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::IPOW>(fname, line_num, i - line_start));
@@ -691,9 +772,8 @@ namespace nn
                     }
                     tarr.push_back(TokenImp<TokenType::POW>(fname, line_num, i - line_start));
                     break;
-                case '!':
-                    use_indents = false;
 
+                case '!':
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::CMP_NE>(fname, line_num, i - line_start));
@@ -702,9 +782,8 @@ namespace nn
                     }
                     tarr.push_back(TokenImp<TokenType::MODE>(fname, line_num, i - line_start));
                     break;
+                
                 case '=':
-                    use_indents = false;
-
                     if (bufsz - i >= 2 && buf[i + 1] == '=')
                     {
                         tarr.push_back(TokenImp<TokenType::CMP_EQ>(fname, line_num, i - line_start));
@@ -715,8 +794,6 @@ namespace nn
                     break;
                 case '"':
                 {
-                    use_indents = false;
-
                     TokenImp<TokenType::LIT_STR> tk(fname, line_num, i - line_start);
                     int sidx = 0;
                     for (i += 1; i < bufsz && sidx < 256 && buf[i] != '"'; i++, sidx++)
@@ -730,10 +807,9 @@ namespace nn
                     tarr.push_back(tk);
                     break;
                 }
+
                 default:
                 {
-                    use_indents = false;
-
                     // Handling numeric types
                     uint32_t col_num = i - line_start;
                     bool neg_val = false;
@@ -943,8 +1019,8 @@ namespace nn
                     case hash("ref"):
                         tarr.push_back(TokenImp<TokenType::KW_REF>(fname, line_num, col_num));
                         continue;
-                    case hash("const"):
-                        tarr.push_back(TokenImp<TokenType::KW_CONST>(fname, line_num, col_num));
+                    case hash("mut"):
+                        tarr.push_back(TokenImp<TokenType::KW_MUT>(fname, line_num, col_num));
                         continue;
                     case hash("null"):
                         tarr.push_back(TokenImp<TokenType::KW_NULL>(fname, line_num, col_num));
@@ -960,12 +1036,6 @@ namespace nn
                         continue;
                     case hash("extern"):
                         tarr.push_back(TokenImp<TokenType::KW_EXTERN>(fname, line_num, col_num));
-                        continue;
-                    case hash("forward"):
-                        tarr.push_back(TokenImp<TokenType::KW_FORWARD>(fname, line_num, col_num));
-                        continue;
-                    case hash("backward"):
-                        tarr.push_back(TokenImp<TokenType::KW_BACKWARD>(fname, line_num, col_num));
                         continue;
                     case hash("f16"):
                         tarr.push_back(TokenImp<TokenType::KW_F16>(fname, line_num, col_num));
@@ -985,8 +1055,8 @@ namespace nn
                     case hash("not"):
                         tarr.push_back(TokenImp<TokenType::KW_NOT>(fname, line_num, col_num));
                         continue;
-                    case hash("__add_intr_info"):
-                        tarr.push_back(TokenImp<TokenType::KW_ADD_INTR_INFO>(fname, line_num, col_num));
+                    case hash("__add_cfg_info"):
+                        tarr.push_back(TokenImp<TokenType::KW_ADD_CFG_INFO>(fname, line_num, col_num));
                         continue;
                     }
                     
@@ -1095,40 +1165,15 @@ namespace nn
             return -1;
         }
 
-        int BlockStartCriteria::accept(const Token* ptk, int idx)
-        {
-            if (ptk->ty == TokenType::COLON)
-            {
-                if (!in_bracket())
-                    return idx;
-            }
-            else
-                count_token(ptk);
-            return -1;
-        }
-
         LineEndCriteria::LineEndCriteria(int indent_level) : target_ilv(indent_level) {}
 
         int LineEndCriteria::accept(const Token* ptk, int idx)
         {
-            if (ptk->ty == TokenType::ENDL)
-            {
-                if (!in_bracket())
-                {
-                    last_endl = idx;
-                    current_ilv = 0;
-                    in_line = false;
-                }
-            }
-            else if (ptk->ty == TokenType::INDENT)
-                current_ilv++;
-            else
-            {
-                if (!in_bracket() && !in_line && last_endl > 0 && current_ilv <= target_ilv)  // Must be >, not >=
-                    return last_endl;
-                in_line = true;
-                count_token(ptk);
-            }
+            if (ptk->ty == TokenType::INDENT &&
+                ptk->get<TokenType::INDENT>().nind < target_ilv &&
+                !in_bracket()
+                ) return idx - 1;  // if idx == 0 => return -1 anyways
+            count_token(ptk);
             return -1;
         }
     }

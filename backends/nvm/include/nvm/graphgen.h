@@ -1,7 +1,7 @@
 #ifndef NVM_GRAPHGEN_H
 #define NVM_GRAPHGEN_H
 
-#include <nvm/common.h>
+#include <nvm/nodegen.h>
 
 namespace nvm
 {
@@ -52,7 +52,6 @@ namespace nvm
     {
     public:
         GraphCompiler();
-        ~GraphCompiler();
 
         bool init(nn::core::MdGraph& graph);
 
@@ -108,10 +107,6 @@ namespace nvm
         llvm::Function* memcpy = nullptr;
         llvm::Function* compile_streq();
         llvm::Function* streq = nullptr;
-
-        // Stuff needed for plugins
-        std::map<std::string, std::vector<NodeImpl>> node_map;
-        std::vector<nn::util::Library*> plugin_libs;
     };
 }
 

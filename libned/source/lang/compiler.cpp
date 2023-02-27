@@ -62,37 +62,48 @@ namespace nn
 
         // Function implementations
 
-        template<typename T>
-        bool CodeModule::merge_namespace(Namespace& dst, T& src)
+        void CodeModule::merge_namespace(Namespace& dst, AstNamespace& src)
         {
-            // std::variant isn't working for the non-copyable Ast* types
-            // TODO: custom implementation of CodeModule::Attr that doesn't depend on std::variant
-
-            for (const AstNamespace& ns : src.namespaces)
+            for (AstNamespace& ns : src.namespaces)
             {
                 CodeModule::Namespace nd;
-                if (merge_namespace(nd, ns))
-                    return true;
+                merge_namespace(nd, ns);
                 dst.namespaces[ns.name].push_back(std::move(nd));
             }
-            for (const AstStruct& agg : src.structs)
-                dst.structs[agg.signature.name].push_back(&agg);
-            for (const AstEnum& e : src.enums)
-                dst.enums[e.signature.name].push_back(&e);
-            for (const AstFn& fn : src.funcs)
-                dst.fns[fn.signature.name].push_back(&fn);
-            for (const AstBlock& def : src.defs)
-                dst.defs[def.signature.name].push_back(&def);
-            for (const AstBlock& intr : src.intrs)
-                dst.intrs[intr.signature.name].push_back(&intr);
-            for (const AstInit& init : src.inits)
-                dst.inits[init.signature.name].push_back(&init);
-            return false;
+            for (AstStruct& agg : src.structs)
+                dst.structs[agg.signature.name].push_back(std::move(agg));
+            for (AstEnum& e : src.enums)
+                dst.enums[e.signature.name].push_back(std::move(e));
+            for (AstFn& fn : src.funcs)
+                dst.fns[fn.signature.name].push_back(std::move(fn));
+            for (AstBlock& def : src.defs)
+                dst.defs[def.signature.name].push_back(std::move(def));
+            for (AstBlock& intr : src.intrs)
+                dst.intrs[intr.signature.name].push_back(std::move(intr));
+            for (AstInit& init : src.inits)
+                dst.inits[init.signature.name].push_back(std::move(init));
         }
 
-        bool CodeModule::merge_ast(AstModule& ast)
+        void CodeModule::merge_module(Namespace& dst, AstModule& src)
         {
-            return merge_namespace(root, ast);
+            for (AstNamespace& ns : src.namespaces)
+            {
+                CodeModule::Namespace nd;
+                merge_namespace(nd, ns);
+                dst.namespaces[ns.name].push_back(std::move(nd));
+            }
+            for (AstStruct& agg : src.structs)
+                dst.structs[agg.signature.name].push_back(std::move(agg));
+            for (AstEnum& e : src.enums)
+                dst.enums[e.signature.name].push_back(std::move(e));
+            for (AstFn& fn : src.funcs)
+                dst.fns[fn.signature.name].push_back(std::move(fn));
+            for (AstBlock& def : src.defs)
+                dst.defs[def.signature.name].push_back(std::move(def));
+            for (AstBlock& intr : src.intrs)
+                dst.intrs[intr.signature.name].push_back(std::move(intr));
+            for (AstInit& init : src.inits)
+                dst.inits[init.signature.name].push_back(std::move(init));
         }
 
         bool CodeModule::create(CodeModule& mod, AstModule& ast, const std::vector<std::string>& imp_dirs, std::vector<std::string> visited)
@@ -113,11 +124,10 @@ namespace nn
                 return
                     lex_file(fname.c_str(), tarr) ||
                     parse_module(tarr, ast) ||
-                    create(mod, ast, imp_dirs, visited) ||
-                    mod.merge_ast(ast);
+                    create(mod, ast, imp_dirs, visited);
             };
 
-            mod.merge_ast(ast);
+            mod.merge_module(mod.root, ast);
             std::string curr_dir = fs::path(ast.fname).parent_path().string();
 
             for (const auto& imp : ast.imports)
@@ -172,6 +182,59 @@ namespace nn
                 inits.size() == 0;
         }
 
+        void CodeModule::expand_namespace(const CodeModule::Namespace& node, const std::string idn, CodeModule::LookupResult& result)
+        {
+            const auto& ns_it = node.namespaces.find(idn);
+            if (ns_it != node.namespaces.end())
+            {
+                result.namespaces.reserve(ns_it->second.size());
+                for (const auto& elem : ns_it->second)
+                    result.namespaces.push_back(&elem);
+            }
+            const auto& struct_it = node.structs.find(idn);
+            if (struct_it != node.structs.end())
+            {
+                result.structs.reserve(struct_it->second.size());
+                for (const auto& elem : struct_it->second)
+                    result.structs.push_back(&elem);
+            }
+            const auto& enum_it = node.enums.find(idn);
+            if (enum_it != node.enums.end())
+            {
+                result.enums.reserve(enum_it->second.size());
+                for (const auto& elem : enum_it->second)
+                    result.enums.push_back(&elem);
+            }
+            const auto& fn_it = node.fns.find(idn);
+            if (fn_it != node.fns.end())
+            {
+                result.fns.reserve(fn_it->second.size());
+                for (const auto& elem : fn_it->second)
+                    result.fns.push_back(&elem);
+            }
+            const auto& def_it = node.defs.find(idn);
+            if (def_it != node.defs.end())
+            {
+                result.defs.reserve(def_it->second.size());
+                for (const auto& elem : def_it->second)
+                    result.defs.push_back(&elem);
+            }
+            const auto& intr_it = node.intrs.find(idn);
+            if (intr_it != node.intrs.end())
+            {
+                result.intrs.reserve(intr_it->second.size());
+                for (const auto& elem : intr_it->second)
+                    result.intrs.push_back(&elem);
+            }
+            const auto& init_it = node.inits.find(idn);
+            if (init_it != node.inits.end())
+            {
+                result.inits.reserve(init_it->second.size());
+                for (const auto& elem : init_it->second)
+                    result.inits.push_back(&elem);
+            }
+        }
+
         bool CodeModule::lookup(const CodeModule::LookupCtx& ctx, const std::string& idn, CodeModule::LookupResult& result)
         {
             // dfs through the ast to find the attr closest to cg_ns
@@ -179,62 +242,45 @@ namespace nn
             {
                 // try to get to the proper level namespace first.  If the fails, search through the current level
                 for (auto& ns : ctx.nd.namespaces[*ctx.it])
-                    if (!lookup({ ns, ctx.it + 1, ctx.end }, idn, result))
+                    if (!lookup({ ns, ctx.it + 1, ctx.begin, ctx.end }, idn, result))
                         return false;
             }
             // Either there wasn't anything in the upper namespace, or we are currently at the most upper namespace
-            if (ctx.nd.structs.contains(idn))
-                result.structs = ctx.nd.structs.at(idn);
-            if (ctx.nd.enums.contains(idn))
-                result.enums = ctx.nd.enums.at(idn);
-            if (ctx.nd.fns.contains(idn))
-                result.fns = ctx.nd.fns.at(idn);
-            if (ctx.nd.defs.contains(idn))
-                result.defs = ctx.nd.defs.at(idn);
-            if (ctx.nd.intrs.contains(idn))
-                result.intrs = ctx.nd.intrs.at(idn);
-            if (ctx.nd.inits.contains(idn))
-                result.inits = ctx.nd.inits.at(idn);
+            expand_namespace(ctx.nd, idn, result);
             if (result.empty())
                 return true;  // Failed at the current namespace
             // The current namespace had something, so initialize result.ns and return false
-            for (std::vector<std::string>::const_iterator it = ctx.it; it != ctx.end; it++)
+            for (std::vector<std::string>::const_iterator it = ctx.begin; it != ctx.it; it++)
                 result.ns.push_back(*it);
+            result.idn = idn;
             return false;
         }
 
-        TypeRef::TypeRef(size_t ptr) : ptr(ptr) {}
+        TypeRef::TypeRef(TypeInfo* ptr)
+        {
+            this->ptr = ptr;
+        }
 
         TypeRef::operator bool() const noexcept { return ptr; }
-        TypeInfo* TypeRef::operator->() noexcept { return type_manager->get(ptr); }
-        const TypeInfo* TypeRef::operator->() const noexcept { return type_manager->get(ptr); }
-        TypeInfo& TypeRef::operator*() noexcept { return *type_manager->get(ptr); }
-        const TypeInfo& TypeRef::operator*() const noexcept { return *type_manager->get(ptr); }
+        TypeInfo* TypeRef::operator->() noexcept { return ptr; }
+        const TypeInfo* TypeRef::operator->() const noexcept { return ptr; }
+        TypeInfo& TypeRef::operator*() noexcept { return *ptr; }
+        const TypeInfo& TypeRef::operator*() const noexcept { return *ptr; }
 
         const TypeRef TypeInfo::null = TypeRef();
 
         TypeInfo::TypeInfo() {}
-
-        TypeInfo::TypeInfo(TypeInfo&& type) noexcept
-        {
-            do_move(std::move(type));
-        }
-
-        TypeInfo& TypeInfo::operator=(TypeInfo&& type) noexcept
-        {
-            if (&type == this)
-                return *this;
-            this->~TypeInfo();
-            do_move(std::move(type));
-            return *this;
-        }
 
         TypeInfo::~TypeInfo()
         {
             switch (ty)
             {
             case TypeInfo::Type::INVALID:
+                break;
             case TypeInfo::Type::TYPE:
+                type_type.~TypeInfoType();
+                break;
+            case TypeInfo::Type::PLACEHOLDER:
             case TypeInfo::Type::BOOL:
             case TypeInfo::Type::FTY:
             case TypeInfo::Type::INT:
@@ -278,65 +324,6 @@ namespace nn
                 break;
             case TypeInfo::Type::UNPACK:
                 type_array.~TypeInfoArray();
-                break;
-            default:
-                assert(false);
-            }
-        }
-
-        void TypeInfo::do_move(TypeInfo&& type) noexcept
-        {
-            ty = type.ty;
-            cat = type.cat;
-            codegen = std::move(type.codegen);
-
-            switch (ty)
-            {
-            case TypeInfo::Type::INVALID:
-            case TypeInfo::Type::TYPE:
-            case TypeInfo::Type::BOOL:
-            case TypeInfo::Type::FTY:
-            case TypeInfo::Type::INT:
-            case TypeInfo::Type::FLOAT:
-            case TypeInfo::Type::STR:
-            case TypeInfo::Type::CFG:
-                break;
-            case TypeInfo::Type::ARRAY:
-                new (&type_array) decltype(type_array)(std::move(type.type_array));
-                break;
-            case TypeInfo::Type::TUPLE:
-                new (&type_tuple) decltype(type_tuple)(std::move(type.type_tuple));
-                break;
-            case TypeInfo::Type::LOOKUP:
-                new (&type_lookup) decltype(type_lookup)(std::move(type.type_lookup));
-                break;
-            case TypeInfo::Type::CARGBIND:
-                new (&type_cargbind) decltype(type_cargbind)(std::move(type.type_cargbind));
-                break;
-            case TypeInfo::Type::STRUCT:
-                new (&type_struct) decltype(type_struct)(std::move(type.type_struct));
-                break;
-            case TypeInfo::Type::ENUM:
-                new (&type_enum) decltype(type_enum)(std::move(type.type_enum));
-                break;
-            case TypeInfo::Type::ENUMENTRY:
-                new (&type_enum_entry) decltype(type_enum_entry)(std::move(type.type_enum_entry));
-                break;
-            case TypeInfo::Type::INIT:
-            case TypeInfo::Type::NODE:
-            case TypeInfo::Type::BLOCK:
-                break;
-            case TypeInfo::Type::EDGE:
-            case TypeInfo::Type::TENSOR:
-                break;
-            case TypeInfo::Type::DLTYPE:
-                new (&type_dltype) decltype(type_dltype)(std::move(type.type_dltype));
-                break;
-            case TypeInfo::Type::GENERIC:
-                new (&type_generic) decltype(type_generic)(std::move(type.type_generic));
-                break;
-            case TypeInfo::Type::UNPACK:
-                new (&type_array) decltype(type_array)(std::move(type.type_array));
                 break;
             default:
                 assert(false);
@@ -649,22 +636,32 @@ namespace nn
                 return "-";
             case TypeInfo::Type::STRUCT:
             {
-                // TODO: make this handle the namespace of the struct
-                std::stringstream ss;
-                ss << "z";
+                std::stringstream ss_cargs;
                 for (const AstArgDecl& arg : type_struct.ast->signature.cargs)
-                    ss << type_struct.cargs.at(arg.var_name)->encode();
-                ss << "0";
+                    ss_cargs << type_struct.cargs.at(arg.var_name)->encode();
+                std::string cargs_str = ss_cargs.str();
+                std::stringstream ss;
+                ss << "z" << type_struct.ast_ns.size();
+                for (const std::string& ns_elem : type_struct.ast_ns)
+                    ss << ns_elem.size() << ns_elem;
+                ss  << type_struct.ast->signature.name.size()
+                    << type_struct.ast->signature.name
+                    << cargs_str.size() << cargs_str;
                 return ss.str();
             }
             case TypeInfo::Type::ENUM:
             {
-                // TODO: make this handle the namespace of the enum
-                std::stringstream ss;
-                ss << "e";
+                std::stringstream ss_cargs;
                 for (const AstArgDecl& arg : type_enum.ast->signature.cargs)
-                    ss << type_enum.cargs.at(arg.var_name)->encode();
-                ss << "0";
+                    ss_cargs << type_enum.cargs.at(arg.var_name)->encode();
+                std::string cargs_str = ss_cargs.str();
+                std::stringstream ss;
+                ss << "e" << type_enum.ast_ns.size();
+                for (const std::string& ns_elem : type_enum.ast_ns)
+                    ss << ns_elem.size() << ns_elem;
+                ss  << type_enum.ast->signature.name.size()
+                    << type_enum.ast->signature.name
+                    << cargs_str.size() << cargs_str;
                 return ss.str();
             }
             case TypeInfo::Type::INIT:
@@ -890,6 +887,7 @@ namespace nn
                             body->add_instruction(instruction::New(node_info, addr)) ||
                             scope.push();
                     }, tmp);
+                break;
             case TypeInfo::Type::ARRAY:
             {
                 tmp = type_manager->create_array(
@@ -969,7 +967,7 @@ namespace nn
             case TypeInfo::Type::STRUCT:
                 if (type_struct.lazy)
                 {
-                    tmp = type_manager->create_lazystruct(type_struct.ast, type_struct.cargs);
+                    tmp = type_manager->create_lazystruct(type_struct.ast, type_struct.ast_ns, type_struct.cargs);
                     if (!tmp) return true;
                     type = type_manager->create_type(
                         TypeInfo::Category::CONST,
@@ -987,7 +985,7 @@ namespace nn
                             return
                                 body->add_instruction(instruction::Agg(node_info, 0)) ||
                                 scope.push();
-                        }, type_struct.ast, type_struct.cargs, type_struct.fields);
+                        }, type_struct.ast, type_struct.ast_ns, type_struct.cargs, type_struct.fields);
                     if (!tmp) return true;
                     std::vector<TypeRef> elem_types;
                     for (const auto& e : type_struct.fields)
@@ -1087,8 +1085,12 @@ namespace nn
             if (ast.is_bytecode)
                 return error::compiler(ast.node_info, "A struct body must not be bytecode");
             std::vector<std::pair<std::string, TypeRef>> fields;
-            if (codegen_fields("A struct", node_info, type_struct.cargs, ast.body, fields))
-                return true;
+            
+            std::vector<std::string> old_ns = cg_ns;
+            cg_ns = type_struct.ast_ns;
+            bool ret = codegen_fields("A struct", node_info, type_struct.cargs, ast.body, fields);
+            cg_ns = old_ns;
+            if (ret) return true;
             
             type_struct.fields = std::move(fields);
             type_struct.lazy = false;
@@ -1140,27 +1142,55 @@ namespace nn
             return !(lhs == rhs);
         }
 
-        TypeInfo* TypeManager::get(size_t ptr) noexcept
+        TypeRef TypeManager::next() noexcept
         {
-            return &buf[ptr];
+            // With arenas, I could just directly use typeinfo pointers...
+            size_t offset = sz & blk_bitmask;
+            if (offset == 0 && sz != 0)
+            {
+                active->next = (MemBlock*)malloc(sizeof(MemBlock));
+                if (!active->next)
+                    return TypeRef{};
+                active = active->next;
+                active->next = nullptr;
+            }
+            sz += 1;
+            TypeInfo* ptr = (TypeInfo*)(active->buf + sizeof(TypeInfo) * offset);
+            new (ptr) TypeInfo{};
+            return TypeRef(ptr);
         }
 
-        const TypeInfo* TypeManager::get(size_t ptr) const noexcept
+        TypeManager::~TypeManager()
         {
-            return &buf[ptr];
-        }
+            // Handling the case where there were no heap allocated arenas
+            if (sz <= blk_sz)
+            {
+                for (uint8_t* ptr = root.buf; ptr != root.buf + sizeof(TypeInfo) * sz; ptr += sizeof(TypeInfo))
+                    ((TypeInfo*)ptr)->~TypeInfo();
+                return;
+            }
 
-        TypeRef TypeManager::next()
-        {
-            TypeRef ret = TypeRef(buf.size());
-            buf.push_back(TypeInfo());
-            return ret;
-        }
+            // Skipping the first free since the root is allocated with the TypeManager
+            MemBlock* blk = &root;
+            for (uint8_t* ptr = blk->buf; ptr != blk->buf + sizeof(TypeInfo) * blk_sz; ptr += sizeof(TypeInfo))
+                ((TypeInfo*)ptr)->~TypeInfo();
+            blk = blk->next;
 
-        TypeManager::TypeManager()
-        {
-            buf.reserve(1024);
-            buf.push_back(TypeInfo());  // null element
+            // Handling completely full heap allocated arenas (general case)
+            while (blk->next)
+            {
+                // Entire block was allocated
+                for (uint8_t* ptr = blk->buf; ptr != blk->buf + sizeof(TypeInfo) * blk_sz; ptr += sizeof(TypeInfo))
+                    ((TypeInfo*)ptr)->~TypeInfo();
+                MemBlock* next = blk->next;  // Can't access blk->next after freeing blk
+                free(blk);
+                blk = next;
+            }
+
+            // Handling the partially filled last arena
+            for (uint8_t* ptr = blk->buf; ptr != blk->buf + sizeof(TypeInfo) * (sz & blk_bitmask); ptr += sizeof(TypeInfo))
+                ((TypeInfo*)ptr)->~TypeInfo();
+            free(blk);
         }
 
         TypeRef TypeManager::duplicate(const TypeRef src)
@@ -1200,6 +1230,7 @@ namespace nn
             case TypeInfo::Type::INT:
             case TypeInfo::Type::FLOAT:
             case TypeInfo::Type::STR:
+            case TypeInfo::Type::CFG:
                 break;
             case TypeInfo::Type::ARRAY:
                 tmp = duplicate(src->type_array.elem);
@@ -1226,6 +1257,7 @@ namespace nn
                 new (&type->type_struct) TypeInfoStruct();
                 type->ty = TypeInfo::Type::STRUCT;
                 type->type_struct.ast = src->type_struct.ast;
+                type->type_struct.ast_ns = src->type_struct.ast_ns;
                 for (const auto& [carg_name, carg_type] : src->type_struct.cargs)
                 {
                     tmp = duplicate(carg_type);
@@ -1440,23 +1472,26 @@ namespace nn
             return type;
         }
 
-        TypeRef TypeManager::create_struct(TypeInfo::Category cat, CodegenCallback codegen, const AstStruct* ast,
-            const std::map<std::string, TypeRef>& cargs, const std::vector<std::pair<std::string, TypeRef>>& fields)
+        TypeRef TypeManager::create_struct(TypeInfo::Category cat, CodegenCallback codegen,
+            const AstStruct* ast, const std::vector<std::string>& ast_ns,
+            const std::map<std::string, TypeRef>& cargs,
+            const std::vector<std::pair<std::string, TypeRef>>& fields)
         {
             TypeRef type = next();
             if (!type) return type;
-            new (&type->type_struct) TypeInfoStruct{ ast, cargs, fields, false };
+            new (&type->type_struct) TypeInfoStruct{ ast, ast_ns, cargs, fields, false };
             type->ty = TypeInfo::Type::STRUCT;
             type->cat = cat;
             type->codegen = codegen;
             return type;
         }
 
-        TypeRef TypeManager::create_lazystruct(const AstStruct* ast, const std::map<std::string, TypeRef>& cargs)
+        TypeRef TypeManager::create_lazystruct(const AstStruct* ast, const std::vector<std::string>& ast_ns,
+            const std::map<std::string, TypeRef>& cargs)
         {
             TypeRef type = next();
             if (!type) return type;
-            new (&type->type_struct) TypeInfoStruct{ ast, cargs, {}, true };
+            new (&type->type_struct) TypeInfoStruct{ ast, ast_ns, cargs, {}, true };
             type->ty = TypeInfo::Type::STRUCT;
             type->cat = TypeInfo::Category::VIRTUAL;
             type->codegen = nullptr;
@@ -2038,7 +2073,7 @@ namespace nn
                     }
                     cargs[carg_name] = rets.front();
                 }
-                return type_manager->create_lazystruct(type_struct.ast, cargs);
+                return type_manager->create_lazystruct(type_struct.ast, type_struct.ast_ns, cargs);
             }
             case TypeNode::Type::ENUM:
             {
@@ -2288,6 +2323,7 @@ namespace nn
                 new (&node->type_struct) StructType();
                 node->ty = TypeNode::Type::STRUCT;
                 node->type_struct.ast = ast;
+                node->type_struct.ast_ns = lookup.ns;
                 node->type_struct.cargs = cargs;
                 return false;
             }
@@ -2313,7 +2349,7 @@ namespace nn
                 return false;
             }
 
-            return error::compiler(node_info, "Unresolved reference to user type %", name);
+            return error::compiler(node_info, "Unresolved reference to user-defined type %", name);
         }
 
         bool ProcCall::create_arg(Scope& scope, const AstArgDecl& decl, ValNode*& node)
@@ -2545,11 +2581,25 @@ namespace nn
                 else
                 {
                     CodeModule::LookupResult lookup;
-                    if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.end() }, expr.expr_string, lookup))
+                    if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.begin(), cg_ns.end() }, expr.expr_string, lookup))
                         return true;
                     return resolve_lookup(scope, expr.node_info, {}, lookup, expr.expr_string, node);
                 }
-                
+            case ExprType::DOT:
+                if (codegen_expr_single_ret<TypeInfo::AllowAll>(scope, *expr.expr_name.expr, type))
+                    return true;
+                if (type->ty == TypeInfo::Type::LOOKUP)
+                {
+                    CodeModule::LookupResult result;
+                    result.ns = type->type_lookup.lookup.ns;
+                    result.ns.push_back(type->type_lookup.lookup.idn);
+                    for (const CodeModule::Namespace* node : type->type_lookup.lookup.namespaces)
+                        CodeModule::expand_namespace(*node, expr.expr_name.val, result);
+                    return resolve_lookup(scope, expr.node_info, {}, result, expr.expr_name.val, node);
+                }
+                return error::compiler(expr.node_info,
+                    "Unable to resolve access to member % for type %", expr.expr_name.val, type);
+
             default:
                 // everything else is invalid
                 return error::compiler(expr.node_info, "Invalid type expression in signature");
@@ -4848,7 +4898,7 @@ namespace nn
             if (struct_matches.size() == 1)
             {
                 // Perfect match, return it
-                TypeRef tmp = type_manager->create_lazystruct(struct_matches[0], {});
+                TypeRef tmp = type_manager->create_lazystruct(struct_matches[0], lookup.ns, {});
                 if (!tmp) return true;
                 if (!lazy_types)
                 {
@@ -4919,18 +4969,23 @@ namespace nn
             {
                 if (line.ty != LineType::EXPR)
                     return error::compiler(line.node_info, "% body must only contain variable declarations", container_type);
-                const auto& decl_expr = line.line_expr.line;
-                if (decl_expr.ty != ExprType::VAR_DECL)
-                    return error::compiler(decl_expr.node_info, "% body must only contain variable declarations", container_type);
+                const AstExpr* decl_expr = &line.line_expr.line;
+                bool is_const = decl_expr->ty == ExprType::UNARY_CONST;
+                bool is_ref   = decl_expr->ty == ExprType::UNARY_REF;
+                if (is_const || is_ref) decl_expr = decl_expr->expr_unary.expr.get();
+                if (decl_expr->ty != ExprType::VAR_DECL)
+                    return error::compiler(decl_expr->node_info, "% body must only contain variable declarations", container_type);
                 TypeRef decl_type;
                 lazy_types = true;
-                bool ret = codegen_expr_single_ret<TypeInfo::AllowAll>(fields_scope, *decl_expr.expr_name.expr, decl_type);
+                bool ret = codegen_expr_single_ret<TypeInfo::AllowAll>(fields_scope, *decl_expr->expr_name.expr, decl_type);
                 lazy_types = false;
                 if (ret) return true;
                 if (decl_type->ty != TypeInfo::Type::TYPE)
-                    return error::compiler(decl_expr.expr_name.expr->node_info, "Expected a type in variable declaration");
-                decl_type->cat = TypeInfo::Category::VIRTUAL;  // Making sure that any field codegens fail
-                fields.push_back({ decl_expr.expr_name.val, decl_type->type_type.base });
+                    return error::compiler(decl_expr->expr_name.expr->node_info, "Expected a type in variable declaration");
+                TypeRef field_type = decl_type->type_type.base;
+                if (is_const) field_type->cat = TypeInfo::Category::CONST;
+                if (is_ref)   field_type->cat = TypeInfo::Category::REF;
+                fields.push_back({ decl_expr->expr_name.val, field_type });
             }
             return false;
         }
@@ -4968,7 +5023,7 @@ namespace nn
         lookup_int:
             // Try to convert it using user-defined functions
             CodeModule::LookupResult lookup;
-            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.end() }, "__int__", lookup))
+            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.begin(), cg_ns.end() }, "__int__", lookup))
             {
                 // No user-defined casting functions were found
                 return error::compiler(node_info, "Unable to cast type '%' to int", arg);
@@ -5045,7 +5100,7 @@ namespace nn
         lookup_float:
             // Try to convert it using user-defined functions
             CodeModule::LookupResult lookup;
-            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.end() }, "__float__", lookup))
+            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.begin(), cg_ns.end() }, "__float__", lookup))
             {
                 // No user-defined casting functions were found
                 return error::compiler(node_info, "Unable to cast type '%' to float", arg);
@@ -5147,7 +5202,7 @@ namespace nn
         lookup_string:
             // Try to convert it using user-defined functions
             CodeModule::LookupResult lookup;
-            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.end() }, "__str__", lookup))
+            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.begin(), cg_ns.end() }, "__str__", lookup))
             {
                 // No user-defined casting functions were found
                 return error::compiler(node_info, "Unable to cast type '%' to string", arg);
@@ -5252,7 +5307,7 @@ namespace nn
         lookup_config:
             // Try to convert it using user-defined functions
             CodeModule::LookupResult lookup;
-            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.end() }, "__cfg__", lookup))
+            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.begin(), cg_ns.end() }, "__cfg__", lookup))
             {
                 // No user-defined casting functions were found
                 return error::compiler(node_info, "Unable to cast type '%' to config", arg);
@@ -5381,7 +5436,7 @@ namespace nn
 
             // Couldn't find it in the scope, look for it in the code module
             CodeModule::LookupResult lookup;
-            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.end() }, expr.expr_string, lookup))
+            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.begin(), cg_ns.end() }, expr.expr_string, lookup))
             {
                 // the identifier didn't match anything in the scope nor the code module.
                 // This makes it an unresolved identifier.
@@ -6382,26 +6437,10 @@ namespace nn
                 // will get pulled out here, but things that need vargs will get figured out later.
                 // Enum attributes are resolved as a dot operator on a TypeInfo::Type::Enum object
                 CodeModule::LookupResult result;
+                result.ns = lookup.ns;
+                result.ns.push_back(lookup.idn);
                 for (const CodeModule::Namespace* node : lookup.namespaces)
-                {
-                    if (node->namespaces.contains(expr.expr_name.val))
-                    {
-                        for (const auto& sub_node : node->namespaces.at(expr.expr_name.val))
-                            result.namespaces.push_back(&sub_node);
-                    }
-                    if (node->structs.contains(expr.expr_name.val))
-                        result.structs = node->structs.at(expr.expr_name.val);
-                    if (node->enums.contains(expr.expr_name.val))
-                        result.enums = node->enums.at(expr.expr_name.val);
-                    if (node->fns.contains(expr.expr_name.val))
-                        result.fns = node->fns.at(expr.expr_name.val);
-                    if (node->defs.contains(expr.expr_name.val))
-                        result.defs = node->defs.at(expr.expr_name.val);
-                    if (node->intrs.contains(expr.expr_name.val))
-                        result.intrs = node->intrs.at(expr.expr_name.val);
-                    if (node->inits.contains(expr.expr_name.val))
-                        result.inits = node->inits.at(expr.expr_name.val);
-                }
+                    CodeModule::expand_namespace(*node, expr.expr_name.val, result);
                 return resolve_lookup(scope, expr.node_info, expr.expr_name.val, result, rets);
             }
             case TypeInfo::Type::STRUCT:
@@ -6688,7 +6727,7 @@ namespace nn
                 {
                     // Perfect match, return it
                     const auto& [ast, cargs] = struct_matches.front();
-                    TypeRef tmp = type_manager->create_lazystruct(ast, cargs);
+                    TypeRef tmp = type_manager->create_lazystruct(ast, callee->type_lookup.lookup.ns, cargs);
                     if (!tmp) return true;
                     if (!lazy_types)
                     {
@@ -7065,7 +7104,7 @@ namespace nn
             bool check_intr = false;
             if (body_type == BodyType::DEF)
             {
-                // Only defs can call other defs or intrs.  All other body types are not allows to
+                // Only defs can call other defs or intrs.  All other body types are not allowed to
                 check_def = true;
                 check_intr = true;
                 for (TypeRef varg : param_vargs)
@@ -7425,7 +7464,7 @@ namespace nn
 
             // Couldn't find it in the scope, look for it in the code module
             CodeModule::LookupResult lookup;
-            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.end() }, expr.expr_string, lookup))
+            if (mod->lookup({ mod->root, cg_ns.begin(), cg_ns.begin(), cg_ns.end() }, expr.expr_string, lookup))
             {
                 // the identifier didn't match anything in the scope nor the code module.
                 // This makes it an unresolved identifier.
@@ -7436,7 +7475,7 @@ namespace nn
 
             // It isn't a callee, otherwise codegen_expr_callee_var would've been called instead.
             // So attempt to resolve the lookup to an unambiguous reference using the shadowing rules
-            return resolve_lookup(scope, expr.node_info, expr.expr_name.val, lookup, rets);
+            return resolve_lookup(scope, expr.node_info, expr.expr_string, lookup, rets);
         }
 
         bool codegen_expr(Scope& scope, const AstExpr& expr, std::vector<TypeRef>& rets)
@@ -7989,8 +8028,11 @@ namespace nn
                 // they'll all be virtual types, but thats fine since they'll be redirected at stack variables.
                 // Also, I'm not fully sure about why this works, I basically just copied what I did for structs
                 std::vector<std::pair<std::string, TypeRef>> fields;
-                if (codegen_fields("An enum", elem.node_info, arg->type_enum.cargs, entry->lines, fields))
-                    return true;
+                std::vector<std::string> old_ns = cg_ns;
+                cg_ns = arg->type_enum.ast_ns;
+                bool failed = codegen_fields("An enum", elem.node_info, arg->type_enum.cargs, entry->lines, fields);
+                cg_ns = old_ns;
+                if (failed) return true;
                 for (const auto& [field_name, field_type] : fields)
                 {
                     TypeRef type = type_manager->duplicate(
@@ -8457,7 +8499,7 @@ namespace nn
             // checking if the body of the function is raw bytecode
             if (ast_fn.is_bytecode)
             {
-                if (parsebc_body(*ast_fn.tarr, *bc, fn_body))
+                if (parsebc_body(ast_fn.tarr, *bc, fn_body))
                     return error::compiler(ast_fn.node_info, "Invalid bytecode found in fn body");
                 return bc->add_block(fn_name, fn_body);
             }
@@ -8776,14 +8818,14 @@ namespace nn
             // And construction via a call results in inline code
             bool ret = false;
             for (const auto& [name, fns] : node.fns)
-                for (const AstFn* fn : fns)
-                    ret = codegen_func(name, *fn, ns) || ret;
+                for (const AstFn& fn : fns)
+                    ret = codegen_func(name, fn, ns) || ret;
             for (const auto& [name, defs] : node.defs)
-                for (const AstBlock* def : defs)
-                    ret = codegen_def(name, *def, ns) || ret;
+                for (const AstBlock& def : defs)
+                    ret = codegen_def(name, def, ns) || ret;
             for (const auto& [name, intrs] : node.intrs)
-                for (const AstBlock* intr : intrs)
-                    ret = codegen_intr(name, *intr, ns) || ret;
+                for (const AstBlock& intr : intrs)
+                    ret = codegen_intr(name, intr, ns) || ret;
             for (const auto& [name, sub_nodes] : node.namespaces)
             {
                 ns.push_back(name);

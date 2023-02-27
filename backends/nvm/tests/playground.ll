@@ -77,3 +77,63 @@ loop:
 end:
     ret void
 }
+
+@lhs = internal global [4 x float] zeroinitializer
+@rhs = internal global [4 x float] zeroinitializer
+@out = internal global [4 x float] zeroinitializer
+
+define void @__add__() {
+entry:
+    %lhs_elem = get float, @lhs, []
+    %rhs_elem = get float, @rhs, []
+    %out_elem = add float, %lhs_elem, %rhs_elem
+    set float, @out, [], %out_elem
+    ret void
+}
+
+define void @__add__() {
+entry:
+    br label %start_loop0
+start_loop0:
+    %idx0 = phi i32 [0, %entry], [%nidx0, %end_loop0]
+    %cond0 = icmp eq i32 %idx0, 10
+    br i1 %cond0, label %end, label %body
+body:
+    %lhs_elem = get float, @lhs, [%idx0]
+    %rhs_elem = get float, @rhs, [%idx0]
+    %out_elem = add float, %lhs_elem, %rhs_elem
+    set float, @out, [%idx0], %out_elem
+    br label %end_loop0
+end_loop0:
+    %nidx0 = add i32 %idx0, 1
+    br label %start_loop0
+end:
+    ret void
+}
+
+define void @__add__() {
+entry:
+    br label %start_loop0
+start_loop0:
+    %idx0 = phi i32 [0, %entry], [%nidx0, %end_loop0]
+    %cond0 = icmp eq i32 %idx0, 10
+    br i1 %cond0, label %end, label %start_loop1
+start_loop1:
+    %idx1 = phi i32 [0, %start_loop0], [%nidx1, %end_loop1]
+    %cond1 = icmp eq i32 %idx1, 10
+    br i1 %cond1, label %end_loop1, label %body
+body:
+    %lhs_elem = get float, @lhs, [%idx0, %idx1]
+    %rhs_elem = get float, @rhs, [%idx0, %idx1]
+    %out_elem = add float, %lhs_elem, %rhs_elem
+    set float, @out, [%idx0, %idx1], %out_elem
+    br label %end_loop1
+end_loop1:
+    %nidx1 = add i32 %idx1, 1
+    br label %start_loop1
+end_loop0:
+    %nidx0 = add i32 %idx0, 1
+    br label %start_loop0
+end:
+    ret void
+}

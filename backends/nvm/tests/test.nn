@@ -1,4 +1,65 @@
+import nvm
+
+struct PwCtx:
+    ref nvm.Node node
+    const nvm.Value lhs_val
+    const nvm.Value rhs_val
+    const nvm.Value out_val
+    const nvm.Value zero_val
+    const nvm.Value one_val
+    const nvm.Type i32_ty
+    const array<int> shape
+
+fn pointwise_add(
+    ref PwCtx ctx, const array<const nvm.Value> index,
+    ref nvm.Block entry, const nvm.Block end
+    ) -> const Block:
+    rank_idx = len(index)
+    if rank_idx == len(ctx.shape):
+        ref body = nvm.new_block(ctx.node, "body")
+        const lhs_elem = nvm.instr.get(body, "lhs_elem", ctx.lhs_val, index)
+        const rhs_elem = nvm.instr.get(body, "rhs_elem", ctx.rhs_val, index)
+        const out_elem = nvm.instr.add(body, "out_elem", lhs_elem, rhs_elem)
+        nvm.instr.set(body, ctx.out_val, index, out_elem)
+        nvm.instr.jmp(body, end)
+        return body
+
+    str_idx := str::rank_idx
+    start_loop : ref = nvm.new_block(node, "start_loop" + str_idx)
+    end_loop: ref = nvm.new_block(node, "end_loop" + str_idx)
+
+    const end_val = nvm.new_i32(node, "end_val" + str_idx, ctx.shape[rank_idx])
+    const idx, ref idx_args = nvm.instr.phi(start_loop, "idx" + str_idx, i32_ty)
+    const cond = nvm.instr.icmp(start_loop, "cond" + str_idx, nvm.ICmpCond.eq, idx, end_val)
+    nvm.instr.br(start_loop, cond, end, pointwise_add(ctx, start_loop, end_loop, index + [idx]))
+    
+    const nidx = nvm.instr.add(end_loop, "nidx" + str_idx, idx, one_val)
+    nvm.instr.jmp(end_loop, start_loop)
+
+    nvm.add_arg(idx_args, start, zero_val)
+    nvm.add_arg(idx_args, end_loop, nidx)
+
+    return start_loop
+
 intr __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> sum:
+    # Setup
+    ref ctx = PwCtx(
+        nvm.new_node(),
+        nvm.new_inp(node, "lhs", fp, shape),
+        nvm.new_inp(node, "rhs", fp, shape),
+        nvm.new_out(node, "out", fp, shape),
+        nvm.new_i32(node, "i32_zero", 0),
+        nvm.new_i32(node, "i32_step", 1),
+        nvm.Type.integer(32),
+        shape)
+
+    # Pointwise add definition
+    ref entry = nvm.new_block(node, "entry")
+    ref end = nvm.new_block("end")
+    nvm.instr.jmp(blk_entry, pointwise_add(ctx, [], entry, end))
+    nvm.instr.retvoid(end)
+
+    __add_intr_info "nvm" : cfg::node
     return fp<*shape> out
 
 intr __mul__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
@@ -53,15 +114,15 @@ def mm_model<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> out:
 def lin_model<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs, fp<M, N> bias) -> out:
     return matmul(lhs, rhs) + bias
 
-init zeros
+zeros := init:
+    out: fp<inp_sz, out_sz>
+    return out
 
-def linear<fty fp, int N, int inp_sz, int out_sz, bool bias=true>(fp<N, inp_sz> inp) -> out:
-    fp<inp_sz, out_sz> w
-    extern zeros w
+linear := def<fp: fty, N: int, inp_sz: int, out_sz: int, bias: bool = true>(inp: fp<N, inp_sz>) -> out:
+    extern zeros(w: fp<inp_sz, out_sz>)
     if bias:
         # Yes, this is not how a linear layer actually works, but I don't want to implement broadcasting yet
-        fp<N, out_sz> b
-        extern zeros b
+        extern zeros b: fp<N, out_sz>
         return matmul(inp, w) + b
     return matmul(inp, w)
 

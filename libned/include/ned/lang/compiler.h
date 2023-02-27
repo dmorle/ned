@@ -17,17 +17,25 @@ namespace nn
         public:
             struct Namespace
             {
-                std::map<std::string, std::vector<Namespace>>        namespaces;
-                std::map<std::string, std::vector<const AstStruct*>> structs;
-                std::map<std::string, std::vector<const AstEnum*>>   enums;
-                std::map<std::string, std::vector<const AstFn*>>     fns;
-                std::map<std::string, std::vector<const AstBlock*>>  defs;
-                std::map<std::string, std::vector<const AstBlock*>>  intrs;
-                std::map<std::string, std::vector<const AstInit*>>   inits;
+                std::map<std::string, std::vector<Namespace>> namespaces;
+                std::map<std::string, std::vector<AstStruct>> structs;
+                std::map<std::string, std::vector<AstEnum>>   enums;
+                std::map<std::string, std::vector<AstFn>>     fns;
+                std::map<std::string, std::vector<AstBlock>>  defs;
+                std::map<std::string, std::vector<AstBlock>>  intrs;
+                std::map<std::string, std::vector<AstInit>>   inits;
+
+                // You couldn't figure this one out yourself C++? Really?
+                Namespace() {}
+                Namespace(const Namespace&) = delete;
+                Namespace(Namespace&&) noexcept = default;
+                Namespace& operator=(const Namespace&) = delete;
+                Namespace& operator=(Namespace&&) noexcept = default;
             };
 
             struct LookupResult
             {
+                std::string idn;  // the identifier that got looked up
                 std::vector<std::string> ns;  // the signature's namespace
                 std::vector<const Namespace*> namespaces;
                 std::vector<const AstStruct*> structs;
@@ -41,21 +49,22 @@ namespace nn
             };
 
         private:
-            template<typename T>
-            static bool merge_namespace(Namespace& dst, T& src);
+            static void merge_namespace(Namespace& dst, AstNamespace& src);
+            static void merge_module(Namespace& dst, AstModule& src);
 
         public:
             Namespace root;
-            bool merge_ast(AstModule& ast);
             static bool create(CodeModule& mod, AstModule& ast, const std::vector<std::string>& imp_dirs, std::vector<std::string> visited);
 
             struct LookupCtx
             {
                 Namespace& nd;
                 std::vector<std::string>::const_iterator it;
+                std::vector<std::string>::const_iterator begin;
                 std::vector<std::string>::const_iterator end;
             };
 
+            static void expand_namespace(const Namespace& node, const std::string idn, LookupResult& result);
             static bool lookup(const LookupCtx& ctx, const std::string& idn, LookupResult& result);
         };
 
@@ -67,11 +76,11 @@ namespace nn
             friend class TypeManager;
             friend class TypeInfo;
 
-            size_t ptr;
-            TypeRef(size_t ptr);
+            TypeInfo* ptr;
+            TypeRef(TypeInfo*);
 
         public:
-            TypeRef() : ptr(0) {}
+            TypeRef() : ptr(nullptr) {}
             TypeRef(const TypeRef&) = default;
             TypeRef(TypeRef&&) = default;
             TypeRef& operator=(const TypeRef&) = default;
@@ -118,6 +127,7 @@ namespace nn
         struct TypeInfoStruct
         {
             const AstStruct* ast;
+            std::vector<std::string> ast_ns;
             std::map<std::string, TypeRef> cargs;
             std::vector<std::pair<std::string, TypeRef>> fields;
             bool lazy;
@@ -244,8 +254,10 @@ namespace nn
             };
 
             TypeInfo();
-            TypeInfo(TypeInfo&& type) noexcept;
-            TypeInfo& operator=(TypeInfo&& type) noexcept;
+            TypeInfo(const TypeInfo& type) = delete;
+            TypeInfo(TypeInfo&& type) noexcept = delete;
+            TypeInfo& operator=(const TypeInfo& type) = delete;
+            TypeInfo& operator=(TypeInfo&& type) noexcept = delete;
             ~TypeInfo();
 
             bool check_pos() const;
@@ -291,27 +303,35 @@ namespace nn
 
             // puts the object that the type references onto the top of the stack if possible
             CodegenCallback codegen = nullptr;
-
-        private:
-            void do_move(TypeInfo&& type) noexcept;
         };
 
         class TypeManager
         {
+            static constexpr size_t blk_bitwidth = 4;
+            static constexpr size_t blk_sz = 1 << blk_bitwidth;
+            static constexpr size_t blk_bitmask = blk_sz - 1;
+
+            struct MemBlock
+            {
+                MemBlock* next = nullptr;
+                uint8_t buf[sizeof(TypeInfo) * blk_sz];
+            };
+
             friend class TypeRef;
 
-            std::vector<TypeInfo> buf;
+            MemBlock root;
+            MemBlock* active = &root;
+            size_t sz = 0;
 
-            inline TypeInfo* get(size_t ptr) noexcept;
-            inline const TypeInfo* get(size_t ptr) const noexcept;
-            inline TypeRef next();
+            TypeRef next() noexcept;
 
         public:
-            TypeManager();
+            TypeManager() {};
             TypeManager(const TypeManager&) = delete;
             TypeManager(TypeManager&&) = delete;
             TypeManager& operator=(const TypeManager&) = delete;
             TypeManager& operator=(TypeManager&&) = delete;
+            ~TypeManager();
 
             TypeRef duplicate          (const TypeRef src);
             TypeRef duplicate          (TypeInfo::Category cat, CodegenCallback codegen, const TypeRef src);
@@ -331,10 +351,12 @@ namespace nn
             
             TypeRef create_lookup      (std::string name, CodeModule::LookupResult lookup);  // always virtual
             TypeRef create_cargbind    (std::string name, CodeModule::LookupResult lookup, const std::vector<AstExpr>& cargs); // always virtual
-            TypeRef create_struct      (TypeInfo::Category cat, CodegenCallback codegen, const AstStruct* ast,
+            TypeRef create_struct      (TypeInfo::Category cat, CodegenCallback codegen,
+                                        const AstStruct* ast, const std::vector<std::string>& ns,
                                         const std::map<std::string, TypeRef>& cargs,
                                         const std::vector<std::pair<std::string, TypeRef>>& fields);
-            TypeRef create_lazystruct  (const AstStruct* ast, const std::map<std::string, TypeRef>& cargs);  // always virtual
+            TypeRef create_lazystruct  (const AstStruct* ast, const std::vector<std::string>& ns,
+                                        const std::map<std::string, TypeRef>& cargs);  // always virtual
             TypeRef create_enum        (TypeInfo::Category cat, CodegenCallback codegen, const AstEnum* ast,
                                         const std::vector<std::string> ast_ns, const std::map<std::string, TypeRef>& cargs);
             TypeRef create_enum_entry  (const AstEnum* ast, const std::vector<std::string> ast_ns,
@@ -484,6 +506,7 @@ namespace nn
             struct StructType
             {
                 const AstStruct* ast;
+                std::vector<std::string> ast_ns;
                 std::map<std::string, ValNode*> cargs;
             };
 
@@ -891,6 +914,7 @@ namespace nn
 
         bool codegen_namespace (const CodeModule::Namespace& node, std::vector<std::string>& ns);
         bool codegen_module(ByteCodeModule& bc, ModuleInfo& info, AstModule& ast, const std::vector<std::string>& imp_dirs);
+        // Note: codegen_module destroys the given AstModule object
     }
 }
 

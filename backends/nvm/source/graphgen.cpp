@@ -57,13 +57,6 @@ namespace nvm
 
     GraphCompiler::GraphCompiler() {}
 
-    GraphCompiler::~GraphCompiler()
-    {
-        using namespace nn::util;
-        for (Library* lib : plugin_libs)
-            lib_del(lib);  // Nothing I can do if this fails
-    }
-
     bool GraphCompiler::init(nn::core::MdGraph& graph)
     {
         pgraph = &graph;
@@ -91,9 +84,6 @@ namespace nvm
         for (const auto& [name, edge] : graph.exts)
             if (graph.opaque(edge))
                 mark_ext_edge(edge_data[graph.opaque<size_t>(edge)], name);
-
-        // finding the plugins needed for compilation
-        find_plugins(node_map, plugin_libs);
 
         return false;
     }
@@ -152,8 +142,8 @@ namespace nvm
             // Making sure the sync node's signature is correct
             if (assert_sync_node_sig(node))
                 return true;
-            assert(node.configs.at("name").val.ty == core::ConfigVal::Tag::STRING);
-            sync_map[node.configs.at("name").val.val_str].push_back(node_ref);
+            assert(node.configs.at("name").ty == core::Config::Tag::STRING);
+            sync_map[node.configs.at("name").val_str].push_back(node_ref);
         }
 
         // Compiling each of the syncs
@@ -198,7 +188,7 @@ namespace nvm
             
             const core::MdNode& node = pgraph->get(edge.inp.ref);
             if (node.name == "sync")  // Skipping sync nodes - just add them to the run dependancies
-                run_deps.push_back({ DepInfo::Type::SYNC, node.configs.at("name").val.val_str });
+                run_deps.push_back({ DepInfo::Type::SYNC, node.configs.at("name").val_str });
             else
                 run_node_refs.push_back(edge.inp.ref);
         }
@@ -211,7 +201,7 @@ namespace nvm
 
             const core::MdNode& node = pgraph->get(edge.inp.ref);
             if (node.name == "sync")  // Skipping sync nodes - just add them to the run dependancies
-                run_deps.push_back({ DepInfo::Type::SYNC, node.configs.at("name").val.val_str });
+                run_deps.push_back({ DepInfo::Type::SYNC, node.configs.at("name").val_str });
             else
                 run_node_refs.push_back(edge.inp.ref);
         }
@@ -313,7 +303,7 @@ namespace nvm
             if (inp_node.name == sync_node_name)
             {
                 // Skipping sync nodes, but adding them as a dependancy of the current sync
-                sync_deps.push_back({ DepInfo::Type::SYNC , inp_node.configs.at("name").val.val_str });
+                sync_deps.push_back({ DepInfo::Type::SYNC , inp_node.configs.at("name").val_str });
                 continue;
             }
             if (compile_normal_node(inp_node_ref, funcs, sync_deps, sync_id))
@@ -334,22 +324,8 @@ namespace nvm
         if (compile_sync_node(node_ref, funcs, sync_deps, sync_id))
             return true;
 
-        // Finding the appropriate overload for the node
-        const nn::core::MdNode& node = pgraph->get(node_ref);
-        if (!node_map.contains(node.name))
-            return nn::error::graph("Unable to find any overloads for node name %", node.name);
-        NodeCtx node_ctx = { node_ref, pgraph };
-        const NodeImpl* node_match = nullptr;
-        for (const auto& node_impl : node_map.at(node.name))
-            if (node_impl.match(node_ctx))
-            {
-                node_match = &node_impl;
-                break;
-            }
-        if (!node_match)
-            return nn::error::graph("Unable to find a matching overload for node %", node.name);
-
         // Creating the llvm function
+        const nn::core::MdNode& node = pgraph->get(node_ref);
         size_t idx = node_name_counts[node.name]++;
         llvm::FunctionType* func_ty = llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), false);
         llvm::Function* node_fn = llvm::Function::Create(func_ty,
@@ -357,8 +333,8 @@ namespace nvm
 
         // Using the plugin to compile the node
         CompCtx comp_ctx = { this, &mod, &builder, node_fn };
-        if (node_match->compile(node_ctx, comp_ctx))
-            return nn::error::graph("Failed to compile node %", node.name);
+        //if (compile_node())
+        //    return nn::error::graph("Failed to compile node %", node.name);
         funcs.push_back(node_fn);
         pgraph->opaque<size_t>(node_ref) = sync_id;  // marking the node as having been compiled
 
@@ -517,8 +493,8 @@ namespace nvm
         {
             const core::MdNode& node = pgraph->get(node_ref);
             assert(node.name == sync_node_name);
-            size_t nbytes = core::fty_size(node.configs.at("fp").val.val_fty);
-            for (auto& e : node.configs.at("shape").val.val_list)
+            size_t nbytes = core::fty_size(node.configs.at("fp").val_fty);
+            for (auto& e : node.configs.at("shape").val_list)
                 nbytes *= e.val_int;
             llvm::Value* nbytes_val = llvm::ConstantInt::get(i32_ty, nbytes);
             auto& [inp_edge_ref, inp_edge_view] = node.inps[0];
@@ -578,20 +554,23 @@ namespace nvm
         it = node.configs.find("name");
         if (it == node.configs.end())
             return error::graph("Found a sync node without a name carg");
-        if (it->second.type != core::ConfigType::make_str())
+        if (it->second.ty != core::Config::Tag::STRING)
             return error::graph("Found a sync node with a non-string name carg");
 
         it = node.configs.find("fp");
         if (it == node.configs.end())
             return error::graph("Found a sync node without an fp carg");
-        if (it->second.type != core::ConfigType::make_fty())
+        if (it->second.ty != core::Config::Tag::FTY)
             return error::graph("Found a sync node with a non-fty fp carg");
 
         it = node.configs.find("shape");
         if (it == node.configs.end())
             return error::graph("Found a sync node without a shape carg");
-        if (it->second.type != core::ConfigType::make_arr(core::ConfigType::make_int()))
+        if (it->second.ty != core::Config::Tag::LIST)
             return error::graph("Found a sync node with a non-array<int> shape carg");
+        for (const auto& elem : it->second.val_list)
+            if (elem.ty != core::Config::Tag::INT)
+                return error::graph("Found a sync node with a non-array<int> shape carg");
 
         if (node.configs.size() != 3)
         {
