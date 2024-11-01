@@ -20,7 +20,6 @@ namespace nn
         {
             INVALID,
             INDENT,
-            ENDL,
             ANGLE_O,
             ANGLE_C,
             ROUND_O,
@@ -129,7 +128,7 @@ namespace nn
 
             // useful utilities
 
-            bool is_whitespace() const { return ty == TokenType::INDENT || ty == TokenType::ENDL; }
+            bool is_whitespace() const { return ty == TokenType::INDENT; }
             template<TokenType TY> TokenImp<TY>& get() { assert(ty != TY); return *reinterpret_cast<TokenImp<TY>*>(this); }
             template<TokenType TY> const TokenImp<TY>& get() const { assert(ty == TY); return *reinterpret_cast<const TokenImp<TY>*>(this); }
             template<TokenType TY> bool expect() const {
@@ -400,7 +399,7 @@ namespace nn
             size_t* offsets = nullptr;
         };
 
-        bool lex_buf(const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num=1, int32_t line_start=0);
+        bool lex_buf(const char* fname, char* buf, size_t bufsz, TokenArray& tarr, uint32_t line_num=1, int32_t line_start=-1);
         bool lex_file(const char* fname, TokenArray& tarr);
 
         class BracketCounter

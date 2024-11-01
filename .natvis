@@ -1,95 +1,119 @@
 <?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
 
-    <Type Name="nn::lang::TokenArray">
-        <DisplayString>{{ size={off_len - off_pos} }}</DisplayString>
-        <Expand>
-            <Item Name="is_slice" ExcludeView="simple">is_slice</Item>
-            <IndexListItems>
-                <Size>off_len - off_pos</Size>
-                <ValueNode>(Token*)(pbuf + offsets[$i + off_pos])</ValueNode>
-            </IndexListItems>
-        </Expand>
-    </Type>
+  <Type Name="nn::lang::TokenArray">
+    <DisplayString>{{ size={off_len - off_pos} }}</DisplayString>
+    <Expand>
+      <Item Name="is_slice" ExcludeView="simple">is_slice</Item>
+      <IndexListItems>
+        <Size>off_len - off_pos</Size>
+        <ValueNode>(Token*)(pbuf + offsets[$i + off_pos])</ValueNode>
+      </IndexListItems>
+    </Expand>
+  </Type>
 
-    <Type Name="nn::lang::AstExpr">
-        <DisplayString>{{ line={node_info.line_start} col={node_info.col_start} }}</DisplayString>
-        <Expand>
-            <Item Name="[ty]">ty</Item>
-            <Item Name="[node_info]">node_info</Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::LIT_BOOL       ">expr_bool     </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::LIT_INT        ">expr_int      </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::LIT_FLOAT      ">expr_float    </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::LIT_STRING     ">expr_string   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::LIT_ARRAY      ">expr_agg      </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::LIT_TUPLE      ">expr_agg      </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::UNARY_POS      ">expr_unary    </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::UNARY_NEG      ">expr_unary    </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::UNARY_NOT      ">expr_unary    </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::UNARY_UNPACK   ">expr_unary    </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::UNARY_REF      ">expr_unary    </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::UNARY_CONST    ">expr_unary    </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::UNARY_FORWARD  ">expr_unary    </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::UNARY_BACKWARD ">expr_unary    </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_ADD     ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_SUB     ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_MUL     ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_DIV     ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_MOD     ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_POW     ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_IADD    ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_ISUB    ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_IMUL    ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_IDIV    ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_IMOD    ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_IPOW    ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_ASSIGN  ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_AND     ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_OR      ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_CMP_EQ  ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_CMP_NE  ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_CMP_GT  ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_CMP_LT  ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_CMP_GE  ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_CMP_LE  ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::BINARY_CAST    ">expr_binary   </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::INDEX          ">expr_index    </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::DOT            ">expr_name     </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::VAR_DECL       ">expr_name     </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::CARGS_CALL     ">expr_call     </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::VARGS_CALL     ">expr_call     </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::DEF_DECL       ">expr_blk_decl </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::INTR_DECL      ">expr_blk_decl </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::FN_DECL        ">expr_fn_decl  </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::KW             ">expr_kw       </Item>
-            <Item Name="[value]" Condition="ty == nn::lang::ExprType::VAR            ">expr_string   </Item>
-        </Expand>
-    </Type>
+  <Type Name="nn::lang::AstExpr">
+    <DisplayString>{{ ty={ty} line={node_info.line_start} col={node_info.col_start} }}</DisplayString>
+    <Expand>
+      <Item Name="ty">ty</Item>
+      <Item Name="node_info">node_info</Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::KW             ">expr_kw         </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::VAR            ">expr_string     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::LIT_BOOL       ">expr_bool       </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::LIT_INT        ">expr_int        </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::LIT_FLOAT      ">expr_float      </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::LIT_STRING     ">expr_string     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::LIT_ARRAY      ">expr_agg        </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::LIT_TUPLE      ">expr_agg        </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::UNARY_POS      ">expr_unary      </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::UNARY_NEG      ">expr_unary      </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::UNARY_NOT      ">expr_unary      </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::UNARY_UNPACK   ">expr_unary      </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::UNARY_MUT      ">expr_unary      </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::UNARY_REF      ">expr_unary      </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_ADD     ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_SUB     ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_MUL     ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_DIV     ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_MOD     ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_POW     ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_IADD    ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_ISUB    ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_IMUL    ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_IDIV    ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_IMOD    ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_IPOW    ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_ASSIGN  ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_AND     ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_OR      ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_CMP_EQ  ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_CMP_NE  ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_CMP_GT  ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_CMP_LT  ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_CMP_GE  ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_CMP_LE  ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_CAST    ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::BINARY_DECL    ">expr_binary     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::INDEX          ">expr_index      </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::DOT            ">expr_name       </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::CALL_CARGS     ">expr_call       </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::CALL_VARGS     ">expr_call       </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::DEFN_NAMESPACE ">expr_namespace  </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::DEFN_ENUM      ">expr_enum       </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::DEFN_STRUCT    ">expr_struct     </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::DEFN_DEF       ">expr_block      </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::DEFN_INTR      ">expr_block      </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::DEFN_FN        ">expr_fn         </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::DEFN_INIT      ">expr_init       </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::DECL_DEF       ">expr_block_decl </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::DECL_INTR      ">expr_block_decl </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::DECL_FN        ">expr_fn_decl    </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::DECL_INIT      ">expr_init_decl  </Item>
+      <Item Name="value" Condition="ty == nn::lang::ExprType::IMPORT         ">expr_import     </Item>
+    </Expand>
+  </Type>
 
+  <Type Name="nn::lang::AstExprUnaryOp">
+    <DisplayString>{{ expr={expr->ty} }}</DisplayString>
+    <Expand>
+      <Item Name="expr">*expr</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="nn::lang::AstExprBinaryOp">
+    <DisplayString>{{ lhs={left->ty} rhs={right->ty} }}</DisplayString>
+    <Expand>
+      <Item Name="lhs">*left</Item>
+      <Item Name="rhs">*right</Item>
+    </Expand>
+  </Type>
+
+  <!--
     <Type Name="nn::lang::TypeRef">
-        <DisplayString>{{ {(void*)ptr} ty={ptr->ty} cat={ptr->cat} }}</DisplayString>
-        <Expand>
-            <ExpandedItem>*ptr</ExpandedItem>
-        </Expand>
+      <DisplayString>{{ {(void*)ptr} ty={ptr->ty} cat={ptr->cat} }}</DisplayString>
+      <Expand>
+        <ExpandedItem>*ptr</ExpandedItem>
+      </Expand>
     </Type>
 
     <Type Name="nn::lang::TypeInfo">
-        <DisplayString>{{ ty={ty} cat={cat} }}</DisplayString>
-        <Expand>
-            <Item Name="[ty]">ty</Item>
-            <Item Name="[cat]">cat</Item>
-            <ExpandedItem Condition="ty == nn::lang::TypeInfo::TYPE      ">type_type       </ExpandedItem>
-            <ExpandedItem Condition="ty == nn::lang::TypeInfo::ARRAY     ">type_array      </ExpandedItem>
-            <ExpandedItem Condition="ty == nn::lang::TypeInfo::TUPLE     ">type_tuple      </ExpandedItem>
-            <ExpandedItem Condition="ty == nn::lang::TypeInfo::LOOKUP    ">type_lookup     </ExpandedItem>
-            <ExpandedItem Condition="ty == nn::lang::TypeInfo::CARGBIND  ">type_cargbind   </ExpandedItem>
-            <ExpandedItem Condition="ty == nn::lang::TypeInfo::STRUCT    ">type_struct     </ExpandedItem>
-            <ExpandedItem Condition="ty == nn::lang::TypeInfo::ENUM      ">type_enum       </ExpandedItem>
-            <ExpandedItem Condition="ty == nn::lang::TypeInfo::ENUMENTRY ">type_enum_entry </ExpandedItem>
-            <ExpandedItem Condition="ty == nn::lang::TypeInfo::DLTYPE    ">type_dltype     </ExpandedItem>
-            <ExpandedItem Condition="ty == nn::lang::TypeInfo::GENERIC   ">type_generic    </ExpandedItem>
-            <ExpandedItem Condition="ty == nn::lang::TypeInfo::UNPACK    ">type_array      </ExpandedItem>
-        </Expand>
+      <DisplayString>{{ ty={ty} cat={cat} }}</DisplayString>
+      <Expand>
+        <Item Name="[ty]">ty</Item>
+        <Item Name="[cat]">cat</Item>
+        <ExpandedItem Condition="ty == nn::lang::TypeInfo::TYPE      ">type_type       </ExpandedItem>
+        <ExpandedItem Condition="ty == nn::lang::TypeInfo::ARRAY     ">type_array      </ExpandedItem>
+        <ExpandedItem Condition="ty == nn::lang::TypeInfo::TUPLE     ">type_tuple      </ExpandedItem>
+        <ExpandedItem Condition="ty == nn::lang::TypeInfo::LOOKUP    ">type_lookup     </ExpandedItem>
+        <ExpandedItem Condition="ty == nn::lang::TypeInfo::CARGBIND  ">type_cargbind   </ExpandedItem>
+        <ExpandedItem Condition="ty == nn::lang::TypeInfo::STRUCT    ">type_struct     </ExpandedItem>
+        <ExpandedItem Condition="ty == nn::lang::TypeInfo::ENUM      ">type_enum       </ExpandedItem>
+        <ExpandedItem Condition="ty == nn::lang::TypeInfo::ENUMENTRY ">type_enum_entry </ExpandedItem>
+        <ExpandedItem Condition="ty == nn::lang::TypeInfo::DLTYPE    ">type_dltype     </ExpandedItem>
+        <ExpandedItem Condition="ty == nn::lang::TypeInfo::GENERIC   ">type_generic    </ExpandedItem>
+        <ExpandedItem Condition="ty == nn::lang::TypeInfo::UNPACK    ">type_array      </ExpandedItem>
+      </Expand>
     </Type>
+  -->
 
 </AutoVisualizer>

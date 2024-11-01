@@ -43,6 +43,7 @@ namespace std
         ss << std::to_string(vec.back());
         return ss.str();
     }
+    std::string to_string(const nn::lang::Token* ptk);
 }
 
 namespace nn

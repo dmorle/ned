@@ -1874,7 +1874,7 @@ namespace nn
                 return true;
 
             // If it's either const or ref, no need to copy it for the call
-            if (is_constref)
+            if (pass_by_ref)
                 return false;
 
             if (!stack_val->check_cpy())
@@ -1899,7 +1899,7 @@ namespace nn
                 return true;
 
             // If it's either const or ref, no need to copy it for the call
-            if (is_constref)
+            if (pass_by_ref)
                 return false;
 
             if (!val->check_cpy())
@@ -2308,8 +2308,8 @@ namespace nn
             const CodeModule::LookupResult& lookup, const std::string& name, TypeNode* node)
         {
             // Checking if a struct matches the cargs
-            std::vector<std::pair<const AstStruct*, std::map<std::string, ValNode*>>> struct_matches;
-            for (const AstStruct* ast : lookup.structs)
+            std::vector<std::pair<const AstExprStruct*, std::map<std::string, ValNode*>>> struct_matches;
+            for (const AstExprStruct* ast : lookup.structs)
             {
                 std::map<std::string, ValNode*> cargs;
                 if (!match_carg_sig(scope, ast->signature, param_cargs, cargs))
@@ -2329,8 +2329,8 @@ namespace nn
             }
 
             // Checking if an enum matches the cargs
-            std::vector<std::pair<const AstEnum*, std::map<std::string, ValNode*>>> enum_matches;
-            for (const AstEnum* ast : lookup.enums)
+            std::vector<std::pair<const AstExprEnum*, std::map<std::string, ValNode*>>> enum_matches;
+            for (const AstExprEnum* ast : lookup.enums)
             {
                 std::map<std::string, ValNode*> cargs;
                 if (!match_carg_sig(scope, ast->signature, param_cargs, cargs))
@@ -2352,17 +2352,33 @@ namespace nn
             return error::compiler(node_info, "Unresolved reference to user-defined type %", name);
         }
 
-        bool ProcCall::create_arg(Scope& scope, const AstArgDecl& decl, ValNode*& node)
-        {
-            return create_arg(scope,
-                decl.node_info, decl.is_packed, decl.type_expr.get(), decl.var_name, decl.default_expr.get(), node);
-        }
-
         bool ProcCall::create_arg(Scope& scope, const AstExpr& decl, ValNode*& node)
         {
-            assert(decl.ty == ExprType::VAR_DECL);
-            return create_arg(scope,
-                decl.node_info, false, decl.expr_name.expr.get(), decl.expr_name.val, nullptr, node);
+            const AstExpr* decl_expr;
+            const AstExpr* default_expr;
+            if (decl.ty == ExprType::BINARY_ASSIGN)
+            {
+                // Defaulted argument
+                default_expr = decl.expr_binary.right.get();
+                decl_expr = decl.expr_binary.left.get();
+            }
+            else
+            {
+                // No default
+                decl_expr = &decl;
+                default_expr = nullptr;
+            }
+            
+            if (decl_expr->ty != ExprType::BINARY_DECL)
+                return error::compiler(decl_expr->node_info, "Expected variable declaration");
+
+            const AstExpr* var_expr = decl_expr->expr_binary.left.get();
+            const AstExpr* type_expr = decl_expr->expr_binary.right.get();
+            bool is_packed = var_expr->ty == ExprType::UNARY_UNPACK;
+            if (is_packed)
+                var_expr = var_expr->expr_unary.expr.get();
+
+            return create_arg(scope, decl.node_info, is_packed, type_expr, var_expr->expr_string, default_expr, node);
         }
 
         bool ProcCall::create_arg(
@@ -2379,8 +2395,8 @@ namespace nn
             node->ty = ValNode::Type::ARG_VAL;
             node->node_info = &node_info;
             node->val_arg.name = var_name;
-            node->is_constref = type_expr->ty == ExprType::UNARY_CONST || type_expr->ty == ExprType::UNARY_REF;
-            if (node->is_constref)
+            node->pass_by_ref = type_expr->ty != ExprType::UNARY_MUT;
+            if (type_expr->ty == ExprType::UNARY_MUT || type_expr->ty == ExprType::UNARY_MUT)
                 type_expr = type_expr->expr_unary.expr.get();
 
             if (!is_packed)
@@ -2396,7 +2412,7 @@ namespace nn
                 // Immutable types don't need to be passed by value, since they'll be const in the callee's scope anyways
                 // This is just a performance improvement for things like unpacks, but for types this is actually needed
                 // for code correctness since runtime type objects can't be copied
-                node->is_constref = node->is_constref || node->val_arg.type->immutable();
+                node->pass_by_ref = node->pass_by_ref || node->val_arg.type->immutable();
                 return false;
             }
             // The argument is packed, wrap the type in an array and make sure theres no defaults
@@ -2408,7 +2424,7 @@ namespace nn
             new (&node->val_arg.type->type_array) ArrayType();
             node->val_arg.type->ty = TypeNode::Type::ARRAY;
             node->val_arg.type->node_info = &node_info;
-            node->is_constref = true;  // packed arguments are always constant
+            node->pass_by_ref = true;  // packed arguments are always constant
             return create_type(scope, *type_expr, node->val_arg.type->type_array.carg);
         }
 
@@ -2420,7 +2436,7 @@ namespace nn
             TypeRef type;
             switch (expr.ty)
             {
-            case ExprType::CARGS_CALL:
+            case ExprType::CALL_CARGS:
                 // expr.expr_call.callee->ty needs to be a builtin type or structure
                 if (expr.expr_call.callee->ty == ExprType::KW)
                     switch (expr.expr_call.callee->expr_kw)
@@ -3817,7 +3833,7 @@ namespace nn
                 const ValNode& node = *varg_nodes.at(name);
                 if (!node.val)
                     return error::compiler(*node.node_info, "Missing required varg '%'", name);
-                if (node.is_constref)
+                if (node.pass_by_ref)
                     return error::compiler(*node.node_info, "const/ref vargs are not allowed in a def block");
 
                 if (node.val->codegen(scope))
@@ -3976,7 +3992,7 @@ namespace nn
                 const ValNode& node = *varg_nodes.at(name);
                 if (!node.val)
                     return error::compiler(*node.node_info, "Missing required varg '%'", name);
-                if (node.is_constref)
+                if (node.pass_by_ref)
                     return error::compiler(*node.node_info, "const/ref vargs are not allowed in a def block");
 
                 if (node.val->codegen(scope))
@@ -5490,7 +5506,7 @@ namespace nn
                 return codegen_expr_callee_var(scope, expr, ret);
             case ExprType::DOT:
                 return codegen_expr_callee_dot(scope, expr, ret);
-            case ExprType::CARGS_CALL:
+            case ExprType::CALL_CARGS:
                 return codegen_expr_callee_cargs(scope, expr, ret);
             default:
                 return codegen_expr_single_ret<TypeInfo::NonVirtual>(scope, expr, ret);
@@ -7562,9 +7578,9 @@ namespace nn
                 return codegen_expr_dot(scope, expr, rets);
             case ExprType::VAR_DECL:
                 return codegen_expr_decl(scope, expr, rets);
-            case ExprType::CARGS_CALL:
+            case ExprType::CALL_CARGS:
                 return codegen_expr_cargs(scope, expr, rets);
-            case ExprType::VARGS_CALL:
+            case ExprType::CALL_VARGS:
                 return codegen_expr_vargs(scope, expr, rets);
             case ExprType::FN_DECL:
                 return codegen_expr_fndecl(scope, expr, rets);
@@ -8482,7 +8498,7 @@ namespace nn
                 body->add_instruction(instruction::Err(node_info));
         }
 
-        bool codegen_func(const std::string& name, const AstFn& ast_fn, const std::vector<std::string>& ns)
+        bool codegen_func(const std::string& name, const AstExprFn& ast_fn, const std::vector<std::string>& ns)
         {
             body_type = BodyType::FN;
             body_sig.fn_sig = &ast_fn.signature;
@@ -8532,7 +8548,7 @@ namespace nn
             return false;
         }
 
-        bool codegen_def(const std::string& name, const AstBlock& ast_def, const std::vector<std::string>& ns)
+        bool codegen_def(const std::string& name, const AstExpr& ast_def, const std::vector<std::string>& ns)
         {
             if (ast_def.is_bytecode)
                 return error::compiler(ast_def.node_info, "the body of a def must not be bytecode");
@@ -8664,7 +8680,7 @@ namespace nn
                 bc->add_block(def_name, *body);
         }
 
-        bool codegen_intr(const std::string& name, const AstBlock& ast_intr, const std::vector<std::string>& ns)
+        bool codegen_intr(const std::string& name, const AstExprBlock& ast_intr, const std::vector<std::string>& ns)
         {
             if (ast_intr.is_bytecode)
                 return error::compiler(ast_intr.node_info, "the body of an intr must not be bytecode");
@@ -8818,13 +8834,13 @@ namespace nn
             // And construction via a call results in inline code
             bool ret = false;
             for (const auto& [name, fns] : node.fns)
-                for (const AstFn& fn : fns)
+                for (const AstExprFn& fn : fns)
                     ret = codegen_func(name, fn, ns) || ret;
             for (const auto& [name, defs] : node.defs)
-                for (const AstBlock& def : defs)
+                for (const AstExprBlock& def : defs)
                     ret = codegen_def(name, def, ns) || ret;
             for (const auto& [name, intrs] : node.intrs)
-                for (const AstBlock& intr : intrs)
+                for (const AstExprBlock& intr : intrs)
                     ret = codegen_intr(name, intr, ns) || ret;
             for (const auto& [name, sub_nodes] : node.namespaces)
             {

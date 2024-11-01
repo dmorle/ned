@@ -29,6 +29,87 @@ namespace nn
         struct AstExpr;
         struct AstLine;
 
+        // Carg only definition (struct/enum/init)
+        struct AstCargSig
+        {
+            std::vector<AstExpr> cargs;
+        };
+
+        // Function definition (fn)
+        struct AstFnSig
+        {
+            std::vector<AstExpr> cargs;
+            std::vector<AstExpr> vargs;
+            std::vector<AstExpr> rets;
+        };
+
+        // Block / intrinsic definition (def/intr)
+        struct AstBlockSig
+        {
+            std::vector<AstExpr> cargs;
+            std::vector<AstExpr> vargs;
+            std::vector<std::string> rets;
+        };
+
+        enum class ExprType
+        {
+            INVALID,
+            EMPTY,
+            KW,
+            VAR,
+            LIT_BOOL,
+            LIT_INT,
+            LIT_FLOAT,
+            LIT_STRING,
+            LIT_ARRAY,
+            LIT_TUPLE,
+            UNARY_POS,
+            UNARY_NEG,
+            UNARY_NOT,
+            UNARY_UNPACK,
+            UNARY_MUT,
+            UNARY_REF,
+            BINARY_ADD,
+            BINARY_SUB,
+            BINARY_MUL,
+            BINARY_DIV,
+            BINARY_MOD,
+            BINARY_POW,
+            BINARY_IADD,
+            BINARY_ISUB,
+            BINARY_IMUL,
+            BINARY_IDIV,
+            BINARY_IMOD,
+            BINARY_IPOW,
+            BINARY_ASSIGN,
+            BINARY_AND,
+            BINARY_OR,
+            BINARY_CMP_EQ,
+            BINARY_CMP_NE,
+            BINARY_CMP_GT,
+            BINARY_CMP_LT,
+            BINARY_CMP_GE,
+            BINARY_CMP_LE,
+            BINARY_CAST,
+            BINARY_DECL,
+            INDEX,
+            DOT,
+            CALL_CARGS,
+            CALL_VARGS,
+            DEFN_NAMESPACE,
+            DEFN_ENUM,
+            DEFN_STRUCT,
+            DEFN_DEF,
+            DEFN_INTR,
+            DEFN_FN,
+            DEFN_INIT,
+            DECL_DEF,
+            DECL_INTR,
+            DECL_FN,
+            DECL_INIT,
+            IMPORT,
+        };
+
         enum class ExprKW
         {
             NUL,
@@ -128,28 +209,6 @@ namespace nn
             std::vector<AstExpr> lines;
         };
 
-        // Carg only definition (struct/enum/init)
-        struct AstCargSig
-        {
-            std::vector<AstExpr> cargs;
-        };
-
-        // Function definition (fn)
-        struct AstFnSig
-        {
-            std::vector<AstExpr> cargs;
-            std::vector<AstExpr> vargs;
-            std::vector<AstExpr> rets;
-        };
-
-        // Block / intrinsic definition (def/intr)
-        struct AstBlockSig
-        {
-            std::vector<AstExpr> cargs;
-            std::vector<AstExpr> vargs;
-            std::vector<std::string> rets;
-        };
-
         struct AstExprStruct
         {
             AstCargSig signature;
@@ -187,64 +246,7 @@ namespace nn
 
         struct AstExpr
         {
-            enum class Type
-            {
-                INVALID,
-                EMPTY,
-                KW,
-                VAR,
-                LIT_BOOL,
-                LIT_INT,
-                LIT_FLOAT,
-                LIT_STRING,
-                LIT_ARRAY,
-                LIT_TUPLE,
-                UNARY_POS,
-                UNARY_NEG,
-                UNARY_NOT,
-                UNARY_UNPACK,
-                UNARY_MUT,
-                UNARY_REF,
-                BINARY_ADD,
-                BINARY_SUB,
-                BINARY_MUL,
-                BINARY_DIV,
-                BINARY_MOD,
-                BINARY_POW,
-                BINARY_IADD,
-                BINARY_ISUB,
-                BINARY_IMUL,
-                BINARY_IDIV,
-                BINARY_IMOD,
-                BINARY_IPOW,
-                BINARY_ASSIGN,
-                BINARY_AND,
-                BINARY_OR,
-                BINARY_CMP_EQ,
-                BINARY_CMP_NE,
-                BINARY_CMP_GT,
-                BINARY_CMP_LT,
-                BINARY_CMP_GE,
-                BINARY_CMP_LE,
-                BINARY_CAST,
-                BINARY_DECL,
-                INDEX,
-                DOT,
-                CALL_CARGS,
-                CALL_VARGS,
-                DEFN_NAMESPACE,
-                DEFN_ENUM,
-                DEFN_STRUCT,
-                DEFN_DEF,
-                DEFN_INTR,
-                DEFN_FN,
-                DEFN_INIT,
-                DECL_DEF,
-                DECL_INTR,
-                DECL_FN,
-                DECL_INIT,
-                IMPORT,
-            } ty = Type::INVALID;
+            ExprType ty = ExprType::INVALID;
             AstNodeInfo node_info;
 
             union
@@ -281,7 +283,6 @@ namespace nn
             void reset() noexcept;
         };
 
-        struct AstLine;
         enum class LineType
         {
             INVALID,

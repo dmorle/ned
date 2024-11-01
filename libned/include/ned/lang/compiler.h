@@ -18,12 +18,7 @@ namespace nn
             struct Namespace
             {
                 std::map<std::string, std::vector<Namespace>> namespaces;
-                std::map<std::string, std::vector<AstStruct>> structs;
-                std::map<std::string, std::vector<AstEnum>>   enums;
-                std::map<std::string, std::vector<AstFn>>     fns;
-                std::map<std::string, std::vector<AstBlock>>  defs;
-                std::map<std::string, std::vector<AstBlock>>  intrs;
-                std::map<std::string, std::vector<AstInit>>   inits;
+                std::map<std::string, std::vector<AstExpr>>   defns;
 
                 // You couldn't figure this one out yourself C++? Really?
                 Namespace() {}
@@ -38,18 +33,13 @@ namespace nn
                 std::string idn;  // the identifier that got looked up
                 std::vector<std::string> ns;  // the signature's namespace
                 std::vector<const Namespace*> namespaces;
-                std::vector<const AstStruct*> structs;
-                std::vector<const AstEnum*>   enums;
-                std::vector<const AstFn*>     fns;
-                std::vector<const AstBlock*>  defs;
-                std::vector<const AstBlock*>  intrs;
-                std::vector<const AstInit*>   inits;
+                std::vector<const AstExpr*>   defns;
 
                 bool empty();
             };
 
         private:
-            static void merge_namespace(Namespace& dst, AstNamespace& src);
+            static void merge_namespace(Namespace& dst, AstExprNamespace& src);
             static void merge_module(Namespace& dst, AstModule& src);
 
         public:
@@ -126,7 +116,7 @@ namespace nn
 
         struct TypeInfoStruct
         {
-            const AstStruct* ast;
+            const AstExprStruct* ast;
             std::vector<std::string> ast_ns;
             std::map<std::string, TypeRef> cargs;
             std::vector<std::pair<std::string, TypeRef>> fields;
@@ -135,14 +125,14 @@ namespace nn
 
         struct TypeInfoEnum
         {
-            const AstEnum* ast;
+            const AstExprEnum* ast;
             std::vector<std::string> ast_ns;
             std::map<std::string, TypeRef> cargs;
         };
 
         struct TypeInfoEnumEntry  // Result of a non-trivial enum entry access (always virtual)
         {
-            const AstEnum* ast;
+            const AstExprEnum* ast;
             std::vector<std::string> ast_ns;
             std::map<std::string, TypeRef> cargs;
             size_t idx;
@@ -352,14 +342,14 @@ namespace nn
             TypeRef create_lookup      (std::string name, CodeModule::LookupResult lookup);  // always virtual
             TypeRef create_cargbind    (std::string name, CodeModule::LookupResult lookup, const std::vector<AstExpr>& cargs); // always virtual
             TypeRef create_struct      (TypeInfo::Category cat, CodegenCallback codegen,
-                                        const AstStruct* ast, const std::vector<std::string>& ns,
+                                        const AstExprStruct* ast, const std::vector<std::string>& ns,
                                         const std::map<std::string, TypeRef>& cargs,
                                         const std::vector<std::pair<std::string, TypeRef>>& fields);
-            TypeRef create_lazystruct  (const AstStruct* ast, const std::vector<std::string>& ns,
+            TypeRef create_lazystruct  (const AstExprStruct* ast, const std::vector<std::string>& ns,
                                         const std::map<std::string, TypeRef>& cargs);  // always virtual
-            TypeRef create_enum        (TypeInfo::Category cat, CodegenCallback codegen, const AstEnum* ast,
+            TypeRef create_enum        (TypeInfo::Category cat, CodegenCallback codegen, const AstExprEnum* ast,
                                         const std::vector<std::string> ast_ns, const std::map<std::string, TypeRef>& cargs);
-            TypeRef create_enum_entry  (const AstEnum* ast, const std::vector<std::string> ast_ns,
+            TypeRef create_enum_entry  (const AstExprEnum* ast, const std::vector<std::string> ast_ns,
                                         const std::map<std::string, TypeRef>& cargs, size_t idx);
 
             TypeRef create_init        (TypeInfo::Category cat, CodegenCallback codegen);
@@ -477,7 +467,7 @@ namespace nn
                 // Start by assuming all nodes are root nodes then during ProcCall::create_* calls,
                 // if the node name comes up it means that the Node wasn't a root node
                 bool is_root = true;
-                bool is_constref = false;  // const or ref (doesn't need to be copied before the proc call)
+                bool pass_by_ref = false;  // true -> doesn't need to be copied before the proc call
                 const AstNodeInfo* node_info;
                 TypeRef val = TypeInfo::null;  // This field gets initialized during codegen
 
@@ -505,14 +495,14 @@ namespace nn
 
             struct StructType
             {
-                const AstStruct* ast;
+                const AstExprStruct* ast;
                 std::vector<std::string> ast_ns;
                 std::map<std::string, ValNode*> cargs;
             };
 
             struct EnumType
             {
-                const AstEnum* ast;
+                const AstExprEnum* ast;
                 std::vector<std::string> ast_ns;
                 std::map<std::string, ValNode*> cargs;
             };
@@ -598,7 +588,6 @@ namespace nn
             // guarentee that they don't update the stack at all, but they DO need to act on
             // and write code that runs on the actual stack, you con't use virtual stacks.
 
-            bool create_arg          (Scope& scope, const AstArgDecl& decl, ValNode*& node);
             bool create_arg          (Scope& scope, const AstExpr& decl, ValNode*& node);
             bool create_type         (Scope& scope, const AstExpr& expr, TypeNode*& node);
             bool create_value        (Scope& scope, const AstExpr& expr, ValNode*& node);
@@ -904,13 +893,13 @@ namespace nn
         bool codegen_line(Scope& scope, const AstLine& line);  // generates code for independent lines.  Can't handle if, elif, else, forward.
         bool codegen_lines(Scope& scope, const std::vector<AstLine>& lines);
 
-        bool proc_name_fn     (std::string& name, const std::vector<std::string>& ns, const AstFn&     ast_fn    );
-        bool proc_name_def    (std::string& name, const std::vector<std::string>& ns, const AstBlock&  ast_def   );
-        bool proc_name_intr   (std::string& name, const std::vector<std::string>& ns, const AstBlock&  ast_intr  );
+        bool proc_name_fn     (std::string& name, const std::vector<std::string>& ns, const AstExprFn&     ast_fn    );
+        bool proc_name_def    (std::string& name, const std::vector<std::string>& ns, const AstExprBlock&  ast_def   );
+        bool proc_name_intr   (std::string& name, const std::vector<std::string>& ns, const AstExprBlock&  ast_intr  );
 
-        bool codegen_func (const std::string& name, const AstFn& ast_fn, const std::vector<std::string>& ns);
-        bool codegen_def  (const std::string& name, const AstBlock& ast_def, const std::vector<std::string>& ns);
-        bool codegen_intr (const std::string& name, const AstBlock& ast_intr, const std::vector<std::string>& ns);
+        bool codegen_func (const std::string& name, const AstExpr& ast_fn, const std::vector<std::string>& ns);
+        bool codegen_def  (const std::string& name, const AstExpr& ast_def, const std::vector<std::string>& ns);
+        bool codegen_intr (const std::string& name, const AstExpr& ast_intr, const std::vector<std::string>& ns);
 
         bool codegen_namespace (const CodeModule::Namespace& node, std::vector<std::string>& ns);
         bool codegen_module(ByteCodeModule& bc, ModuleInfo& info, AstModule& ast, const std::vector<std::string>& imp_dirs);

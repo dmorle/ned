@@ -360,6 +360,7 @@ namespace nn
             template<> std::string ins_str<InstructionType::LE   >() { return "le"   ; }
             template<> std::string ins_str<InstructionType::IDX  >() { return "idx"  ; }
             template<> std::string ins_str<InstructionType::LEN  >() { return "len"  ; }
+            template<> std::string ins_str<InstructionType::APP  >() { return "app"  ; }
             template<> std::string ins_str<InstructionType::XCFG >() { return "xcfg" ; }
             template<> std::string ins_str<InstructionType::XSTR >() { return "xstr" ; }
             template<> std::string ins_str<InstructionType::XFLT >() { return "xflt" ; }
@@ -672,6 +673,10 @@ namespace nn
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");
                 return body.add_instruction(Len(tarr[0]));
+            case hash("app"):
+                if (tarr.size() != 1)
+                    return error::syntax(tarr[0], "Invalid instruction");
+                return body.add_instruction(App(tarr[0]));
             case hash("xcfg"):
                 if (tarr.size() != 1)
                     return error::syntax(tarr[0], "Invalid instruction");

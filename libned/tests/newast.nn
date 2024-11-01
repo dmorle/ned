@@ -1,0 +1,4 @@
+zero := 0
+
+# main := fn() -> int:
+# 	return 0

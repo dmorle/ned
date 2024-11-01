@@ -1,18 +1,18 @@
 import nvm
 
-struct PwCtx:
+PwCtx := struct:
     ref nvm.Node node
-    const nvm.Value lhs_val
-    const nvm.Value rhs_val
-    const nvm.Value out_val
-    const nvm.Value zero_val
-    const nvm.Value one_val
-    const nvm.Type i32_ty
-    const array<int> shape
+    nvm.Value lhs_val
+    nvm.Value rhs_val
+    nvm.Value out_val
+    nvm.Value zero_val
+    nvm.Value one_val
+    nvm.Type i32_ty
+    array<int> shape
 
-fn pointwise_add(
-    ref PwCtx ctx, const array<const nvm.Value> index,
-    ref nvm.Block entry, const nvm.Block end
+fpointwise_add := fn(
+        ctx: ref PwCtx, index: array<nvm.Value>,
+        entry: ref nvm.Block, end: nvm.Block
     ) -> const Block:
     rank_idx = len(index)
     if rank_idx == len(ctx.shape):
@@ -26,7 +26,7 @@ fn pointwise_add(
 
     str_idx := str::rank_idx
     start_loop : ref = nvm.new_block(node, "start_loop" + str_idx)
-    end_loop: ref = nvm.new_block(node, "end_loop" + str_idx)
+    end_loop : ref = nvm.new_block(node, "end_loop" + str_idx)
 
     const end_val = nvm.new_i32(node, "end_val" + str_idx, ctx.shape[rank_idx])
     const idx, ref idx_args = nvm.instr.phi(start_loop, "idx" + str_idx, i32_ty)
@@ -41,7 +41,7 @@ fn pointwise_add(
 
     return start_loop
 
-intr __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> sum:
+__add__ := intr<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> sum:
     # Setup
     ref ctx = PwCtx(
         nvm.new_node(),
@@ -62,56 +62,59 @@ intr __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> sum:
     __add_intr_info "nvm" : cfg::node
     return fp<*shape> out
 
-intr __mul__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+__mul__ := intr<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out: 
     return fp<*shape> out
 
-def __add__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> sum:
+__add__ := def<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> sum:
     fp<*shape> out
     out.forward = lhs.forward + rhs.forward
     lhs.backward = out.backward
     rhs.backward = out.backward
     return out
 
-def __mul__<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+__mul__ := def<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
     fp<*shape> out
     out.forward = lhs.forward * rhs.forward
     lhs.backward = out.backward * rhs.forward
     rhs.backward = out.backward * lhs.forward
     return out
 
-intr transpose<fty fp, int M, int N>(fp<M, N> inp) -> out:
+transpose := intr<fty fp, int M, int N>(fp<M, N> inp) -> out:
     __add_intr_info "nvm" : cfg::"test"
     return fp<N, M> out
 
-def transpose<fty fp, int M, int N>(fp<M, N> inp) -> out:
+sum_reduce := def<int* dims, fty fp, int *shape>(fp<*shape> inp) -> out:
+    ...
+
+transpose := def<fty fp, int M, int N>(fp<M, N> inp) -> out:
     fp<M, N> out
     out.forward = transpose(inp.forward)
     inp.backward = transpose(out.backward)
     return out
 
-intr matmul<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> prod:
+matmul := intr<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> prod:
     return fp<M, N> prod
 
-def matmul<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> out:
+matmul := def<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> out:
     fp<M, N> out
     out.forward = matmul(lhs.forward, rhs.forward)
     lhs.backward = matmul(out.backward, transpose(rhs.forward))
     rhs.backward = matmul(transpose(lhs.forward), out.backward)
     return out
 
-intr sync<str name, fty fp, int *shape>(fp<*shape> inp) -> out:
+sync := intr<str name, fty fp, int *shape>(fp<*shape> inp) -> out:
     return fp<*shape> out
 
-def add_model<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
+add_model := def<fty fp, int *shape>(fp<*shape> lhs, fp<*shape> rhs) -> out:
     return lhs + rhs
 
-def tr_model<fty fp, int M, int N>(fp<M, N> inp) -> out:
+tr_model := def<fty fp, int M, int N>(fp<M, N> inp) -> out:
     return transpose(inp)
 
-def mm_model<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> out:
+mm_model := def<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs) -> out:
     return matmul(lhs, rhs)
 
-def lin_model<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs, fp<M, N> bias) -> out:
+lin_model := def<fty fp, int M, int K, int N>(fp<M, K> lhs, fp<K, N> rhs, fp<M, N> bias) -> out:
     return matmul(lhs, rhs) + bias
 
 zeros := init:
@@ -121,25 +124,32 @@ zeros := init:
 linear := def<fp: fty, N: int, inp_sz: int, out_sz: int, bias: bool = true>(inp: fp<N, inp_sz>) -> out:
     extern zeros(w: fp<inp_sz, out_sz>)
     if bias:
-        # Yes, this is not how a linear layer actually works, but I don't want to implement broadcasting yet
+        # Yes, this is not how a linear layer actually works,
+        # but I don't want to implement broadcasting yet
         extern zeros b: fp<N, out_sz>
         return matmul(inp, w) + b
     return matmul(inp, w)
 
-def linear_no_bias_pls<fty fp, int N, int inp_sz, int out_sz>(fp<N, inp_sz> inp) -> out:
+linear_no_bias_pls := def<fty fp, int N, int inp_sz, int out_sz>(fp<N, inp_sz> inp) -> out:
     fp<inp_sz, out_sz> w
     extern zeros w
     return matmul(inp, w)
 
-def opt_model<fty fp, int N, int inp_sz, int out_sz>(fp<N, inp_sz> x) -> y:
+opt_model := def<fty fp, int N, int inp_sz, int out_sz>(fp<N, inp_sz> x) -> y:
     return linear_no_bias_pls<out_sz=out_sz>(x)
+
+# Loss stuff
+
+square_loss := def<fty fp, int *shape>(fp<*shape> pred, fp<*shape> gt):
+    pred.backwards = 2 * sum_reduce<*shape>(pred - gt)
+    return void
 
 # Optimizer stuff
 
-intr const_val<float val, fty fp, int *shape>() -> val:
+const_val := intr<float val, fty fp, int *shape>() -> val:
     return fp<*shape> out
 
-def SGD<float lr, fty fp, int *shape>() -> weight:
+SGD := def<float lr, fty fp, int *shape>() -> weight:
     fp<*shape> weight
     val = const_val<lr, fp, *shape>()
     weight.forward = sync<"step">(weight.forward + val * weight.backward)

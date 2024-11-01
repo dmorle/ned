@@ -47,3 +47,18 @@ target_link_libraries(libned_tests libned)
 
 set_property(TARGET libned_tests PROPERTY LINKER_LANGUAGE CXX)
 set_property(TARGET libned_tests PROPERTY CXX_STANDARD 20)
+
+add_executable(
+    libned_test_newast
+    "tests/newast.cpp"
+
+    "source/errors.cpp"
+
+    "source/lang/lexer.cpp"
+    "source/lang/ast.cpp"
+)
+
+target_compile_definitions(libned_test_newast PUBLIC TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/")
+
+set_property(TARGET libned_test_newast PROPERTY LINKER_LANGUAGE CXX)
+set_property(TARGET libned_test_newast PROPERTY CXX_STANDARD 20)

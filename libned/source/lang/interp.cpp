@@ -1345,6 +1345,16 @@ namespace nn
                 stack.push(dst);
         }
 
+        inline bool exec_app(CallStack& stack, ProgramHeap& heap)
+        {
+            Obj vec, elem;
+            if (stack.pop(elem) ||
+                stack.pop(vec)
+                ) return true;
+            elem.agg_obj->push_back(elem);
+            return false;
+        }
+
         inline bool exec_xcfg(CallStack& stack, ProgramHeap& heap)
         {
             Obj type, src, dst;
@@ -1861,6 +1871,10 @@ namespace nn
                     break;
                 case InstructionType::LEN:
                     if (exec_len(stack, heap))
+                        goto runtime_error;
+                    break;
+                case InstructionType::APP:
+                    if (exec_app(stack, heap))
                         goto runtime_error;
                     break;
                 case InstructionType::XCFG:

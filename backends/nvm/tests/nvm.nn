@@ -17,15 +17,15 @@ len := fn<type T>(array<T> arr) -> int:
         len
         ret
 
-append := fn<T: type>(arr: ref array<T>, t: T) -> void
+append := fn<T: type>(arr: ref array<T>, t: T) -> void:
     :begin
         dup 1
         dup 1
         app
         ret
 
-range := fn(int n) -> array<int>:
-    i : mut int = 0
+range := fn(n: int) -> array<int>:
+    i : mut = 0
     result: mut array<int>
     while i < n:
         append(result, i)
@@ -41,7 +41,7 @@ enumerate := fn<type T>(array<T> arr) -> array<tuple<int, T>>:
 zip := fn<type T1, type T2>(arr1: array<T1>, arr2: array<T2>) -> array<tuple<T1, T2>>:
     result : mut array<tuple<T1, T2>>
     for i in range(min(len(arr1), len(arr2))):
-        append(result, (arr1[i], arr2[i]),)
+        append(result, (arr1[i], arr2[i]))
     return result
 
 map := fn<T: type, R: type>(arr: array<T>, key: fn(t: T) -> R, T;, x: int) -> array<R>:
@@ -183,7 +183,7 @@ nvm := namespace:
             return Type.float64
         raise("Unexpected fty value: " + str::fp)
 
-    dereference := fn(ref Type ty) -> Type:
+    dereference := fn(ty: ref Type) -> Type:
         match ty:
             edge:
                 return fty_to_type(fp)
@@ -211,24 +211,24 @@ nvm := namespace:
         append(node.const_ints, (ret, ival))
         return ret
 
-    fn new_i32(ref Node node, const str name, int ival) -> Value:
+    new_i32 := fn(node: ref Node, name: str, ival: int) -> Value:
         ref ret = Value(name, Type.integer(32))
-        node.const_ints += [(ret, ival),]
+        append(node.const_ints, (ret, ival))
         return ret
     
-    fn new_f32(ref Node node, const str name, float fval) -> Value:
+    new_f32 := fn(node: ref Node, name: str, fval: float) -> Value:
         ref ret = Value(name, Type.float32)
-        node.const_flts += [(ret, fval),]
+        append(node.const_flts, (ret, fval))
         return ret
     
-    fn new_fty(ref Node node, const str name, const fty fp, float fval) -> Value:
+    new_fty := fn(node: ref Node, name: str, fp: fty, fval: float) -> Value:
         ret := Value(name, fty_to_type(fp))
-        node.const_flts += [(ret, fval),]
+        append(node.const_flts, (ret, fval))
         return ret
 
-    fn new_block(ref Node node, const str name) -> Block:
-        ref blk = Block(name, [])
-        node.blocks += [blk]
+    new_block := fn(node: ref Node, name: const str) -> Block:
+        blk : ref = Block(name, [])
+        append(node.blocks, blk)
         return blk
 
     instr := namespace:

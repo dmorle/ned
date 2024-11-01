@@ -171,6 +171,7 @@ namespace nn
             LE,
             IDX,
             LEN,
+            APP,
             XCFG,
             XSTR,
             XFLT,
@@ -335,6 +336,7 @@ namespace nn
             using Lt    = Implicit < LT    >;
             using Idx   = Implicit < IDX   >;
             using Len   = Implicit < LEN   >;
+            using App   = Implicit < APP   >;
             using XCfg  = Implicit < XCFG  >;
             using XStr  = Implicit < XSTR  >;
             using XFlt  = Implicit < XFLT  >;
@@ -433,6 +435,7 @@ namespace nn
 * 
 * idx          Retrieves the left at the index of the right
 * len          Retrieves the length of the tos
+* app          Appends an element to an array
 * 
 * xcfg         Converts an object to a config object
 * xstr         Converts an object to a string object

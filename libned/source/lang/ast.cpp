@@ -1,8 +1,6 @@
 #include <ned/errors.h>
 #include <ned/lang/ast.h>
 #include <ned/lang/lexer.h>
-#include <ned/lang/obj.h>
-#include <ned/lang/bytecode.h>
 
 #include <functional>
 #include <cassert>
@@ -16,32 +14,32 @@ namespace nn
     {
         constexpr auto token_expr_table = []
         {
-            std::array<AstExpr::Type, (size_t)TokenType::TOKEN_TYPE_END> table = {};
+            std::array<ExprType, (size_t)TokenType::TOKEN_TYPE_END> table = {};
 
-            // Mapping tokens to expression types
-            table[(size_t)TokenType::COLON  ] = AstExpr::Type::BINARY_DECL;
-            table[(size_t)TokenType::CAST   ] = AstExpr::Type::BINARY_CAST;
-            table[(size_t)TokenType::ADD    ] = AstExpr::Type::BINARY_ADD;
-            table[(size_t)TokenType::SUB    ] = AstExpr::Type::BINARY_SUB;
-            table[(size_t)TokenType::STAR   ] = AstExpr::Type::BINARY_MUL;
-            table[(size_t)TokenType::DIV    ] = AstExpr::Type::BINARY_DIV;
-            table[(size_t)TokenType::MOD    ] = AstExpr::Type::BINARY_MOD;
-            table[(size_t)TokenType::POW    ] = AstExpr::Type::BINARY_POW;
-            table[(size_t)TokenType::IADD   ] = AstExpr::Type::BINARY_IADD;
-            table[(size_t)TokenType::ISUB   ] = AstExpr::Type::BINARY_ISUB;
-            table[(size_t)TokenType::IMUL   ] = AstExpr::Type::BINARY_IMUL;
-            table[(size_t)TokenType::IDIV   ] = AstExpr::Type::BINARY_IDIV;
-            table[(size_t)TokenType::IMOD   ] = AstExpr::Type::BINARY_IMOD;
-            table[(size_t)TokenType::IPOW   ] = AstExpr::Type::BINARY_IPOW;
-            table[(size_t)TokenType::ASSIGN ] = AstExpr::Type::BINARY_ASSIGN;
-            table[(size_t)TokenType::CMP_EQ ] = AstExpr::Type::BINARY_CMP_EQ;
-            table[(size_t)TokenType::CMP_NE ] = AstExpr::Type::BINARY_CMP_NE;
-            table[(size_t)TokenType::CMP_GT ] = AstExpr::Type::BINARY_CMP_GT;
-            table[(size_t)TokenType::CMP_LT ] = AstExpr::Type::BINARY_CMP_LT;
-            table[(size_t)TokenType::CMP_GE ] = AstExpr::Type::BINARY_CMP_GE;
-            table[(size_t)TokenType::CMP_LE ] = AstExpr::Type::BINARY_CMP_LE;
-            table[(size_t)TokenType::KW_AND ] = AstExpr::Type::BINARY_AND;
-            table[(size_t)TokenType::KW_OR  ] = AstExpr::Type::BINARY_OR;
+            // Mapping tokens to expression ExprTypes
+            table[(size_t)TokenType::COLON  ] = ExprType::BINARY_DECL;
+            table[(size_t)TokenType::CAST   ] = ExprType::BINARY_CAST;
+            table[(size_t)TokenType::ADD    ] = ExprType::BINARY_ADD;
+            table[(size_t)TokenType::SUB    ] = ExprType::BINARY_SUB;
+            table[(size_t)TokenType::STAR   ] = ExprType::BINARY_MUL;
+            table[(size_t)TokenType::DIV    ] = ExprType::BINARY_DIV;
+            table[(size_t)TokenType::MOD    ] = ExprType::BINARY_MOD;
+            table[(size_t)TokenType::POW    ] = ExprType::BINARY_POW;
+            table[(size_t)TokenType::IADD   ] = ExprType::BINARY_IADD;
+            table[(size_t)TokenType::ISUB   ] = ExprType::BINARY_ISUB;
+            table[(size_t)TokenType::IMUL   ] = ExprType::BINARY_IMUL;
+            table[(size_t)TokenType::IDIV   ] = ExprType::BINARY_IDIV;
+            table[(size_t)TokenType::IMOD   ] = ExprType::BINARY_IMOD;
+            table[(size_t)TokenType::IPOW   ] = ExprType::BINARY_IPOW;
+            table[(size_t)TokenType::ASSIGN ] = ExprType::BINARY_ASSIGN;
+            table[(size_t)TokenType::CMP_EQ ] = ExprType::BINARY_CMP_EQ;
+            table[(size_t)TokenType::CMP_NE ] = ExprType::BINARY_CMP_NE;
+            table[(size_t)TokenType::CMP_GT ] = ExprType::BINARY_CMP_GT;
+            table[(size_t)TokenType::CMP_LT ] = ExprType::BINARY_CMP_LT;
+            table[(size_t)TokenType::CMP_GE ] = ExprType::BINARY_CMP_GE;
+            table[(size_t)TokenType::CMP_LE ] = ExprType::BINARY_CMP_LE;
+            table[(size_t)TokenType::KW_AND ] = ExprType::BINARY_AND;
+            table[(size_t)TokenType::KW_OR  ] = ExprType::BINARY_OR;
 
             return table;
         }();
@@ -67,7 +65,7 @@ namespace nn
             case ExprKW::NUL:
                 return "null";
             case ExprKW::TYPE:
-                return "type";
+                return "ExprType";
             case ExprKW::VOID:
                 return "void";
             case ExprKW::INIT:
@@ -102,21 +100,17 @@ namespace nn
         // Parses lines from a token sequence
         // On failure, this function returns true
         template<typename T, bool(*parse_fn)(const TokenArray&, T&, int)>
-        inline bool parse_lines(const TokenArray& tarr, int indent_level, std::vector<T>& lines)
-        {
+        inline bool parse_lines(const TokenArray& tarr, int indent_level, std::vector<T>& lines) {
             int i = 0;
             int end;
-            do
-            {
+            do {
                 end = tarr.search(LineEndCriteria(indent_level), i);
                 if (end < 0)
                     end = tarr.size();
                 for (int j = i; j < end; j++)  // Only use lines that have non-whitespace tokens in them
-                    if (!tarr[j]->is_whitespace())
-                    {
+                    if (!tarr[j]->is_whitespace()) {
                         lines.push_back(T());
-                        if (parse_fn({ tarr, i, end }, lines.back(), indent_level))
-                        {
+                        if (parse_fn({ tarr, i, end }, lines.back(), indent_level)) {
                             lines.clear();
                             return true;
                         }
@@ -129,17 +123,15 @@ namespace nn
 
         // Parses comma deliminated token sequences within a matching set of brackets
         // Returns the index in tarr immediately after the CLOSE token was found
-        inline bool parse_args(const TokenArray& tarr, std::vector<AstExpr>& args, int indent_level)
-        {
+        inline bool parse_args(const TokenArray& tarr, std::vector<AstExpr>& args, int indent_level) {
             // Taking advantage of the existing tuple parsing code in parse_expr
             AstExpr args_expr;
             if (parse_expr<args_prec_table, args_rtol_table>(tarr, args_expr, indent_level))
                 return error::syntax(tarr[0], "Error parsing cargs");
             // Dealing with the result of parse_expr
-            if (args_expr.ty == AstExpr::Type::EMPTY)
+            if (args_expr.ty == ExprType::EMPTY)
                 return false;  // No cargs
-            if (args_expr.ty == AstExpr::Type::LIT_TUPLE)
-            {
+            if (args_expr.ty == ExprType::LIT_TUPLE) {
                 // Multiple cargs
                 args = std::move(args_expr.expr_agg.elems);
                 return false;
@@ -149,22 +141,18 @@ namespace nn
             return false;
         }
 
-        bool parse_index(const TokenArray& tarr, std::vector<AstExprIndex::Elem>& elems, int ilv)
-        {
+        bool parse_index(const TokenArray& tarr, std::vector<AstExprIndex::Elem>& elems, int ilv) {
             assert(tarr.size() > 0);
             int start = 0, end;
-            while (true)
-            {
+            while (true) {
                 for (; start < tarr.size() && tarr[start]->is_whitespace(); start++);
                 if (start >= tarr.size())
                     break;
-                if (tarr[start]->ty == TokenType::ELLIPSES)
-                {
+                if (tarr[start]->ty == TokenType::ELLIPSES) {
                     // tarr[start] should be the only white space character between start and
                     // the next comma up to end
                     for (end = start + 1; end < tarr.size() && tarr[end]->is_whitespace(); end++);
-                    if (end == tarr.size())
-                    {
+                    if (end == tarr.size()) {
                         // The index expression ends in "..."
                         elems.push_back({ AstExprIndex::Elem::Type::ELLIPSES });
                         return false;
@@ -293,12 +281,12 @@ namespace nn
                 {
                 case TokenType::ANGLE_O:
                     new (&pexpr->expr_call) AstExprCall();
-                    pexpr->ty = AstExpr::Type::CALL_CARGS;
+                    pexpr->ty = ExprType::CALL_CARGS;
                     pexpr->expr_call.callee = std::move(lhs);
                     break;
                 case TokenType::ROUND_O:
                     new (&pexpr->expr_call) AstExprCall();
-                    pexpr->ty = AstExpr::Type::CALL_VARGS;
+                    pexpr->ty = ExprType::CALL_VARGS;
                     pexpr->expr_call.callee = std::move(lhs);
                     break;
                 default:
@@ -315,7 +303,7 @@ namespace nn
             case TokenType::SQUARE_O:
                 // TODO: implement index with slicing
                 new (&pexpr->expr_binary) AstExprIndex();
-                pexpr->ty = AstExpr::Type::INDEX;
+                pexpr->ty = ExprType::INDEX;
                 pexpr->expr_index.expr = std::move(lhs);
                 if (parse_index({ tarr, start, end }, pexpr->expr_index.args, ilv))
                     return true;
@@ -324,28 +312,28 @@ namespace nn
                 if (tarr[start]->expect<TokenType::IDN>())
                     return true;
                 new (&pexpr->expr_name) AstExprName();
-                pexpr->ty = AstExpr::Type::DOT;
+                pexpr->ty = ExprType::DOT;
                 pexpr->expr_name.expr = std::move(lhs);
                 pexpr->expr_name.val = tarr[start]->get<TokenType::IDN>().val;
                 break;
             case TokenType::ANGLE_O:
                 new (&pexpr->expr_call) AstExprCall();
-                pexpr->ty = AstExpr::Type::CALL_CARGS;
+                pexpr->ty = ExprType::CALL_CARGS;
                 pexpr->expr_call.callee = std::move(lhs);
                 if (parse_expr({ tarr, start, end }, ret_expr, ilv + 1))
                     return true;
-                if (ret_expr.ty == AstExpr::Type::LIT_TUPLE)
+                if (ret_expr.ty == ExprType::LIT_TUPLE)
                     pexpr->expr_call.args = std::move(ret_expr.expr_agg.elems);
                 else
                     pexpr->expr_call.args.push_back(std::move(ret_expr));
                 break;
             case TokenType::ROUND_O:
                 new (&pexpr->expr_call) AstExprCall();
-                pexpr->ty = AstExpr::Type::CALL_VARGS;
+                pexpr->ty = ExprType::CALL_VARGS;
                 pexpr->expr_call.callee = std::move(lhs);
                 if (parse_expr({ tarr, start, end }, ret_expr, ilv + 1))
                     return true;
-                if (ret_expr.ty == AstExpr::Type::LIT_TUPLE)
+                if (ret_expr.ty == ExprType::LIT_TUPLE)
                     pexpr->expr_call.args = std::move(ret_expr.expr_agg.elems);
                 else
                     pexpr->expr_call.args.push_back(std::move(ret_expr));
@@ -365,87 +353,87 @@ namespace nn
             {
             case TokenType::LIT_INT:
                 ast_expr.expr_int = ptk->get<TokenType::LIT_INT>().val;
-                ast_expr.ty = AstExpr::Type::LIT_INT;
+                ast_expr.ty = ExprType::LIT_INT;
                 return false;
             case TokenType::LIT_FLOAT:
                 ast_expr.expr_float = ptk->get<TokenType::LIT_FLOAT>().val;
-                ast_expr.ty = AstExpr::Type::LIT_FLOAT;
+                ast_expr.ty = ExprType::LIT_FLOAT;
                 return false;
             case TokenType::LIT_STR:
                 new (&ast_expr.expr_string) std::string(ptk->get<TokenType::LIT_STR>().val);
-                ast_expr.ty = AstExpr::Type::LIT_STRING;
+                ast_expr.ty = ExprType::LIT_STRING;
                 return false;
             case TokenType::IDN:
                 new (&ast_expr.expr_string) std::string(ptk->get<TokenType::IDN>().val);
-                ast_expr.ty = AstExpr::Type::VAR;
+                ast_expr.ty = ExprType::VAR;
                 return false;
             case TokenType::KW_TRUE:
                 ast_expr.expr_bool = true;
-                ast_expr.ty = AstExpr::Type::LIT_BOOL;
+                ast_expr.ty = ExprType::LIT_BOOL;
                 return false;
             case TokenType::KW_FALSE:
                 ast_expr.expr_bool = false;
-                ast_expr.ty = AstExpr::Type::LIT_BOOL;
+                ast_expr.ty = ExprType::LIT_BOOL;
                 return false;
             case TokenType::KW_NULL:
                 ast_expr.expr_kw = ExprKW::NUL;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_TYPE:
                 ast_expr.expr_kw = ExprKW::TYPE;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_VOID:
                 ast_expr.expr_kw = ExprKW::VOID;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_INIT:
                 ast_expr.expr_kw = ExprKW::INIT;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_FTY:
                 ast_expr.expr_kw = ExprKW::FTY;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_BOOL:
                 ast_expr.expr_kw = ExprKW::BOOL;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_INT:
                 ast_expr.expr_kw = ExprKW::INT;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_FLOAT:
                 ast_expr.expr_kw = ExprKW::FLOAT;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_STR:
                 ast_expr.expr_kw = ExprKW::STR;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_ARRAY:
                 ast_expr.expr_kw = ExprKW::ARRAY;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_TUPLE:
                 ast_expr.expr_kw = ExprKW::TUPLE;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_CFG:
                 ast_expr.expr_kw = ExprKW::CFG;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_F16:
                 ast_expr.expr_kw = ExprKW::F16;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_F32:
                 ast_expr.expr_kw = ExprKW::F32;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             case TokenType::KW_F64:
                 ast_expr.expr_kw = ExprKW::F64;
-                ast_expr.ty = AstExpr::Type::KW;
+                ast_expr.ty = ExprType::KW;
                 return false;
             default:
                 error::syntax(ptk, "Unexpected token for single token expression leaf node");
@@ -534,7 +522,7 @@ namespace nn
                     arr_expr = lhs.get();
                 }
                 new (&arr_expr->expr_agg) AstExprAggLit();
-                arr_expr->ty = AstExpr::Type::LIT_ARRAY;
+                arr_expr->ty = ExprType::LIT_ARRAY;
 
                 if (is_empty && !has_mods)
                     return false;
@@ -601,13 +589,12 @@ namespace nn
             for (; end < tarr.size() && tarr[end]->is_whitespace(); end++);
             if (end == tarr.size())
                 return error::syntax(tarr[i], "Missing ':' after label % in match statement", ast_match_elem.label);
-            if (tarr[end]->expect<TokenType::COLON>())
+            if (tarr[end++]->expect<TokenType::COLON>())
                 return true;
-            for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
             if (end == tarr.size())
                 return error::syntax(tarr[(size_t)end - 1], "Missing body of label % in match statement", ast_match_elem.label);
             return
-                tarr[end]->expect<TokenType::ENDL>() ||
+                tarr[end]->expect<TokenType::INDENT>() ||
                 parse_lines<AstLine, parse_line>({ tarr, end }, indent_level + 1, ast_match_elem.body);
         }
 
@@ -701,10 +688,10 @@ namespace nn
                 if (parse_expr({ tarr, i + 1, end }, ast_line.line_match.arg, indent_level))
                     return error::syntax(tarr[i], "Invalid syntax in match argument");
 
-                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                end++;
                 if (end == tarr.size())
                     return error::syntax(tarr[(size_t)end - 1], "Missing body of match block");
-                if (tarr[end]->expect<TokenType::ENDL>() ||
+                if (tarr[end]->expect<TokenType::INDENT>() ||
                     parse_lines<AstMatchElem, parse_match_elem>({ tarr, end }, indent_level + 1, ast_line.line_match.elems))
                     return true;
                 break;
@@ -721,10 +708,10 @@ namespace nn
                 if (parse_expr({ tarr, i + 1, end }, ast_line.line_branch.cond, indent_level))
                     return error::syntax(tarr[i], "Invalid syntax in if condition");
 
-                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                end++;
                 if (end == tarr.size())
                     return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
-                if (tarr[end]->expect<TokenType::ENDL>() ||
+                if (tarr[end]->expect<TokenType::INDENT>() ||
                     parse_lines<AstLine, parse_line>({ tarr, end }, indent_level + 1, ast_line.line_branch.body))
                     return true;
                 break;
@@ -741,10 +728,10 @@ namespace nn
                 if (parse_expr({ tarr, i + 1, end }, ast_line.line_branch.cond, indent_level))
                     return error::syntax(tarr[i], "Invalid syntax in elif condition");
 
-                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                end++;
                 if (end == tarr.size())
                     return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
-                if (tarr[end]->expect<TokenType::ENDL>() ||
+                if (tarr[end]->expect<TokenType::INDENT>() ||
                     parse_lines<AstLine, parse_line>({ tarr, end }, indent_level + 1, ast_line.line_branch.body))
                     return true;
                 break;
@@ -757,10 +744,10 @@ namespace nn
                 if (tarr[end]->expect<TokenType::COLON>())
                     return true;
 
-                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                end++;
                 if (end == tarr.size())
                     return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
-                if (tarr[end]->expect<TokenType::ENDL>() ||
+                if (tarr[end]->expect<TokenType::INDENT>() ||
                     parse_lines<AstLine, parse_line>({ tarr, end }, indent_level + 1, ast_line.line_block.body))
                     return true;
                 break;
@@ -777,10 +764,10 @@ namespace nn
                 if (parse_expr({ tarr, i + 1, end }, ast_line.line_branch.cond, indent_level))
                     return error::syntax(tarr[i], "Invalid syntax in while condition");
 
-                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                end++;
                 if (end == tarr.size())
                     return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
-                if (tarr[end]->expect<TokenType::ENDL>() ||
+                if (tarr[end]->expect<TokenType::INDENT>() ||
                     parse_lines<AstLine, parse_line>({ tarr, end }, indent_level + 1, ast_line.line_branch.body))
                     return true;
                 break;
@@ -806,10 +793,10 @@ namespace nn
                 if (parse_expr({ tarr, i + 1, end }, ast_line.line_for.iter, indent_level))
                     return error::syntax(tarr[i], "Invalid syntax in for loop iterator");
 
-                for (end++; end < tarr.size() && tarr[end]->ty == TokenType::INDENT; end++);
+                end++;
                 if (end == tarr.size())
                     return error::syntax(tarr[(size_t)end - 1], "Missing body of evaluation mode block");
-                if (tarr[end]->expect<TokenType::ENDL>() ||
+                if (tarr[end]->expect<TokenType::INDENT>() ||
                     parse_lines<AstLine, parse_line>({ tarr, end }, indent_level + 1, ast_line.line_for.body))
                     return true;
                 break;
@@ -826,10 +813,10 @@ namespace nn
                 if (tarr[i]->expect<TokenType::COLON>())
                     return true;
 
-                for (i++; i < tarr.size() && tarr[i]->ty == TokenType::INDENT; i++);
+                end++;
                 if (i == tarr.size())
                     return error::syntax(tarr[(size_t)i - 1], "Missing body of evaluation mode block");
-                if (tarr[i]->expect<TokenType::ENDL>() ||
+                if (tarr[i]->expect<TokenType::INDENT>() ||
                     parse_lines<AstLine, parse_line>({ tarr, i }, indent_level + 1, ast_line.line_label.body))
                     return true;
                 break;
@@ -862,10 +849,8 @@ namespace nn
 
             if (tarr[i]->expect<TokenType::IDN>())
                 return true;
-            ast_entry.name = tarr[i]->get<TokenType::IDN>().val;
-            for (i++; i < tarr.size() && tarr[i]->ty == TokenType::INDENT; i++);
-            if (i == tarr.size() || tarr[i]->ty == TokenType::ENDL)
-            {
+            ast_entry.name = tarr[i++]->get<TokenType::IDN>().val;
+            if (i == tarr.size() || tarr[i]->ty == TokenType::INDENT) {
                 // Potentially an empty enum entry
                 for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
                 if (i == tarr.size())
@@ -873,10 +858,10 @@ namespace nn
             }
             if (tarr[i]->expect<TokenType::COLON>())
                 return true;
-            for (i++; i < tarr.size() && tarr[i]->ty == TokenType::INDENT; i++);  // one token past the last tab after the ':'
+            i++;
             if (i == tarr.size())
-                return error::syntax(tarr[0], "Expected new line after ':'");
-            if (tarr[i]->expect<TokenType::ENDL>())
+                return error::syntax(tarr[(size_t)i - 1], "Expected new line after ':'");
+            if (tarr[i]->expect<TokenType::INDENT>())
                 return true;
             return parse_lines<AstLine, parse_line>({ tarr, i }, indent_level + 1, ast_entry.lines);
         }
@@ -1006,7 +991,7 @@ namespace nn
                 ) return true;
             for (AstExpr& ret : rets)
             {
-                if (ret.ty != AstExpr::Type::VAR)
+                if (ret.ty != ExprType::VAR)
                     return error::syntax(ret.node_info, "Expected only indentifiers in the returns of a block");
                 ast_block_sig.rets.push_back(ret.expr_string);
             }
@@ -1021,7 +1006,7 @@ namespace nn
             {
             case TokenType::KW_NAMESPACE:
                 new (&ast_expr.expr_namespace) AstExprNamespace();
-                ast_expr.ty = AstExpr::Type::DEFN_NAMESPACE;
+                ast_expr.ty = ExprType::DEFN_NAMESPACE;
                 for (i = 1; i < tarr.size() && tarr[i]->is_whitespace(); i++);
                 if (tarr[i]->expect<TokenType::COLON>())
                     return -1;
@@ -1034,7 +1019,7 @@ namespace nn
 
             case TokenType::KW_STRUCT:
                 new (&ast_expr.expr_struct) AstExprStruct();
-                ast_expr.ty = AstExpr::Type::DEFN_STRUCT;
+                ast_expr.ty = ExprType::DEFN_STRUCT;
                 i = tarr.search(IsSameCriteria(TokenType::COLON), 1);
                 if (i == -1)
                 {
@@ -1052,7 +1037,7 @@ namespace nn
 
             case TokenType::KW_ENUM:
                 new (&ast_expr.expr_enum) AstExprEnum();
-                ast_expr.ty = AstExpr::Type::DEFN_ENUM;
+                ast_expr.ty = ExprType::DEFN_ENUM;
                 i = tarr.search(IsSameCriteria(TokenType::COLON), 1);
                 if (i == -1)
                 {
@@ -1090,13 +1075,13 @@ namespace nn
                 if (tarr[i]->ty == TokenType::SIGDECL)
                 {
                     new (&ast_expr.expr_block_decl) AstBlockSig();
-                    ast_expr.ty = AstExpr::Type::DECL_DEF;
+                    ast_expr.ty = ExprType::DECL_DEF;
                     if (parse_signature({ tarr, 1, i }, ast_expr.expr_block_decl, ilv))
                         return -1;
                     return i + 1;
                 }
                 new (&ast_expr.expr_block) AstExprBlock();
-                ast_expr.ty = AstExpr::Type::DEFN_DEF;
+                ast_expr.ty = ExprType::DEFN_DEF;
                 if (parse_signature({ tarr, 1, i }, ast_expr.expr_block.signature, ilv))
                     return -1;
                 end = tarr.search(LineEndCriteria(ilv), i + 1);
@@ -1132,13 +1117,13 @@ namespace nn
                 if (tarr[i]->ty == TokenType::SIGDECL)
                 {
                     new (&ast_expr.expr_block_decl) AstBlockSig();
-                    ast_expr.ty = AstExpr::Type::DECL_INTR;
+                    ast_expr.ty = ExprType::DECL_INTR;
                     if (parse_signature({ tarr, 1, i }, ast_expr.expr_block_decl, ilv))
                         return -1;
                     return i + 1;
                 }
                 new (&ast_expr.expr_block) AstExprBlock();
-                ast_expr.ty = AstExpr::Type::DEFN_INTR;
+                ast_expr.ty = ExprType::DEFN_INTR;
                 if (parse_signature({ tarr, 1, i }, ast_expr.expr_block.signature, ilv))
                     return -1;
                 end = tarr.search(LineEndCriteria(ilv), i + 1);
@@ -1174,13 +1159,13 @@ namespace nn
                 if (tarr[i]->ty == TokenType::SIGDECL)
                 {
                     new (&ast_expr.expr_fn_decl) AstFnSig();
-                    ast_expr.ty = AstExpr::Type::DECL_FN;
+                    ast_expr.ty = ExprType::DECL_FN;
                     if (parse_signature({ tarr, 1, i }, ast_expr.expr_fn_decl, ilv))
                         return -1;
                     return i + 1;
                 }
                 new (&ast_expr.expr_fn) AstExprFn();
-                ast_expr.ty = AstExpr::Type::DEFN_FN;
+                ast_expr.ty = ExprType::DEFN_FN;
                 if (parse_signature({ tarr, 1, i }, ast_expr.expr_fn.signature, ilv))
                     return -1;
                 end = tarr.search(LineEndCriteria(ilv), i + 1);
@@ -1216,13 +1201,13 @@ namespace nn
                 if (tarr[i]->ty == TokenType::SIGDECL)
                 {
                     new (&ast_expr.expr_init_decl) AstCargSig();
-                    ast_expr.ty = AstExpr::Type::DECL_INIT;
+                    ast_expr.ty = ExprType::DECL_INIT;
                     if (parse_signature({ tarr, 1, i }, ast_expr.expr_init_decl, ilv))
                         return -1;
                     return i + 1;
                 }
                 new (&ast_expr.expr_init) AstExprInit();
-                ast_expr.ty = AstExpr::Type::DEFN_INIT;
+                ast_expr.ty = ExprType::DEFN_INIT;
                 if (parse_signature({ tarr, 1, i }, ast_expr.expr_init.signature, ilv))
                     return -1;
                 end = tarr.search(LineEndCriteria(ilv), i + 1);
@@ -1250,7 +1235,7 @@ namespace nn
 
             case TokenType::KW_IMPORT:
                 new (&ast_expr.expr_import) AstExprImport();
-                ast_expr.ty = AstExpr::Type::IMPORT;
+                ast_expr.ty = ExprType::IMPORT;
 
                 for (end = i + 1; end < tarr.size() && tarr[end]->is_whitespace(); end++);
                 if (end == tarr.size())
@@ -1274,22 +1259,22 @@ namespace nn
                 return end;
 
             case TokenType::ADD:
-                ast_expr.ty = AstExpr::Type::UNARY_POS;
+                ast_expr.ty = ExprType::UNARY_POS;
                 goto parse_unary_op;
             case TokenType::SUB:
-                ast_expr.ty = AstExpr::Type::UNARY_NEG;
+                ast_expr.ty = ExprType::UNARY_NEG;
                 goto parse_unary_op;
             case TokenType::STAR:
-                ast_expr.ty = AstExpr::Type::UNARY_UNPACK;
+                ast_expr.ty = ExprType::UNARY_UNPACK;
                 goto parse_unary_op;
             case TokenType::KW_NOT:
-                ast_expr.ty = AstExpr::Type::UNARY_NOT;
+                ast_expr.ty = ExprType::UNARY_NOT;
                 goto parse_unary_op;
             case TokenType::KW_MUT:
-                ast_expr.ty = AstExpr::Type::UNARY_MUT;
+                ast_expr.ty = ExprType::UNARY_MUT;
                 goto parse_unary_op;
             case TokenType::KW_REF:
-                ast_expr.ty = AstExpr::Type::UNARY_REF;
+                ast_expr.ty = ExprType::UNARY_REF;
                 goto parse_unary_op;
             parse_unary_op:
                 new (&ast_expr.expr_unary) AstExprUnaryOp();
@@ -1306,11 +1291,9 @@ namespace nn
         }
 
         template<PrecTable prec_table, RtolTable rtol_table>
-        int parse_subexpr(const TokenArray& tarr, AstExpr& ast_expr, int ilv, int prec)
-        {
+        int parse_subexpr(const TokenArray& tarr, AstExpr& ast_expr, int ilv, int prec) {
             bool tuple_lit = tarr[0]->ty == TokenType::COMMA;
-            if (tuple_lit)
-            {
+            if (tuple_lit) {
                 AstExpr tmp = std::move(ast_expr);
                 new (&ast_expr.expr_agg) AstExprAggLit();
                 ast_expr.node_info = tmp.node_info;
@@ -1322,9 +1305,8 @@ namespace nn
             int end = 0;
             int i;
             int op_prec = prec_table[(size_t)tarr[end]->ty];
-            while (op_prec >= prec)
-            {
-                AstExpr::Type binop_type = token_expr_table[(size_t)tarr[end]->ty];
+            while (op_prec >= prec) {
+                ExprType binop_ExprType = token_expr_table[(size_t)tarr[end]->ty];
                 for (i = end + 1; i < tarr.size() && tarr[i]->is_whitespace(); i++);
                 
                 AstExpr rhs;
@@ -1333,27 +1315,21 @@ namespace nn
                     .line_start = tarr[end]->line_num,
                     .col_start = tarr[end]->col_num,
                 };
-                if (i == tarr.size())
-                {
+                if (i == tarr.size()) {
                     // Empty expression
                     if (tuple_lit)
-                        return i;  // Don't worry about empty types for tuples, commas at the end are allowed
-                    rhs.ty = AstExpr::Type::EMPTY;
+                        return i;  // Don't worry about empty ExprTypes for tuples, commas at the end are allowed
+                    rhs.ty = ExprType::EMPTY;
                     rhs.node_info.line_end = rhs.node_info.line_start;
                     rhs.node_info.col_end = rhs.node_info.col_start;
-                }
-                else
-                {
-                    end = tarr.search(PrioritySplitCriteria(), i);
-                    if (i == end)
-                    {
+                } else {
+                    end = tarr.search(PrioritySplitCriteria<prec_table>(), i);
+                    if (i == end) {
                         // Either a unary operator or a code block
                         end = parse_unary({ tarr, i }, rhs, ilv);
                         if (end == -1) return -1;
                         for (; end < tarr.size() && tarr[end]->is_whitespace(); end++);
-                    }
-                    else
-                    {
+                    } else {
                         // Nothin special, just a regular old binary op
                         if (end == -1)
                             end = tarr.size();
@@ -1362,24 +1338,21 @@ namespace nn
                     }
                 }
 
-                if (end == tarr.size())
-                {
+                if (end == tarr.size()) {
                     // Reached the end of the expression
-                    rhs.node_info.line_end = tarr[end - 1]->line_num;
-                    rhs.node_info.col_end = tarr[end - 1]->col_num;
-                    if (tuple_lit)
-                    {
+                    rhs.node_info.line_end = tarr[(size_t)end - 1]->line_num;
+                    rhs.node_info.col_end = tarr[(size_t)end - 1]->col_num;
+                    if (tuple_lit) {
                         ast_expr.expr_agg.elems.push_back(std::move(rhs));
                         return tarr.size();
                     }
-                    else
-                    {
+                    else {
                         AstExpr lhs = std::move(ast_expr);  // lhs <- ast_expr; ast_expr <- AstExpr();
                         new (&ast_expr.expr_binary) AstExprBinaryOp();
-                        ast_expr.ty = token_expr_table[(size_t)tarr[end]->ty];
+                        ast_expr.ty = token_expr_table[(size_t)tarr[0]->ty];
                         ast_expr.node_info = lhs.node_info;
-                        lhs.node_info.line_end = tarr[i].line_num;
-                        lhs.node_info.col_end = tarr[i].col_num;
+                        lhs.node_info.line_end = tarr[i]->line_num;
+                        lhs.node_info.col_end = tarr[i]->col_num;
                         ast_expr.expr_binary.left = std::make_unique<AstExpr>(std::move(lhs));
                         ast_expr.expr_binary.right = std::make_unique<AstExpr>(std::move(rhs));
                         return tarr.size();
@@ -1404,18 +1377,15 @@ namespace nn
                 
                 // Same precedence with left associativity,
                 // push down the left side of the tree and continue looping
-                if (tuple_lit)
-                {
+                if (tuple_lit) {
                     ast_expr.expr_agg.elems.push_back(std::move(rhs));
-                }
-                else
-                {
+                } else {
                     AstExpr lhs = std::move(ast_expr);  // lhs <- ast_expr; ast_expr <- AstExpr();
                     new (&ast_expr.expr_binary) AstExprBinaryOp();
-                    ast_expr.ty = binop_type;
+                    ast_expr.ty = binop_ExprType;
                     ast_expr.node_info = lhs.node_info;
-                    lhs.node_info.line_end = tarr[i].line_num;
-                    lhs.node_info.col_end = tarr[i].col_num;
+                    lhs.node_info.line_end = tarr[i]->line_num;
+                    lhs.node_info.col_end = tarr[i]->col_num;
                     ast_expr.expr_binary.left = std::make_unique<AstExpr>(std::move(lhs));
                     ast_expr.expr_binary.right = std::make_unique<AstExpr>(std::move(rhs));
                 }
@@ -1444,14 +1414,14 @@ namespace nn
             int i = 0;
             for (; i < tarr.size() && tarr[i]->is_whitespace(); i++);
             if (i == tarr.size())
-                return error::syntax(tarr[0], "Empty expression are not allowed");
-            int end = tarr.search(PrioritySplitCriteria(), i);
+                return error::syntax(tarr[0], "Empty expressions are not allowed");
+            int end = tarr.search(PrioritySplitCriteria<prec_table>(), i);
 
             if (i == end)
             {
                 // Either a unary operator or a code block
                 end = parse_unary({ tarr, i }, ast_expr, ilv);
-                if (end == -1) return -1;
+                if (end == -1) return true;
                 for (; end < tarr.size() && tarr[end]->is_whitespace(); end++);
             }
             else
@@ -1460,15 +1430,16 @@ namespace nn
                 if (end == -1)
                     end = tarr.size();
                 if (parse_leaf_expr({ tarr, i, end }, ast_expr, ilv))
-                    return -1;
+                    return true;
             }
             if (end == tarr.size())
                 return false;
 
-            end = parse_subexpr<prec_table, rtol_table>({ tarr, end }, ast_expr, ilv, 0);
-            if (end == -1)
+            int ret = parse_subexpr<prec_table, rtol_table>({ tarr, end }, ast_expr, ilv, 0);
+            if (ret == -1)
                 return true;
-            if (end < tarr.size())  // I don't think this should every happen, idk though
+            end += ret;
+            if (end < tarr.size())  // I don't think this should ever happen, idk though
                 return error::syntax(tarr[end], "Unexpected token '%'", tarr[end]);
             return false;
         }
@@ -1479,119 +1450,212 @@ namespace nn
             return parse_lines<AstExpr, parse_expr>(tarr, 0, ast_module.lines);
         }
 
+        AstLine::AstLine() {}
+
+        AstLine::AstLine(AstLine&& line) noexcept
+        {
+            node_info = std::move(line.node_info);
+            ty = line.ty;
+            line.ty = LineType::INVALID;
+
+            switch (ty) {
+#define DO_MOVE(idn) new (&idn) decltype(idn)(std::move(line.idn)); line.idn.~decltype(idn)()
+            case LineType::INVALID:
+            case LineType::BREAK:
+            case LineType::CONTINUE:
+                break;
+            case LineType::EXPORT:
+                DO_MOVE(line_export);
+                break;
+            case LineType::EXTERN:
+                DO_MOVE(line_extern);
+                break;
+            case LineType::CFGINFO:
+                DO_MOVE(line_cfginfo);
+                break;
+            case LineType::RETURN:
+                DO_MOVE(line_func);
+                break;
+            case LineType::MATCH:
+                DO_MOVE(line_match);
+                break;
+            case LineType::IF:
+            case LineType::ELIF:
+            case LineType::WHILE:
+                DO_MOVE(line_branch);
+                break;
+            case LineType::ELSE:
+                DO_MOVE(line_block);
+                break;
+            case LineType::EVALMODE:
+                DO_MOVE(line_label);
+                break;
+            case LineType::FOR:
+                DO_MOVE(line_for);
+                break;
+            case LineType::EXPR:
+                DO_MOVE(line_expr);
+                break;
+#undef DO_MOVE
+            default:
+                assert(false);
+            }
+        }
+
+        AstLine::~AstLine() {
+            switch (ty) {
+            case LineType::INVALID:
+            case LineType::BREAK:
+            case LineType::CONTINUE:
+                break;
+            case LineType::EXPORT:
+                line_export.~AstLineExport();
+                break;
+            case LineType::EXTERN:
+                line_extern.~AstLineExtern();
+                break;
+            case LineType::CFGINFO:
+                line_cfginfo.~AstLineCfgInfo();
+                break;
+            case LineType::RETURN:
+                line_func.~AstLineUnaryFunc();
+                break;
+            case LineType::MATCH:
+                line_match.~AstLineMatch();
+                break;
+            case LineType::IF:
+            case LineType::ELIF:
+            case LineType::WHILE:
+                line_branch.~AstLineBranch();
+                break;
+            case LineType::ELSE:
+                line_block.~AstLineBlock();
+                break;
+            case LineType::EVALMODE:
+                line_label.~AstLineLabel();
+                break;
+            case LineType::FOR:
+                line_for.~AstLineFor();
+                break;
+            case LineType::EXPR:
+                line_expr.~AstLineExpr();
+                break;
+            default:
+                assert(false);
+            }
+        }
+
         AstExpr::AstExpr() {}
 
-        AstExpr::AstExpr(AstExpr&& expr) noexcept
-        {
-            node_info = std::move(expr.node_info);
+        AstExpr::AstExpr(AstExpr&& expr) noexcept {
+            node_info = std::move(expr.node_info); 
+            ty = expr.ty;
+            expr.ty = ExprType::INVALID;
 
-#define DO_MOVE(idn) new (&idn) decltype(idn)(std::move(expr.idn))
-            switch (ty)
-            {
-            case Type::INVALID:
-            case Type::EMPTY:
+#define DO_MOVE(idn) new (&idn) decltype(idn)(std::move(expr.idn)); expr.idn.~decltype(idn)()
+            switch (ty) {
+            case ExprType::INVALID:
+            case ExprType::EMPTY:
                 break;
-            case Type::KW:
+            case ExprType::KW:
                 DO_MOVE(expr_kw);
                 break;
-            case Type::VAR:
+            case ExprType::VAR:
                 DO_MOVE(expr_string);
                 break;
-            case Type::LIT_BOOL:
-            case Type::LIT_INT:
-            case Type::LIT_FLOAT:
+            case ExprType::LIT_BOOL:
+            case ExprType::LIT_INT:
+            case ExprType::LIT_FLOAT:
                 break;
-            case Type::LIT_STRING:
+            case ExprType::LIT_STRING:
                 DO_MOVE(expr_string);
                 break;
-            case Type::LIT_ARRAY:
-            case Type::LIT_TUPLE:
+            case ExprType::LIT_ARRAY:
+            case ExprType::LIT_TUPLE:
                 DO_MOVE(expr_agg);
                 break;
-            case Type::UNARY_POS:
-            case Type::UNARY_NEG:
-            case Type::UNARY_NOT:
-            case Type::UNARY_UNPACK:
-            case Type::UNARY_MUT:
-            case Type::UNARY_REF:
+            case ExprType::UNARY_POS:
+            case ExprType::UNARY_NEG:
+            case ExprType::UNARY_NOT:
+            case ExprType::UNARY_UNPACK:
+            case ExprType::UNARY_MUT:
+            case ExprType::UNARY_REF:
                 DO_MOVE(expr_unary);
                 break;
-            case Type::BINARY_ADD:
-            case Type::BINARY_SUB:
-            case Type::BINARY_MUL:
-            case Type::BINARY_DIV:
-            case Type::BINARY_MOD:
-            case Type::BINARY_POW:
-            case Type::BINARY_IADD:
-            case Type::BINARY_ISUB:
-            case Type::BINARY_IMUL:
-            case Type::BINARY_IDIV:
-            case Type::BINARY_IMOD:
-            case Type::BINARY_IPOW:
-            case Type::BINARY_ASSIGN:
-            case Type::BINARY_AND:
-            case Type::BINARY_OR:
-            case Type::BINARY_CMP_EQ:
-            case Type::BINARY_CMP_NE:
-            case Type::BINARY_CMP_GT:
-            case Type::BINARY_CMP_LT:
-            case Type::BINARY_CMP_GE:
-            case Type::BINARY_CMP_LE:
-            case Type::BINARY_CAST:
-            case Type::BINARY_DECL:
+            case ExprType::BINARY_ADD:
+            case ExprType::BINARY_SUB:
+            case ExprType::BINARY_MUL:
+            case ExprType::BINARY_DIV:
+            case ExprType::BINARY_MOD:
+            case ExprType::BINARY_POW:
+            case ExprType::BINARY_IADD:
+            case ExprType::BINARY_ISUB:
+            case ExprType::BINARY_IMUL:
+            case ExprType::BINARY_IDIV:
+            case ExprType::BINARY_IMOD:
+            case ExprType::BINARY_IPOW:
+            case ExprType::BINARY_ASSIGN:
+            case ExprType::BINARY_AND:
+            case ExprType::BINARY_OR:
+            case ExprType::BINARY_CMP_EQ:
+            case ExprType::BINARY_CMP_NE:
+            case ExprType::BINARY_CMP_GT:
+            case ExprType::BINARY_CMP_LT:
+            case ExprType::BINARY_CMP_GE:
+            case ExprType::BINARY_CMP_LE:
+            case ExprType::BINARY_CAST:
+            case ExprType::BINARY_DECL:
                 DO_MOVE(expr_binary);
                 break;
-            case Type::INDEX:
+            case ExprType::INDEX:
                 DO_MOVE(expr_index);
                 break;
-            case Type::DOT:
+            case ExprType::DOT:
                 DO_MOVE(expr_name);
                 break;
-            case Type::CALL_CARGS:
-            case Type::CALL_VARGS:
+            case ExprType::CALL_CARGS:
+            case ExprType::CALL_VARGS:
                 DO_MOVE(expr_call);
                 break;
-            case Type::DEFN_NAMESPACE:
+            case ExprType::DEFN_NAMESPACE:
                 DO_MOVE(expr_namespace);
                 break;
-            case Type::DEFN_ENUM:
+            case ExprType::DEFN_ENUM:
                 DO_MOVE(expr_enum);
                 break;
-            case Type::DEFN_STRUCT:
+            case ExprType::DEFN_STRUCT:
                 DO_MOVE(expr_struct);
                 break;
-            case Type::DEFN_DEF:
-            case Type::DEFN_INTR:
+            case ExprType::DEFN_DEF:
+            case ExprType::DEFN_INTR:
                 DO_MOVE(expr_block);
                 break;
-            case Type::DEFN_FN:
+            case ExprType::DEFN_FN:
                 DO_MOVE(expr_fn);
                 break;
-            case Type::DEFN_INIT:
+            case ExprType::DEFN_INIT:
                 DO_MOVE(expr_init);
                 break;
-            case Type::DECL_DEF:
-            case Type::DECL_INTR:
+            case ExprType::DECL_DEF:
+            case ExprType::DECL_INTR:
                 DO_MOVE(expr_block_decl);
                 break;
-            case Type::DECL_FN:
+            case ExprType::DECL_FN:
                 DO_MOVE(expr_fn_decl);
                 break;
-            case Type::DECL_INIT:
+            case ExprType::DECL_INIT:
                 DO_MOVE(expr_init_decl);
                 break;
-            case Type::IMPORT:
+            case ExprType::IMPORT:
                 DO_MOVE(expr_import);
                 break;
 #undef DO_MOVE
             default:
                 assert(false);
             }
-            expr.reset();
         }
 
-        AstExpr& AstExpr::operator=(AstExpr&& expr) noexcept
-        {
+        AstExpr& AstExpr::operator=(AstExpr&& expr) noexcept {
             if (this == &expr)
                 return *this;
             this->~AstExpr();
@@ -1599,118 +1663,108 @@ namespace nn
             return *this;
         }
 
-        AstExpr::~AstExpr()
-        {
-            reset();
-        }
-
-        void AstExpr::reset() noexcept
-        {
-            node_info = { "", 0, 0, 0, 0 };
-
-            switch (ty)
-            {
-            case Type::INVALID:
-            case Type::EMPTY:
+        AstExpr::~AstExpr() {
+            switch (ty) {
+            case ExprType::INVALID:
+            case ExprType::EMPTY:
                 break;
-            case Type::KW:
+            case ExprType::KW:
                 expr_kw.~ExprKW();
                 break;
-            case Type::VAR:
+            case ExprType::VAR:
                 expr_string.~basic_string();
                 break;
-            case Type::LIT_BOOL:
-            case Type::LIT_INT:
-            case Type::LIT_FLOAT:
+            case ExprType::LIT_BOOL:
+            case ExprType::LIT_INT:
+            case ExprType::LIT_FLOAT:
                 break;
-            case Type::LIT_STRING:
+            case ExprType::LIT_STRING:
                 expr_string.~basic_string();
                 break;
-            case Type::LIT_ARRAY:
+            case ExprType::LIT_ARRAY:
                 expr_agg.~AstExprAggLit();
                 break;
-            case Type::LIT_TUPLE:
+            case ExprType::LIT_TUPLE:
                 expr_agg.~AstExprAggLit();
                 break;
-            case Type::UNARY_POS:
-            case Type::UNARY_NEG:
-            case Type::UNARY_NOT:
-            case Type::UNARY_UNPACK:
-            case Type::UNARY_MUT:
-            case Type::UNARY_REF:
+            case ExprType::UNARY_POS:
+            case ExprType::UNARY_NEG:
+            case ExprType::UNARY_NOT:
+            case ExprType::UNARY_UNPACK:
+            case ExprType::UNARY_MUT:
+            case ExprType::UNARY_REF:
                 expr_unary.~AstExprUnaryOp();
                 break;
-            case Type::BINARY_ADD:
-            case Type::BINARY_SUB:
-            case Type::BINARY_MUL:
-            case Type::BINARY_DIV:
-            case Type::BINARY_MOD:
-            case Type::BINARY_POW:
-            case Type::BINARY_IADD:
-            case Type::BINARY_ISUB:
-            case Type::BINARY_IMUL:
-            case Type::BINARY_IDIV:
-            case Type::BINARY_IMOD:
-            case Type::BINARY_IPOW:
-            case Type::BINARY_ASSIGN:
-            case Type::BINARY_AND:
-            case Type::BINARY_OR:
-            case Type::BINARY_CMP_EQ:
-            case Type::BINARY_CMP_NE:
-            case Type::BINARY_CMP_GT:
-            case Type::BINARY_CMP_LT:
-            case Type::BINARY_CMP_GE:
-            case Type::BINARY_CMP_LE:
-            case Type::BINARY_CAST:
-            case Type::BINARY_DECL:
+            case ExprType::BINARY_ADD:
+            case ExprType::BINARY_SUB:
+            case ExprType::BINARY_MUL:
+            case ExprType::BINARY_DIV:
+            case ExprType::BINARY_MOD:
+            case ExprType::BINARY_POW:
+            case ExprType::BINARY_IADD:
+            case ExprType::BINARY_ISUB:
+            case ExprType::BINARY_IMUL:
+            case ExprType::BINARY_IDIV:
+            case ExprType::BINARY_IMOD:
+            case ExprType::BINARY_IPOW:
+            case ExprType::BINARY_ASSIGN:
+            case ExprType::BINARY_AND:
+            case ExprType::BINARY_OR:
+            case ExprType::BINARY_CMP_EQ:
+            case ExprType::BINARY_CMP_NE:
+            case ExprType::BINARY_CMP_GT:
+            case ExprType::BINARY_CMP_LT:
+            case ExprType::BINARY_CMP_GE:
+            case ExprType::BINARY_CMP_LE:
+            case ExprType::BINARY_CAST:
+            case ExprType::BINARY_DECL:
                 expr_binary.~AstExprBinaryOp();
                 break;
-            case Type::INDEX:
+            case ExprType::INDEX:
                 expr_index.~AstExprIndex();
                 break;
-            case Type::DOT:
+            case ExprType::DOT:
                 expr_name.~AstExprName();
                 break;
-            case Type::CALL_CARGS:
-            case Type::CALL_VARGS:
+            case ExprType::CALL_CARGS:
+            case ExprType::CALL_VARGS:
                 expr_call.~AstExprCall();
                 break;
-            case Type::DEFN_NAMESPACE:
+            case ExprType::DEFN_NAMESPACE:
                 expr_namespace.~AstExprNamespace();
                 break;
-            case Type::DEFN_ENUM:
+            case ExprType::DEFN_ENUM:
                 expr_enum.~AstExprEnum();
                 break;
-            case Type::DEFN_STRUCT:
+            case ExprType::DEFN_STRUCT:
                 expr_struct.~AstExprStruct();
                 break;
-            case Type::DEFN_DEF:
-            case Type::DEFN_INTR:
+            case ExprType::DEFN_DEF:
+            case ExprType::DEFN_INTR:
                 expr_block.~AstExprBlock();
                 break;
-            case Type::DEFN_FN:
+            case ExprType::DEFN_FN:
                 expr_fn.~AstExprFn();
                 break;
-            case Type::DEFN_INIT:
+            case ExprType::DEFN_INIT:
                 expr_init.~AstExprInit();
                 break;
-            case Type::DECL_DEF:
-            case Type::DECL_INTR:
+            case ExprType::DECL_DEF:
+            case ExprType::DECL_INTR:
                 expr_block_decl.~AstBlockSig();
                 break;
-            case Type::DECL_FN:
+            case ExprType::DECL_FN:
                 expr_fn_decl.~AstFnSig();
                 break;
-            case Type::DECL_INIT:
+            case ExprType::DECL_INIT:
                 expr_init_decl.~AstCargSig();
                 break;
-            case Type::IMPORT:
+            case ExprType::IMPORT:
                 expr_import.~AstExprImport();
                 break;
             default:
                 assert(false);
             }
-            ty = Type::INVALID;
         }
     }
 }
